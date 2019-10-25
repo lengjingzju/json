@@ -2075,10 +2075,6 @@ static int _str_parse(json_parse_t *parse_ptr, char **pptr, json_bool_t key_flag
         if (*str != '\\'){
             *ptr++ = *str++;
         } else {
-            if ((end_str - str) < 2) {
-                JsonErr("invalid \\ value!\n");
-                goto err;
-            }
             seq_len = 2;
             switch (str[1]) {
                 case 'b':  *ptr++ = '\b'; break;
@@ -2286,15 +2282,15 @@ static int _json_parse_value(json_parse_t *parse_ptr, json_object **item, json_o
 
         default:
         {
-            if (!strncmp(str, "false", 5)) {
+            if (strncmp(str, "false", 5) == 0) {
                 out_item->type = JSON_BOOL;
                 out_item->vint = 0;
                 _update_parse_offset(parse_ptr, 5);
-            } else if (!strncmp(str, "true", 4)) {
+            } else if (strncmp(str, "true", 4) == 0) {
                 out_item->type = JSON_BOOL;
                 out_item->vint = 1;
                 _update_parse_offset(parse_ptr, 4);
-            } else if (!strncmp(str, "null", 4)) {
+            } else if (strncmp(str, "null", 4) == 0) {
                 out_item->type = JSON_NULL;
                 _update_parse_offset(parse_ptr, 4);
             } else {
@@ -2483,7 +2479,7 @@ static int _str_rapid_parse(json_rapid_parse_t *parse_ptr, char **pptr, json_boo
     int total = 0;
     int seq_len = 0;
     char *ptr = NULL, *ptr_bak = NULL;
-    char *str = NULL, *end_str = NULL;
+    char *str = NULL, *end_str = NULL, *tmp_str = NULL;
 
     *pptr = NULL;
     if (_str_rapid_parse_len_get(parse_ptr, &len, &total) < 0) {
@@ -2499,18 +2495,17 @@ static int _str_rapid_parse(json_rapid_parse_t *parse_ptr, char **pptr, json_boo
     if (len == total - 2) {
         ptr += len;
         *ptr = 0;
-        str = ptr+1;
         goto finish;
+    } else {
+        tmp_str = str;
+        str = strchr(tmp_str, '\\');
+        ptr += str - tmp_str;
     }
 
     while (str < end_str) {
         if (*str != '\\'){
             *ptr++ = *str++;
         } else {
-            if ((end_str - str) < 2) {
-                JsonErr("invalid \\ value!\n");
-                goto err;
-            }
             seq_len = 2;
             switch (str[1]) {
                 case 'b':  *ptr++ = '\b'; break;
@@ -2679,15 +2674,15 @@ static int _json_rapid_parse_value(json_rapid_parse_t *parse_ptr, json_object **
 
         default:
         {
-            if (!strncmp(str, "false", 5)) {
+            if (strncmp(str, "false", 5) == 0) {
                 out_item->type = JSON_BOOL;
                 out_item->vint = 0;
                 parse_ptr->offset += 5;
-            } else if (!strncmp(str, "true", 4)) {
+            } else if (strncmp(str, "true", 4) == 0) {
                 out_item->type = JSON_BOOL;
                 out_item->vint = 1;
                 parse_ptr->offset += 4;
-            } else if (!strncmp(str, "null", 4)) {
+            } else if (strncmp(str, "null", 4) == 0) {
                 out_item->type = JSON_NULL;
                 parse_ptr->offset += 4;
             } else {

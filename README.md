@@ -1,5 +1,4 @@
-
-# json使用和接口说明
+# JSON使用和接口说明
 
 ## 功能特点
 * 比cJSON更快，更省内存
@@ -12,14 +11,18 @@
 ## 性能测试
 * 解析json字符串成json控制结构，解析速度最多快`250%`，耗用内存可省`100%`以上
 * json控制结构打印成json字符串，打印速度最多快`150%`
-* 支持边读文件边解析成json控制结构(无需全部读完文件再解析)，速度基本无损失
-* 支持json控制结构边打印边输出到文件(无需全部打印完再写文件)，速度基本无损失
+* 边读文件边解析成json控制结构(无需全部读完文件再解析)，速度基本无损失
+* json控制结构边打印边输出到文件(无需全部打印完再写文件)，速度基本无损失
 * 注：测试平台(Nationalchip STB | CPU: CSKY | DDR3: 128MB, 533MHz | OS:  ECOS)
 
 ## 接口说明
 
 ### 节点
 ```C
+struct json_list_head {
+    struct json_list_head *next, *prev;
+};
+
 typedef enum {
     JSON_NULL = 0,
     JSON_BOOL,
@@ -335,6 +338,7 @@ int json_cache_add_string_to_object(json_object *object, const char *key, const 
  * json_item_total_get
  * json_get_number_value
  * json_change_number_value
+ * all "inline number apis"
  * json_strict_change_number_value
  * json_get_array_size
  * json_get_array_item
@@ -342,17 +346,14 @@ int json_cache_add_string_to_object(json_object *object, const char *key, const 
  * json_detach_item_from_array
  * json_detach_item_from_object
  * json_add_item_to_array
- * all "json print apis"
- * json_parse_common
- * all "inline number apis"
 **/
 ```
 * `编辑(一般模式)`的一些api(内部没有调用malloc/free)也可以用于内存池
 
-## 感激
+## 参考代码
 * 参考了[cJSON](https://github.com/DaveGamble/cJSON)的实现，其中utf16_literal_to_utf8函数完全来自cJSON
 
-## 联系
+## 联系方式
 * 邮箱：lengjingzju@163.com
 * 微博：lengjingzju@sina.com
 * wx/qq：1083936981
