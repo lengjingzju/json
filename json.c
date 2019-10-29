@@ -1962,6 +1962,43 @@ fail:
     return 0;
 }
 
+static char *_str_parse_transform(char *str, char *end_str, char *ptr)
+{
+    int seq_len = 0;
+
+    while (str < end_str) {
+        if (*str != '\\'){
+            *ptr++ = *str++;
+        } else {
+            seq_len = 2;
+            switch (str[1]) {
+                case 'b':  *ptr++ = '\b'; break;
+                case 'f':  *ptr++ = '\f'; break;
+                case 'n':  *ptr++ = '\n'; break;
+                case 'r':  *ptr++ = '\r'; break;
+                case 't':  *ptr++ = '\t'; break;
+                case 'v':  *ptr++ = '\v'; break;
+                case '\"': *ptr++ = '\"'; break;
+                case '\\': *ptr++ = '\\'; break;
+                case '/':  *ptr++ = '/' ; break;
+                case 'u':
+                if ((seq_len = utf16_literal_to_utf8((unsigned char*)str,
+                               (unsigned char*)end_str, (unsigned char**)&ptr)) == 0) {
+                    JsonErr("invalid utf16 code!\n");
+                    return NULL;
+                }
+                break;
+                default :
+                    return NULL;
+            }
+            str += seq_len;
+        }
+    }
+    *ptr = 0;
+
+    return ptr;
+}
+
 static int _str_parse_len_get(json_parse_t *parse_ptr, int *out_len, int *total_len)
 {
     int len = 0;
@@ -2036,7 +2073,6 @@ static int _str_parse(json_parse_t *parse_ptr, char **pptr, json_bool_t key_flag
     size_t i = 0;
     int len = 0;
     int total = 0;
-    int seq_len = 0;
     char *ptr = NULL, *ptr_bak = NULL;
     char *str = NULL, *end_str = NULL;
     block_mem_node_t *ret_node = NULL;
@@ -2049,12 +2085,6 @@ static int _str_parse(json_parse_t *parse_ptr, char **pptr, json_bool_t key_flag
         JsonErr("str format err!\n");
         return -1;
     }
-    if ((ptr = _parse_alloc(parse_ptr, len+1, STRING_MEM_ID, &ret_node)) == NULL) {
-        JsonErr("malloc failed!\n");
-        return -1;
-    }
-    ptr_bak = ptr;
-
 #if JSON_DIRECT_FILE_SUPPORT
     if (parse_ptr->str) {
 #endif
@@ -2064,42 +2094,22 @@ static int _str_parse(json_parse_t *parse_ptr, char **pptr, json_bool_t key_flag
         use_size_bak = parse_ptr->read_size;
         if (_get_parse_ptr(parse_ptr, 0, total, &str) < total) {
             JsonErr("reread failed!\n");
-            goto err;
+            return -1;
         }
     }
 #endif
     end_str = str + total - 1;
-
     str++;
-    while (str < end_str) {
-        if (*str != '\\'){
-            *ptr++ = *str++;
-        } else {
-            seq_len = 2;
-            switch (str[1]) {
-                case 'b':  *ptr++ = '\b'; break;
-                case 'f':  *ptr++ = '\f'; break;
-                case 'n':  *ptr++ = '\n'; break;
-                case 'r':  *ptr++ = '\r'; break;
-                case 't':  *ptr++ = '\t'; break;
-                case 'v':  *ptr++ = '\v'; break;
-                case '\"': *ptr++ = '\"'; break;
-                case '\\': *ptr++ = '\\'; break;
-                case '/':  *ptr++ = '/' ; break;
-                case 'u':
-                    if ((seq_len = utf16_literal_to_utf8((unsigned char*)str,
-                                    (unsigned char*)end_str, (unsigned char**)&ptr)) == 0) {
-                        JsonErr("invalid utf16 code!\n");
-                        goto err;
-                    }
-                    break;
-                default :
-                    goto err;
-            }
-            str += seq_len;
-        }
+
+    if ((ptr = _parse_alloc(parse_ptr, len+1, STRING_MEM_ID, &ret_node)) == NULL) {
+        JsonErr("malloc failed!\n");
+        return -1;
     }
-    *ptr = 0;
+    ptr_bak = ptr;
+    if ((ptr = _str_parse_transform(str, end_str, ptr)) == NULL) {
+        JsonErr("transform failed!\n");
+        goto err;
+    }
 
     _update_parse_offset(parse_ptr, total);
     if (key_flag) {
@@ -2477,7 +2487,6 @@ static int _str_rapid_parse(json_rapid_parse_t *parse_ptr, char **pptr, json_boo
 {
     int len = 0;
     int total = 0;
-    int seq_len = 0;
     char *ptr = NULL, *ptr_bak = NULL;
     char *str = NULL, *end_str = NULL, *tmp_str = NULL;
 
@@ -2486,53 +2495,25 @@ static int _str_rapid_parse(json_rapid_parse_t *parse_ptr, char **pptr, json_boo
         JsonErr("str format err!\n");
         goto err;
     }
-
     str = parse_ptr->str + parse_ptr->offset;
     end_str = str + total - 1;
     str++;
+
     ptr = str;
     ptr_bak = ptr;
     if (len == total - 2) {
         ptr += len;
         *ptr = 0;
-        goto finish;
     } else {
         tmp_str = str;
         str = strchr(tmp_str, '\\');
         ptr += str - tmp_str;
-    }
-
-    while (str < end_str) {
-        if (*str != '\\'){
-            *ptr++ = *str++;
-        } else {
-            seq_len = 2;
-            switch (str[1]) {
-                case 'b':  *ptr++ = '\b'; break;
-                case 'f':  *ptr++ = '\f'; break;
-                case 'n':  *ptr++ = '\n'; break;
-                case 'r':  *ptr++ = '\r'; break;
-                case 't':  *ptr++ = '\t'; break;
-                case 'v':  *ptr++ = '\v'; break;
-                case '\"': *ptr++ = '\"'; break;
-                case '\\': *ptr++ = '\\'; break;
-                case '/':  *ptr++ = '/' ; break;
-                case 'u':
-                    if ((seq_len = utf16_literal_to_utf8((unsigned char*)str,
-                                    (unsigned char*)end_str, (unsigned char**)&ptr)) == 0) {
-                        JsonErr("invalid utf16 code!\n");
-                        goto err;
-                    }
-                    break;
-                default :
-                    goto err;
-            }
-            str += seq_len;
+        if ((ptr = _str_parse_transform(str, end_str, ptr)) == NULL) {
+            JsonErr("transform failed!\n");
+            goto err;
         }
     }
-    *ptr = 0;
 
-finish:
     parse_ptr->offset += total;
     if (key_flag) {
         if (ptr == ptr_bak) {
