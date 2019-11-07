@@ -281,7 +281,7 @@ err:
     json_cache_memory_free(&head);
 #else
     if (json)
-        json_delete_json(json);
+        json_del_object(json);
 #endif
     if (new_data)
         json_free_print_ptr(new_data);
