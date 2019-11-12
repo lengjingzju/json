@@ -1,13 +1,13 @@
-# JSON使用和接口说明
+# ConciseJSON 使用和接口说明
 
 ## 功能特点
 * 比cJSON更快，更省内存
 * 支持边读文件边解析成json控制结构
 * 支持json控制结构边打印边输出到文件
-* 接口和cJSON一样友好，代码逻辑比cJSON更清晰，代码大小比cJSON稍大一些
+* 接口和cJSON一样友好，代码逻辑比cJSON更清晰，代码段大小和cJSON差不多
 * json解析和打印接口是弹性的，可以设置参数，实现特定类型的json解析效率的提高
 * 除类似cJSON的经典接口外，另外提供一套使用内存池的接口
-* `同时提供dom风格的和sax风格的APIs`
+* `同时提供dom风格的和sax风格的APIs` ，dom风格参考json_test.c文件，sax风格参考 json_test_sax.c文件
 
 ## 性能测试
 * 解析json字符串成json控制结构，解析速度最多快`250%`，耗用内存可省`100%`以上
@@ -15,6 +15,12 @@
 * 边读文件边解析成json控制结构(无需全部读完文件再解析)，速度基本无损失
 * json控制结构边打印边输出到文件(无需全部打印完再写文件)，速度基本无损失
 * 注：测试平台(Nationalchip STB | CPU: CSKY | DDR3: 128MB, 533MHz | OS: ECOS)
+
+## 优化手段
+* 减小节点的大小
+* 尽量减少和优化分支语句，例如使用switch-case语句；大概率出现的事件分支在前；归类同一特征条件；减少多次重复判断
+* 减少malloc的次数，例如使用内存池；使用临时字符串缓存；复用原有字符串；甚至在原有字符串上修改
+* 使用读写缓冲减少read/write次数
 
 ## 接口说明
 
@@ -36,7 +42,7 @@ typedef enum {
 } json_type_t;
 
 typedef struct {
-    struct json_list_head list;
+    struct json_list_head list;     // brother pointer
     char *key;
     json_type_t type;
     union {
@@ -44,11 +50,11 @@ typedef struct {
         unsigned int vhex;          // hex, 0xaaaaaaaa
         double vdbl;                // double
         char *vstr;                 // string
-        struct json_list_head head; // array, object
+        struct json_list_head head; // array, object (son pointer)
     };
 } json_object;
 ```
-* 使用双向链表管理节点，类似linux内核的lish.h
+* 使用双向链表管理节点，类似linux内核的list.h
 
 ### DOM打印
 ```C
@@ -81,14 +87,14 @@ static inline char *json_fprint_unformat(json_object *json, const char *path);
 
 ```
 * full_add_size: 经典模式下打印字符串realloc的增量，或write buffer的缓冲区大小，最小值/默认值为 JSON_FULL_ADD_SIZE_DEF
-* temp_add_size: 临时转换buffer的realloc的增量的最小值，如果增大，用完后代码会自动realloc到最小值，最小值/默认值为 JSON_TEMP_ADD_SIZE_DEF
+* temp_add_size: 临时转换buffer的realloc的增量的最小值，如果某次增大，这次用完后会自动realloc到最小值，最小值/默认值为 JSON_TEMP_ADD_SIZE_DEF
 * item_cell_size: 预估的一个节点打印成字符串后的长度，最小值/默认值为 JSON_ITEM_UNFORMAT_CELL_SIZE_DEF 和 JSON_ITEM_FORMAT_CELL_SIZE_DEF
-* path: 如果path不为空，将直接边打印边输出到文件，否则是打印到一个大的完整字符串
-* format_flag: 格式化打印选项，true时格式化打印
+* path: 如果path不为空，将直接边打印边输出到文件，否则是打印到一个大的完整字符串返回给用户
+* format_flag: 格式化打印选项，值为true时是格式化打印
 * calculate_flag: 打印到字符串时的算法选项，false: 经典模式和cJSON类似；`true: 算法预估realloc大小，速度更快`
 * json_print_common: 打印通用接口
 * json_print_format, json_print_unformat: 打印成字符串的简写接口，`需要` `json_free_print_ptr`释放返回的字符串
-* json_fprint_format, json_fprint_unformat: 直接边打印边输出到文件的简写接口，成功返回"ok"字符串，`不需要` `json_free_print_ptr`释放返回的字符串
+* json_fprint_format, json_fprint_unformat: 直接边打印边输出到文件的简写接口，成功返回字符串"ok"，`不需要` `json_free_print_ptr`释放返回的字符串
 
 ### DOM解析
 ```C
@@ -139,7 +145,7 @@ json_object *json_rapid_parse_str(char *str, struct json_list_head *head, size_t
 * json_parse_file: 同上，只是从文件边读边解析
 * json_fast_parse_str: 使用内存池的字符串解析的简写接口，使用前必须使用`json_cache_memory_init`初始化，用完后需要`json_cache_memory_free`释放内存
 * json_fast_parse_file: 同上，只是边读文件边解析
-* json_rapid_parse_str: 不调用json_parse_common，使用内存池极速解析，`会修改传入的字符串，使用过程中不要释放原始的str` , `速度最快，占用内存最少`
+* json_rapid_parse_str: 使用内存池极速解析，`会修改传入的字符串，使用过程中不要释放原始的str` , `速度最快，占用内存最少` ，该函数没有调用json_parse_common
 
 ### SAX打印
 ```C
@@ -173,7 +179,7 @@ char *json_sax_print_finish(json_sax_print_handle handle);
 * json_sax_print_handle: 实际是json_sax_print_t指针
 * json_sax_print_start: sax打印时必须先调用此函数，进行资源初始化并获取句柄json_sax_print_handle
 *   如果打印到字符串，最好给一个item_total值，用于计算生成字符串的增量
-* json_sax_print_value: sax 条目通用打印接口，如果要打印节点的父节点是object，key必须有值；其它情况下key填不填值均可
+* json_sax_print_value: sax条目通用打印接口，如果要打印节点的父节点是object，key必须有值；其它情况下key填不填值均可
 *   array 和 object 要打印两次，一次值是 `JSON_SAX_START` 表示开始，一次值是 `JSON_SAX_FINISH` 表示完成
 * json_sax_print_finish: sax打印完成必须调用此函数，释放中间资源并返回字符串
 *   打印成字符串时，该函数返回打印的字符串， `需要` `json_free_print_ptr`释放返回的字符串
@@ -240,11 +246,10 @@ static inline int json_sax_parse_file(const char *path, json_sax_parser_callback
 * json_sax_parse_choice_t: 参考json_parse_choice_t说明
 
 * json_sax_parse_common: sax解析通用接口，因为不需要保存json树结构，所以不需要使用内存池
-* json_sax_parse_str: 从字符串解析的快捷接口
-* json_sax_parse_file: 从文件边读边解析的快捷接口
+* json_sax_parse_str: 从字符串sax解析的简写接口
+* json_sax_parse_file: 从文件边读边sax解析的简写接口
 
 ### 编辑(一般模式)
-
 ```C
 int json_item_total_get(json_object *json);
 int json_change_key(json_object *json, const char *key);
@@ -270,7 +275,7 @@ static inline json_object *json_create_object(void);
 * json_del_object: 递归删除节点
 * json_new_object: 创建指定类型的空节点
 * json_create_item: 创建指定类型的有值节点
-* 创建的节点使用完后需要使用`json_del_object`删除，如果把该节点加入了array或object，该节点无需再删除
+* 注：创建的节点使用完后需要使用`json_del_object`删除，如果把该节点加入了array或object，该节点无需再删除
 
 ```C
 json_object *json_create_item_array(json_type_t type, void *values, int count);
@@ -281,8 +286,6 @@ static inline json_object *json_create_double_array(double *values, int count);
 static inline json_object *json_create_string_array(char **values, int count);
 ```
 * json_create_item_array： 快速创建数组节点，使用要点同上
-
-
 
 ```C
 int json_get_number_value(json_object *json, json_bool_t *vbool, int *vint, unsigned int *vhex, double *vdbl);
@@ -299,8 +302,6 @@ static inline int json_change_hex_value(json_object *json, unsigned int value);
 static inline int json_change_double_value(json_object *json, double value);
 ```
 * 获取或修改number类型节点的value，传入的vbool vint vhex vdbl `有且只有一个有值`，返回1表明有强制转换，返回0表明类型对应，返回-1表明不是number类型
-* 后面的static inline xxxx() 函数是快速模式
-
 
 ```C
 int json_get_array_size(json_object *json);
@@ -316,7 +317,7 @@ json_object *json_detach_item_from_array(json_object *json, int seq);
 json_object *json_detach_item_from_object(json_object *json, const char *key);
 ```
 * 将指定子节点从array或object取下并返回，使用完成后`需要`使用`json_del_object`删除返回的子节点
-* 注：使用内存cache的json`不需要`调用`json_del_object`删除返回的子节点
+* 注：使用内存cache的json也可以调用这两个函数，并且`不需要`调用`json_del_object`删除返回的子节点
 
 ```C
 int json_del_item_from_array(json_object *json, int seq);
@@ -356,7 +357,6 @@ static inline int json_add_string_to_object(json_object *object, const char *key
 * json_add_new_item_to_object: 新建指定类型的节点，并将该节点加入object
 
 ### 编辑(使用内存池)
-
 ```C
 void json_cache_memory_init(struct json_list_head *head);
 void json_cache_memory_free(struct json_list_head *head);
@@ -364,7 +364,6 @@ void json_cache_memory_free(struct json_list_head *head);
 * 使用内存池前需要使用json_cache_memory_init初始化内存池入口
 * 使用内存池完成后需要使用json_cache_memory_free释放内存池
 * 绝对不要调用存在malloc, free之类的api，例如`json_new_object`和`json_del_object`等
-
 
 ```C
 char *json_cache_new_string(size_t len, struct json_list_head *head, size_t cache_size);
