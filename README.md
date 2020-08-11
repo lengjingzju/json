@@ -26,6 +26,8 @@
 
 ### 测试结果
 
+> 见json_test.png
+
 ![测试结果](./json_test.png)
 
 ## json对象结构
