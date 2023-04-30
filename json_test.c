@@ -104,7 +104,7 @@ static void usage_print(const char *func)
 
 int test_json_sax_print(void)
 {
-    json_sax_phdl handle = NULL;
+    json_sax_print_hd handle = NULL;
     char *print_str = NULL;
 
     handle = json_sax_print_format_start(100);
@@ -127,18 +127,18 @@ int test_json_sax_print(void)
     return 0;
 }
 
-json_sax_parse_ret _sax_parser_cb(json_sax_parser *parser)
+json_sax_ret_t _sax_parser_cb(json_sax_parser_t *parser)
 {
 #define KEY_BUF_LEN 64
 #define STR_BUF_LEN 128
-    static json_sax_phdl handle = NULL;
+    static json_sax_print_hd handle = NULL;
     char *key = NULL;
     char *str = NULL;
     int key_alloc_flag = 0;
     int str_alloc_flag = 0;
     char key_buf[KEY_BUF_LEN] = {0};
     char str_buf[STR_BUF_LEN] = {0};
-    json_sax_parse_depth_t *depth = &parser->array[parser->count-1];
+    json_sax_depth_t *depth = &parser->array[parser->count-1];
     if (depth->key.alloc == 0 && depth->key.str != NULL) {
         if (depth->key.len < KEY_BUF_LEN) {
             key = key_buf;

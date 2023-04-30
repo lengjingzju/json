@@ -1,19 +1,16 @@
+/*******************************************
+* SPDX-License-Identifier: MIT             *
+* Copyright (C) 2019-.... Jing Leng        *
+* Contact: Jing Leng <lengjingzju@163.com> *
+* URL: https://github.com/lengjingzju/json *
+*******************************************/
+
 #ifndef __JSON_H__
 #define __JSON_H__
-#include <ctype.h>
+#include <stdbool.h>
 
-/*
- * original URL:
- * https://gitee.com/lengjingzju/json
- * https://github.com/lengjingzju/json
- */
-
+#define JSON_VERSION                    0x010000
 #define JSON_SAX_APIS_SUPPORT           1
-
-/* json node */
-typedef int json_bool_t;
-#define JSON_FALSE                      0
-#define JSON_TRUE                       1
 
 /******** json object structure ********/
 
@@ -33,7 +30,7 @@ typedef enum {
 } json_type_t;
 
 typedef union {
-    json_bool_t vbool;
+    bool vbool;
     int vint;
     unsigned int vhex;
     double vdbl;
@@ -56,10 +53,8 @@ typedef struct {
 
 /* basic json apis */
 int json_item_total_get(json_object *json);
-int json_change_key(json_object *json, const char *key);
-int json_change_string(json_object *json, const char *str);
 
-/* create/del json apis */
+/* create apis */
 void json_del_object(json_object *json);
 json_object *json_new_object(json_type_t type);
 json_object *json_create_item(json_type_t type, void *value);
@@ -69,7 +64,7 @@ static inline json_object *json_create_null(void)
     return json_new_object(JSON_NULL);
 }
 
-static inline json_object *json_create_bool(json_bool_t value)
+static inline json_object *json_create_bool(bool value)
 {
     return json_create_item(JSON_BOOL, &value);
 }
@@ -107,7 +102,7 @@ static inline json_object *json_create_object(void)
 /* create json array apis */
 json_object *json_create_item_array(json_type_t type, void *values, int count);
 
-static inline json_object *json_create_bool_array(json_bool_t *values, int count)
+static inline json_object *json_create_bool_array(bool *values, int count)
 {
     return json_create_item_array(JSON_BOOL, values, count);
 }
@@ -132,14 +127,15 @@ static inline json_object *json_create_string_array(char **values, int count)
     return json_create_item_array(JSON_STRING, values, count);
 }
 
-/* number value apis */
+/* setting apis */
+int json_set_key(json_object *json, const char *key);
+int json_set_string_value(json_object *json, const char *str);
 int json_get_number_value(json_object *json, json_type_t type, void *value);
-int json_change_number_value(json_object *json, json_type_t type, void *value);
-int json_strict_change_number_value(json_object *json, json_type_t type, void *value);
+int json_set_number_value(json_object *json, json_type_t type, void *value);
 
-static inline json_bool_t json_get_bool_value(json_object *json)
+static inline bool json_get_bool_value(json_object *json)
 {
-    json_bool_t value = 0;
+    bool value = 0;
     json_get_number_value(json, JSON_BOOL, &value);
     return value;
 }
@@ -165,24 +161,24 @@ static inline double json_get_double_value(json_object *json)
     return value;
 }
 
-static inline int json_change_bool_value(json_object *json, json_bool_t value)
+static inline int json_set_bool_value(json_object *json, bool value)
 {
-    return json_change_number_value(json, JSON_BOOL, &value);
+    return json_set_number_value(json, JSON_BOOL, &value);
 }
 
-static inline int json_change_int_value(json_object *json, int value)
+static inline int json_set_int_value(json_object *json, int value)
 {
-    return json_change_number_value(json, JSON_INT, &value);
+    return json_set_number_value(json, JSON_INT, &value);
 }
 
-static inline int json_change_hex_value(json_object *json, unsigned int value)
+static inline int json_set_hex_value(json_object *json, unsigned int value)
 {
-    return json_change_number_value(json, JSON_HEX, &value);
+    return json_set_number_value(json, JSON_HEX, &value);
 }
 
-static inline int json_change_double_value(json_object *json, double value)
+static inline int json_set_double_value(json_object *json, double value)
 {
-    return json_change_number_value(json, JSON_DOUBLE, &value);
+    return json_set_number_value(json, JSON_DOUBLE, &value);
 }
 
 /* array/object apis */
@@ -214,7 +210,7 @@ static inline int json_add_null_to_object(json_object *object, const char *key)
     return json_add_new_item_to_object(object, JSON_NULL, key, NULL);
 }
 
-static inline int json_add_bool_to_object(json_object *object, const char *key, json_bool_t value)
+static inline int json_add_bool_to_object(json_object *object, const char *key, bool value)
 {
     return json_add_new_item_to_object(object, JSON_BOOL, key, &value);
 }
@@ -250,8 +246,8 @@ typedef struct {
 
 typedef struct {
     struct json_list_head head;
-    size_t def_size;
-    size_t align_byte;
+    size_t mem_size;
+    size_t align_size;
     int fast_alloc;
     json_mem_node_t *cur_node;
 } json_mem_mgr_t;
@@ -264,16 +260,12 @@ typedef struct {
 
 /******** json memory pool editing mode APIs ********/
 
-/* memmory pool head init/free */
-void pjson_memory_head_init(struct json_list_head *head);
-void pjson_memory_head_move(struct json_list_head *old, struct json_list_head *_new);
-void pjson_memory_head_free(struct json_list_head *head);
-
 // call pjson_memory_init before use, call pjson_memory_free after use.
 void pjson_memory_free(json_mem_t *mem);
 void pjson_memory_init(json_mem_t *mem);
-int pjson_change_key(json_object *json, const char *key, json_mem_t *mem);
-int pjson_change_string(json_object *json, const char *str, json_mem_t *mem);
+
+int pjson_set_key(json_object *json, const char *key, json_mem_t *mem);
+int pjson_set_string_value(json_object *json, const char *str, json_mem_t *mem);
 
 /* create json apis */
 json_object *pjson_new_object(json_type_t type, json_mem_t *mem);
@@ -284,7 +276,7 @@ static inline json_object *pjson_create_null(json_mem_t *mem)
     return pjson_new_object(JSON_NULL, mem);
 }
 
-static inline json_object *pjson_create_bool(json_bool_t value, json_mem_t *mem)
+static inline json_object *pjson_create_bool(bool value, json_mem_t *mem)
 {
     return pjson_create_item(JSON_BOOL, &value, mem);
 }
@@ -322,7 +314,7 @@ static inline json_object *pjson_create_object(json_mem_t *mem)
 /* create json array apis */
 json_object *pjson_create_item_array(json_type_t item_type, void *values, int count, json_mem_t *mem);
 
-static inline json_object *pjson_create_bool_array(json_bool_t *values, int count, json_mem_t *mem)
+static inline json_object *pjson_create_bool_array(bool *values, int count, json_mem_t *mem)
 {
     return pjson_create_item_array(JSON_BOOL, values, count, mem);
 }
@@ -356,7 +348,7 @@ static inline int pjson_add_null_to_object(json_object *object, const char *key,
 {
     return pjson_add_new_item_to_object(object, JSON_NULL, key, NULL, mem); }
 
-static inline int pjson_add_bool_to_object(json_object *object, const char *key, json_bool_t value, json_mem_t *mem)
+static inline int pjson_add_bool_to_object(json_object *object, const char *key, bool value, json_mem_t *mem)
 {
     return pjson_add_new_item_to_object(object, JSON_BOOL, key, &value, mem);
 }
@@ -384,23 +376,21 @@ static inline int pjson_add_string_to_object(json_object *object, const char *ke
 /******** json dom print/parse apis ********/
 
 typedef struct {
-    const char *path;
-    size_t addsize;
-    size_t temp_addsize;
+    size_t plus_size;
+    size_t item_size;
     int item_total;
-    size_t item_cellsize;
-    json_bool_t format_flag;
-    json_bool_t calculate_flag;
+    bool format_flag;
+    const char *path;
 } json_print_choice_t;
 
 typedef struct {
-    const char *path;
-    char *str;
+    size_t mem_size;
     size_t read_size;
     size_t str_len;
-    size_t mem_size;
+    bool reuse_flag;
     json_mem_t *mem;
-    json_bool_t reuse_flag;
+    const char *path;
+    char *str;
 } json_parse_choice_t;
 
 char *json_print_common(json_object *json, json_print_choice_t *choice);
@@ -411,8 +401,7 @@ static inline char *json_print_format(json_object *json)
 {
     json_print_choice_t choice = {0};
 
-    choice.format_flag = JSON_TRUE;
-    choice.calculate_flag = JSON_TRUE;
+    choice.format_flag = true;
     return json_print_common(json, &choice);
 }
 
@@ -420,8 +409,7 @@ static inline char *json_print_unformat(json_object *json)
 {
     json_print_choice_t choice = {0};
 
-    choice.format_flag = JSON_FALSE;
-    choice.calculate_flag = JSON_TRUE;
+    choice.format_flag = false;
     return json_print_common(json, &choice);
 }
 
@@ -429,7 +417,7 @@ static inline char *json_fprint_format(json_object *json, const char *path)
 {
     json_print_choice_t choice = {0};
 
-    choice.format_flag = JSON_TRUE;
+    choice.format_flag = true;
     choice.path = path;
     return json_print_common(json, &choice);
 }
@@ -438,7 +426,7 @@ static inline char *json_fprint_unformat(json_object *json, const char *path)
 {
     json_print_choice_t choice = {0};
 
-    choice.format_flag = JSON_FALSE;
+    choice.format_flag = false;
     choice.path = path;
     return json_print_common(json, &choice);
 }
@@ -465,7 +453,7 @@ static inline json_object *json_resuse_parse_str(char *str, json_mem_t *mem, siz
     choice.str = str;
     choice.mem = mem;
     choice.str_len = str_len;
-    choice.reuse_flag = JSON_TRUE;
+    choice.reuse_flag = true;
     return json_parse_common(&choice);
 }
 
@@ -492,7 +480,7 @@ typedef struct {
     int alloc;
     size_t len;
     char *str;
-} json_detail_str_t;
+} json_sax_str_t;
 
 typedef enum {
     JSON_SAX_START = 0,
@@ -501,139 +489,134 @@ typedef enum {
 
 typedef union {
     json_number_t vnum;
-    json_detail_str_t vstr;
-    json_sax_cmd_t vcmd;            // array, object
+    json_sax_str_t vstr;
+    json_sax_cmd_t vcmd;            /* for array and object */
 } json_sax_value_t;
 
 typedef struct {
     json_type_t type;
-    json_detail_str_t key;
-} json_sax_parse_depth_t;
-
-typedef struct {
-    int total;
-    int count;
-    json_sax_parse_depth_t *array;
-    json_sax_value_t value;
-} json_sax_parser;
+    json_sax_str_t key;
+} json_sax_depth_t;
 
 typedef enum {
     JSON_SAX_PARSE_CONTINUE = 0,
     JSON_SAX_PARSE_STOP
-} json_sax_parse_ret;
-
-typedef json_sax_parse_ret (*json_sax_parser_callback)(json_sax_parser *parser);
+} json_sax_ret_t;
 
 typedef struct {
+    int total;
+    int count;
+    json_sax_depth_t *array;
+    json_sax_value_t value;
+} json_sax_parser_t;
+
+typedef json_sax_ret_t (*json_sax_cb_t)(json_sax_parser_t *parser);
+
+typedef struct {
+    size_t read_size;
+    size_t str_len;
     char *str;
     const char *path;
-    size_t read_size;
-    json_sax_parser_callback callback;
+    json_sax_cb_t cb;
 } json_sax_parse_choice_t;
 
-typedef void* json_sax_phdl;
-
-int json_sax_print_value(json_sax_phdl handle, json_type_t type, const char *key, const void *value);
-json_sax_phdl json_sax_print_start(json_print_choice_t *choice);
-char *json_sax_print_finish(json_sax_phdl handle);
+typedef void* json_sax_print_hd;
+int json_sax_print_value(json_sax_print_hd handle, json_type_t type, const char *key, const void *value);
+json_sax_print_hd json_sax_print_start(json_print_choice_t *choice);
+char *json_sax_print_finish(json_sax_print_hd handle);
 int json_sax_parse_common(json_sax_parse_choice_t *choice);
 
-static inline int json_sax_print_null(json_sax_phdl handle, const char *key)
+static inline int json_sax_print_null(json_sax_print_hd handle, const char *key)
 {
     return json_sax_print_value(handle, JSON_NULL, key, NULL);
 }
 
-static inline int json_sax_print_bool(json_sax_phdl handle, const char *key, json_bool_t value)
+static inline int json_sax_print_bool(json_sax_print_hd handle, const char *key, bool value)
 {
     return json_sax_print_value(handle, JSON_BOOL, key, &value);
 }
 
-static inline int json_sax_print_int(json_sax_phdl handle, const char *key, int value)
+static inline int json_sax_print_int(json_sax_print_hd handle, const char *key, int value)
 {
     return json_sax_print_value(handle, JSON_INT, key, &value);
 }
 
-static inline int json_sax_print_hex(json_sax_phdl handle, const char *key, unsigned int value)
+static inline int json_sax_print_hex(json_sax_print_hd handle, const char *key, unsigned int value)
 {
     return json_sax_print_value(handle, JSON_HEX, key, &value);
 }
 
-static inline int json_sax_print_double(json_sax_phdl handle, const char *key, double value)
+static inline int json_sax_print_double(json_sax_print_hd handle, const char *key, double value)
 {
     return json_sax_print_value(handle, JSON_DOUBLE, key, &value);
 }
 
-static inline int json_sax_print_string(json_sax_phdl handle, const char *key, const char *value)
+static inline int json_sax_print_string(json_sax_print_hd handle, const char *key, const char *value)
 {
     return json_sax_print_value(handle, JSON_STRING, key, value);
 }
 
-static inline int json_sax_print_array(json_sax_phdl handle, const char *key, json_sax_cmd_t value)
+static inline int json_sax_print_array(json_sax_print_hd handle, const char *key, json_sax_cmd_t value)
 {
     return json_sax_print_value(handle, JSON_ARRAY, key, &value);
 }
 
-static inline int json_sax_print_object(json_sax_phdl handle, const char *key, json_sax_cmd_t value)
+static inline int json_sax_print_object(json_sax_print_hd handle, const char *key, json_sax_cmd_t value)
 {
     return json_sax_print_value(handle, JSON_OBJECT, key, &value);
 }
 
-static inline json_sax_phdl json_sax_print_format_start(int item_total)
+static inline json_sax_print_hd json_sax_print_format_start(int item_total)
 {
     json_print_choice_t choice = {0};
 
-    choice.format_flag = JSON_TRUE;
-    choice.calculate_flag = JSON_TRUE;
+    choice.format_flag = true;
     choice.item_total = item_total;
-    choice.calculate_flag = JSON_TRUE;
     return json_sax_print_start(&choice);
 }
 
-static inline json_sax_phdl json_sax_print_unformat_start(int item_total)
+static inline json_sax_print_hd json_sax_print_unformat_start(int item_total)
 {
     json_print_choice_t choice = {0};
 
-    choice.format_flag = JSON_FALSE;
-    choice.calculate_flag = JSON_TRUE;
+    choice.format_flag = false;
     choice.item_total = item_total;
-    choice.calculate_flag = JSON_TRUE;
     return json_sax_print_start(&choice);
 }
 
-static inline json_sax_phdl json_sax_fprint_format_start(const char *path)
+static inline json_sax_print_hd json_sax_fprint_format_start(const char *path)
 {
     json_print_choice_t choice = {0};
 
-    choice.format_flag = JSON_TRUE;
+    choice.format_flag = true;
     choice.path = path;
     return json_sax_print_start(&choice);
 }
 
-static inline json_sax_phdl json_sax_fprint_unformat_start(const char *path)
+static inline json_sax_print_hd json_sax_fprint_unformat_start(const char *path)
 {
     json_print_choice_t choice = {0};
 
-    choice.format_flag = JSON_FALSE;
+    choice.format_flag = false;
     choice.path = path;
     return json_sax_print_start(&choice);
 }
 
-static inline int json_sax_parse_str(char *str, json_sax_parser_callback callback)
+static inline int json_sax_parse_str(char *str, json_sax_cb_t cb)
 {
     json_sax_parse_choice_t choice = {0};
     choice.str = str;
-    choice.callback = callback;
+    choice.cb = cb;
     return json_sax_parse_common(&choice);
 }
 
-static inline int json_sax_parse_file(const char *path, json_sax_parser_callback callback)
+static inline int json_sax_parse_file(const char *path, json_sax_cb_t cb)
 {
     json_sax_parse_choice_t choice = {0};
     choice.path = path;
-    choice.callback = callback;
+    choice.cb = cb;
     return json_sax_parse_common(&choice);
 }
 
 #endif
 #endif
-
