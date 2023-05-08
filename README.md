@@ -20,15 +20,15 @@
 
 > ./json <json文件名> <测试序号0-7>
 
-### 测试平台
-
-> Nationalchip STB | CPU: CSKY | DDR3: 128MB, 533MHz | OS: ECOS
-
 ### 测试结果
 
-> 见json_test.png
+> 测试平台: Nationalchip STB | CPU: CSKY | DDR3: 128MB, 533MHz | OS: ECOS
 
-![测试结果](./json_test.png)
+![ECOS测试结果](./json_test.png)
+
+> 测试平台: Ubuntu 18.04
+
+![Ubuntu测试结果](./json_test2.png)
 
 ## json对象结构
 
@@ -348,7 +348,7 @@ typedef struct {
 json_object *json_parse_common(json_parse_choice_t *choice);
 static inline json_object *json_parse_str(char *str);
 static inline json_object *json_fast_parse_str(char *str, json_mem_t *mem, size_t str_len);
-static inline json_object *json_resuse_parse_str(char *str, json_mem_t *mem, size_t str_len);
+static inline json_object *json_reuse_parse_str(char *str, json_mem_t *mem, size_t str_len);
 static inline json_object *json_parse_file(const char *path);
 static inline json_object *json_fast_parse_file(const char *path, json_mem_t *mem);
 ```
@@ -363,7 +363,7 @@ static inline json_object *json_fast_parse_file(const char *path, json_mem_t *me
 * json_parse_common: 解析通用接口
 * json_parse_str: 类似cJSON的经典字符串解析的简写接口，用完后需要`json_del_object`释放返回的管理结构
 * json_fast_parse_str: 使用内存池的字符串解析的简写接口，使用前必须使用`pjson_memory_init`初始化mem，用完后需要`pjson_memory_free`释放
-* json_resuse_parse_str: 使用内存池极速解析并复用原始字符串，`会修改传入的字符串，使用过程中不要释放原始的str` , `速度最快，占用内存最少`
+* json_reuse_parse_str: 使用内存池极速解析并复用原始字符串，`会修改传入的字符串，使用过程中不要释放原始的str` , `速度最快，占用内存最少`
 * json_parse_file: 类似json_parse_str，只是从文件边读边解析
 * json_fast_parse_file: 类似json_parse_str， 只是边读文件边解析
 

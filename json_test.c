@@ -94,7 +94,7 @@ static void usage_print(const char *func)
     printf("Usage: %s <%s> <num>\n", func, ANY_JSON_NAME);
     printf("\t%s %s 1 ==> test json_parse_str()\n", func, ANY_JSON_NAME);
     printf("\t%s %s 2 ==> test json_fast_parse_str()\n", func, ANY_JSON_NAME);
-    printf("\t%s %s 3 ==> test json_resuse_parse_str()\n", func, ANY_JSON_NAME);
+    printf("\t%s %s 3 ==> test json_reuse_parse_str()\n", func, ANY_JSON_NAME);
     printf("\t%s %s 4 ==> test json_parse_file()\n", func, ANY_JSON_NAME);
     printf("\t%s %s 5 ==> test json_fast_parse_file()\n", func, ANY_JSON_NAME);
     printf("\t%s %s 6 ==> test json_sax_parse_str()\n", func, ANY_JSON_NAME);
@@ -279,7 +279,6 @@ int main(int argc, char *argv[])
             return -1;
     }
 
-    snprintf(s_dst_json_path, sizeof(s_dst_json_path), "%s-%d.format.json", file, choice);
     switch(choice)
     {
         case 1:
@@ -290,7 +289,7 @@ int main(int argc, char *argv[])
             fast_flag = 1;
             break;
         case 3:
-            json = json_resuse_parse_str(orig_data, &mem, orig_size);
+            json = json_reuse_parse_str(orig_data, &mem, orig_size);
             fast_flag = 1;
             break;
         case 4:

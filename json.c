@@ -2127,7 +2127,7 @@ json_object *json_parse_common(json_parse_choice_t *choice)
 {
     json_object *json = NULL;
     json_parse_t parse_val = {0};
-    size_t mem_size = 0;
+    size_t mem_size = 0, total_size = 0;
 
 
     parse_val.read_size = parse_val.read_size ? parse_val.read_size : JSON_PARSE_READ_SIZE_DEF;
@@ -2139,10 +2139,17 @@ json_object *json_parse_common(json_parse_choice_t *choice)
             JsonErr("open(%s) failed!\n", choice->path);
             return NULL;
         }
+        if (choice->str_len) {
+            total_size = choice->str_len;
+        } else {
+            total_size = lseek(parse_val.fd, 0, SEEK_END);
+            lseek(parse_val.fd, 0, SEEK_SET);
+        }
     } else {
         parse_val.getptr = _get_str_parse_ptr;
         parse_val.str = choice->str;
-        parse_val.size = choice->str_len ? choice->str_len : strlen(choice->str);
+        total_size = choice->str_len ? choice->str_len : strlen(choice->str);
+        parse_val.size = total_size;
         if (choice->mem)
             parse_val.reuse_flag = choice->reuse_flag;
     }
@@ -2150,7 +2157,7 @@ json_object *json_parse_common(json_parse_choice_t *choice)
     if (choice->mem) {
         parse_val.alloc = pjson_memory_alloc;
         pjson_memory_init(choice->mem);
-        mem_size = parse_val.size / JSON_PARSE_NUM_PLUS_DEF;
+        mem_size = total_size / JSON_PARSE_NUM_PLUS_DEF;
         if (mem_size < choice->mem_size)
             mem_size = choice->mem_size;
         choice->mem->obj_mgr.mem_size = mem_size;

@@ -447,7 +447,7 @@ static inline json_object *json_fast_parse_str(char *str, json_mem_t *mem, size_
     return json_parse_common(&choice);
 }
 
-static inline json_object *json_resuse_parse_str(char *str, json_mem_t *mem, size_t str_len)
+static inline json_object *json_reuse_parse_str(char *str, json_mem_t *mem, size_t str_len)
 {
     json_parse_choice_t choice = {0};
     choice.str = str;
