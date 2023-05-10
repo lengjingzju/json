@@ -11,6 +11,7 @@
 #include <math.h>
 #include <unistd.h>
 #include <fcntl.h>
+#include <limits.h>
 #include "json.h"
 
 /**************** definition ****************/
@@ -669,7 +670,6 @@ static void *pjson_memory_alloc(size_t size, json_mem_mgr_t *mgr)
         data_size = size + mgr->align_size - 1;
         data_size -= data_size % mgr->align_size;
     }
-    block_size = (data_size > mgr->mem_size) ? data_size : mgr->mem_size;
 
     if (mgr->cur_node->cur + data_size <= mgr->cur_node->ptr + mgr->cur_node->size) {
         goto end;
@@ -684,6 +684,7 @@ static void *pjson_memory_alloc(size_t size, json_mem_mgr_t *mgr)
         }
     }
 
+    block_size = (data_size > mgr->mem_size) ? data_size : mgr->mem_size;
     if (_json_mem_new(block_size, mgr) != NULL) {
         mgr->cur_node = (json_mem_node_t *) (mgr->head.next);
         goto end;
@@ -1612,12 +1613,12 @@ static inline void _update_parse_offset(json_parse_t *parse_ptr, int num)
 
 static inline void _skip_blank(json_parse_t *parse_ptr)
 {
-    char *str = NULL;
+    unsigned char *str = NULL;
     unsigned char c = 0;
     int cnt = 0;
 
-    while (_get_parse_ptr(parse_ptr, cnt, 64, &str) != 0) {
-        while ((c = *(unsigned char *)str)) {
+    while (_get_parse_ptr(parse_ptr, cnt, 64, (char **)&str) != 0) {
+        while ((c = *str)) {
             if (c <= ' ') {
                 str++, ++cnt;
             } else {
@@ -1628,63 +1629,108 @@ static inline void _skip_blank(json_parse_t *parse_ptr)
     }
 }
 
-static int _parse_num(char **sstr, json_number_t *vnum, bool check_hex)
+static inline bool _hex_char_check(char c)
 {
-#define _HEX_CHECK(x)  ((x >= '0' && x <= '9') || (x >= 'a' && x <= 'f') || (x >= 'A' && x <= 'F'))
-#define _HEX_CAL(y,x)  do {                             \
-    if      (x >= '0' && x <= '9') y = x - '0';         \
-    else if (x >= 'a' && x <= 'f') y = 10 + x - 'a';    \
-    else if (x >= 'A' && x <= 'F') y = 10 + x - 'A';    \
-    else                           y = 0;               \
-} while (0)
+    bool ret = false;
 
+    switch (c) {
+    case '0': case '1': case '2': case '3': case '4':
+    case '5': case '6': case '7': case '8': case '9':
+    case 'a': case 'b': case 'c': case 'd': case 'e': case 'f':
+    case 'A': case 'B': case 'C': case 'D': case 'E': case 'F':
+        ret = true;
+        break;
+    default:
+        break;
+    }
+
+    return ret;
+}
+
+static inline bool _dec_char_check(char c)
+{
+    bool ret = false;
+
+    switch (c) {
+    case '0': case '1': case '2': case '3': case '4':
+    case '5': case '6': case '7': case '8': case '9':
+        ret = true;
+        break;
+    default:
+        break;
+    }
+
+    return ret;
+}
+
+static inline unsigned int _hex_char_calculate(char c)
+{
+    unsigned int ret = 0;
+
+    switch (c) {
+    case '0': case '1': case '2': case '3': case '4':
+    case '5': case '6': case '7': case '8': case '9':
+        ret = c - '0';
+        break;
+    case 'a': case 'b': case 'c': case 'd': case 'e': case 'f':
+        ret = 10 + c - 'a';
+        break;
+   case 'A': case 'B': case 'C': case 'D': case 'E': case 'F':
+        ret = 10 + c - 'A';
+        break;
+    default:
+        break;
+    }
+
+    return ret;
+}
+
+static int _parse_num(char **sstr, json_number_t *vnum)
+{
+    int sign = 1;
+    unsigned long long int k = 1, m = 0, n = 0;
+    double d = 0;
     char *num = *sstr;
-    if (*num == '0' && (*(num+1) == 'x' || *(num+1) == 'X') && _HEX_CHECK(*(num+2))) {
-        unsigned int m = 0, n = 0;
-        if (!check_hex)
-            return JSON_NULL;
-        num += 2;
-        do {
-            _HEX_CAL(m, *num); n = (n << 4) + m; num++;
-        } while (_HEX_CHECK(*num));
 
-        vnum->vhex = n;
+    if (*num == '0' && (*(num+1) == 'x' || *(num+1) == 'X')) {
+        num += 2;
+        while (_hex_char_check(*num))
+            m = (m << 4) + _hex_char_calculate(*num++);
+
         *sstr = num;
+        vnum->vhex = m;
         return JSON_HEX;
     } else {
-        double m = 0, n = 0;
-        int sign = 1, scale = 0;
-
-        if (*num == '-') num++, sign = -1;
-        else if (*num == '+') num++;
-        while (*num == '0') num++;
-
-        if (*num >= '1' && *num <= '9') {
-            do {
-                m = (m * 10) + (*num++ - '0');
-            } while (*num >= '0' && *num <= '9');
+        switch (*num) {
+        case '-': num++; sign = -1; break;
+        case '+': num++; break;
+        default: break;
         }
 
-        if (*num=='.' && *(num+1) >= '0' && *(num+1) <= '9') {
+        while (*num == '0')
             num++;
-            do {
-                m = (m * 10) + (*num++ - '0');
-                scale--;
-            } while (*num >= '0' && *num <= '9');
-            n = sign * m * pow (10.0, scale);
+        while (_dec_char_check(*num))
+            m = (m << 3) + (m << 1) + (*num++ - '0');
 
-            vnum->vdbl = n;
+        if (*num == '.') {
+            num++;
+            while (_dec_char_check(*num)) {
+                n = (n << 3) + (n << 1) + (*num++ - '0');
+                k = (k << 3) + (k << 1);
+            }
+            d = m + 1.0 * n / k;
+
             *sstr = num;
+            vnum->vdbl = sign == 1 ? d : -d;
             return JSON_DOUBLE;
         } else {
-            n = sign * m;
             *sstr = num;
-            if ((int)n == n) {
-                vnum->vint = (int)n;
-                return JSON_INT;
-            } else {
-                vnum->vdbl = n;
+            if (m > INT_MAX) {
+                vnum->vdbl = sign == 1 ? m : -m;
                 return JSON_DOUBLE;
+            } else {
+                vnum->vint = sign == 1 ? m : -m;
+                return JSON_INT;
             }
         }
     }
@@ -1692,39 +1738,35 @@ static int _parse_num(char **sstr, json_number_t *vnum, bool check_hex)
     return JSON_NULL;
 }
 
-static json_type_t _json_parse_number(char **sstr, json_number_t *vnum) //int *vint, unsigned int *vhex, double *vdbl)
+static json_type_t _json_parse_number(char **sstr, json_number_t *vnum)
 {
     json_type_t ret = JSON_NULL;
+    json_type_t tret = JSON_NULL;
+    json_number_t tnum;
+    double nbase = 0, nindex = 0;
 
-    ret = _parse_num(sstr, vnum, true);
+    ret = _parse_num(sstr, vnum);
     switch (ret) {
     case JSON_HEX:
         return ret;
     case JSON_INT:
     case JSON_DOUBLE:
-        {
-            char val = **sstr;
-            if (val != 'e' && val != 'E') {
-                return ret;
-            } else {
-                json_type_t tret = 0;
-                json_number_t tnum;
-                double nbase = 0, nindex = 0;
-
-                *sstr += 1;
-                nbase = (ret == JSON_INT) ? vnum->vint : vnum->vdbl;
-                tret = _parse_num(sstr, &tnum, false);
-                switch (tret) {
-                case JSON_INT:
-                case JSON_DOUBLE:
-                    nindex = (tret == JSON_INT) ? tnum.vint : tnum.vdbl;
-                    vnum->vdbl = nbase * pow (10.0, nindex);
-                    return JSON_DOUBLE;
-                default:
-                    return JSON_NULL;
-                }
+        switch (**sstr) {
+        case 'e': case 'E':
+            *sstr += 1;
+            nbase = (ret == JSON_INT) ? vnum->vint : vnum->vdbl;
+            tret = _parse_num(sstr, &tnum);
+            switch (tret) {
+            case JSON_INT: nindex = tnum.vint; break;
+            case JSON_DOUBLE: nindex = tnum.vdbl; break;
+            default: return JSON_NULL;
             }
+            vnum->vdbl = nbase * pow (10.0, nindex);
+            return JSON_DOUBLE;
+        default:
+            return ret;
         }
+        break;
     default:
         return JSON_NULL;
     }
@@ -1736,15 +1778,21 @@ static inline unsigned int _parse_hex4(const unsigned char *str)
     unsigned int val = 0;
 
     for (i = 0; i < 4; i++) {
-        if ((str[i] >= '0') && (str[i] <= '9')) {
+        switch (str[i]) {
+        case '0': case '1': case '2': case '3': case '4':
+        case '5': case '6': case '7': case '8': case '9':
             val += str[i] - '0';
-        } else if ((str[i] >= 'A') && (str[i] <= 'F')) {
-            val += 10 + str[i] - 'A';
-        } else if ((str[i] >= 'a') && (str[i] <= 'f')) {
+            break;
+        case 'a': case 'b': case 'c': case 'd': case 'e': case 'f':
             val += 10 + str[i] - 'a';
-        } else {
+            break;
+       case 'A': case 'B': case 'C': case 'D': case 'E': case 'F':
+            val += 10 + str[i] - 'A';
+            break;
+        default:
             return 0;
         }
+
         if (i < 3) { /* shift left to make place for the next nibble */
             val = val << 4;
         }
@@ -2128,7 +2176,6 @@ json_object *json_parse_common(json_parse_choice_t *choice)
     json_object *json = NULL;
     json_parse_t parse_val = {0};
     size_t mem_size = 0, total_size = 0;
-
 
     parse_val.read_size = parse_val.read_size ? parse_val.read_size : JSON_PARSE_READ_SIZE_DEF;
     parse_val.mem = choice->mem ? choice->mem : &s_invalid_json_mem;

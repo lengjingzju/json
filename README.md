@@ -23,10 +23,12 @@
 ### 测试结果
 
 > 测试平台: Nationalchip STB | CPU: CSKY | DDR3: 128MB, 533MHz | OS: ECOS
+> 注: 老版本测试结果，新的版本比这更快
 
 ![ECOS测试结果](./json_test.png)
 
 > 测试平台: Ubuntu 18.04
+> 测试源: [canada.json](https://github.com/miloyip/nativejson-benchmark/blob/master/data/canada.json)
 
 ![Ubuntu测试结果](./json_test2.png)
 

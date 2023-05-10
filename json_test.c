@@ -279,6 +279,7 @@ int main(int argc, char *argv[])
             return -1;
     }
 
+    snprintf(s_dst_json_path, sizeof(s_dst_json_path), "%s-%d.format.json", file, choice);
     switch(choice)
     {
         case 1:
