@@ -623,8 +623,6 @@ static void _json_mem_init(json_mem_mgr_t *mgr)
     INIT_JSON_LIST_HEAD(&mgr->head);
     mgr->cur_node = &s_invalid_json_mem_node;
     mgr->mem_size = JSON_POOL_MEM_SIZE_DEF;
-    mgr->align_size = sizeof(void *);
-    mgr->fast_alloc = 1;
 }
 
 static void _json_mem_free(json_mem_mgr_t *mgr)
@@ -660,28 +658,12 @@ static void *_json_mem_new(size_t size, json_mem_mgr_t *mgr)
 
 static void *pjson_memory_alloc(size_t size, json_mem_mgr_t *mgr)
 {
-    json_mem_node_t *pos = NULL;
     void *p = NULL;
     size_t data_size = 0, block_size = 0;
 
-    if (mgr->align_size == 1) {
-        data_size = size;
-    } else {
-        data_size = size + mgr->align_size - 1;
-        data_size -= data_size % mgr->align_size;
-    }
-
+    data_size = size;
     if (mgr->cur_node->cur + data_size <= mgr->cur_node->ptr + mgr->cur_node->size) {
         goto end;
-    }
-
-    if (!mgr->fast_alloc) {
-        json_list_for_each_entry(pos, &mgr->head, list) {
-            if (pos->cur + data_size <= pos->ptr + pos->size) {
-                mgr->cur_node = pos;
-                goto end;
-            }
-        }
     }
 
     block_size = (data_size > mgr->mem_size) ? data_size : mgr->mem_size;
@@ -701,9 +683,7 @@ void pjson_memory_init(json_mem_t *mem)
 {
     _json_mem_init(&mem->obj_mgr);
     _json_mem_init(&mem->key_mgr);
-    mem->key_mgr.align_size = 1;
     _json_mem_init(&mem->str_mgr);
-    mem->str_mgr.align_size = 1;
 }
 
 void pjson_memory_free(json_mem_t *mem)

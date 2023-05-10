@@ -209,8 +209,6 @@ typedef struct {
 typedef struct {
     struct json_list_head head;         // json_mem_node_t挂载节点
     size_t mem_size;                    // 默认分配块内存大小
-    size_t align_size;                  // 几字节对齐要求
-    int fast_alloc;                     // 0只查找当前节点 / 1查找所有节点，分配不到就重新分配
     json_mem_node_t *cur_node;          // 当前使用的内存节点
 } json_mem_mgr_t;
 
@@ -233,7 +231,7 @@ void pjson_memory_init(json_mem_t *mem);
 
 * pjson_memory_free: 释放json内存池管理的所有内存
 * pjson_memory_init: 初始化json内存池管理结构
-* 注：编辑模式初始化内存池后可修改mem_size，一般无需修改align_size，选择修改fast_alloc
+* 注：编辑模式初始化内存池后可修改mem_size
 * 注：使用内存池前需要使用pjson_memory_init初始化内存池入口，全部使用完成后使用pjson_memory_free释放
 * 注：绝对不要调用存在malloc, free之类的api，例如`json_new_object`和`json_del_object`等
 

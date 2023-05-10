@@ -247,8 +247,6 @@ typedef struct {
 typedef struct {
     struct json_list_head head;
     size_t mem_size;
-    size_t align_size;
-    int fast_alloc;
     json_mem_node_t *cur_node;
 } json_mem_mgr_t;
 
