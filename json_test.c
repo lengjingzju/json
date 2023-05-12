@@ -97,11 +97,14 @@ static void usage_print(const char *func)
     printf("\t%s %s 3 ==> test json_reuse_parse_str()\n", func, ANY_JSON_NAME);
     printf("\t%s %s 4 ==> test json_parse_file()\n", func, ANY_JSON_NAME);
     printf("\t%s %s 5 ==> test json_fast_parse_file()\n", func, ANY_JSON_NAME);
+#if JSON_SAX_APIS_SUPPORT
     printf("\t%s %s 6 ==> test json_sax_parse_str()\n", func, ANY_JSON_NAME);
     printf("\t%s %s 7 ==> test json_sax_parse_file()\n", func, ANY_JSON_NAME);
     printf("Usage: %s 0 ==> test json_sax_print_xxxx()\n", func);
+#endif
 }
 
+#if JSON_SAX_APIS_SUPPORT
 int test_json_sax_print(void)
 {
     json_sax_print_hd handle = NULL;
@@ -219,6 +222,8 @@ json_sax_ret_t _sax_parser_cb(json_sax_parser_t *parser)
         free(key);
     return JSON_SAX_PARSE_CONTINUE;
 }
+#endif
+
 // gcc -o json json.c json_test.c -lm -O0 -g -W -Wall
 // gcc -o json json.c json_test.c -lm -O2 -ffunction-sections -fdata-sections -W -Wall
 int main(int argc, char *argv[])
@@ -235,6 +240,7 @@ int main(int argc, char *argv[])
 
     pjson_memory_init(&mem);
 
+#if JSON_SAX_APIS_SUPPORT
     if (argc == 2) {
         choice = atoi(argv[1]);
         if (choice == 0) {
@@ -245,6 +251,7 @@ int main(int argc, char *argv[])
             return -1;
         }
     }
+#endif
 
     if (argc != 3) {
         usage_print(argv[0]);
@@ -264,7 +271,9 @@ int main(int argc, char *argv[])
         case 1:
         case 2:
         case 3:
+#if JSON_SAX_APIS_SUPPORT
         case 6:
+#endif
             if (read_file_to_data(file, &orig_data, &orig_size) < 0) {
                 printf("read file %s failed!\n", file);
                 return -1;
@@ -272,7 +281,9 @@ int main(int argc, char *argv[])
             break;
         case 4:
         case 5:
+#if JSON_SAX_APIS_SUPPORT
         case 7:
+#endif
             break;
         default:
             usage_print(argv[0]);
@@ -300,6 +311,7 @@ int main(int argc, char *argv[])
             json = json_fast_parse_file(file, &mem);
             fast_flag = 1;
             break;
+#if JSON_SAX_APIS_SUPPORT
         case 6:
             if (json_sax_parse_str(orig_data, _sax_parser_cb) < 0) {
                 printf("json_sax_parse_str failed!\n");
@@ -315,6 +327,7 @@ int main(int argc, char *argv[])
             }
             ms2 = _system_ms_get();
             goto end;
+#endif
         default:
             break;
     }
@@ -385,7 +398,9 @@ int main(int argc, char *argv[])
     }
     ms4 = _system_ms_get();
 
+#if JSON_SAX_APIS_SUPPORT
 end:
+#endif
     if (!fast_flag && json)
         json_del_object(json);
     pjson_memory_free(&mem);

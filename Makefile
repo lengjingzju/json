@@ -8,7 +8,7 @@ PACKAGE_NAME    = ljson
 
 major_ver       = 1
 minor_ver       = 0
-patch_ver       = 0
+patch_ver       = 3
 staticlib       = lib$(PACKAGE_NAME).a
 sharedlib       = lib$(PACKAGE_NAME).so $(major_ver) $(minor_ver) $(patch_ver)
 testedbin       = ljson_test

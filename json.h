@@ -9,7 +9,7 @@
 #define __JSON_H__
 #include <stdbool.h>
 
-#define JSON_VERSION                    0x010000
+#define JSON_VERSION                    0x010003
 #define JSON_SAX_APIS_SUPPORT           1
 
 /******** json object structure ********/

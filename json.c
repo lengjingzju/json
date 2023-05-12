@@ -646,8 +646,8 @@ static void *_json_mem_new(size_t size, json_mem_mgr_t *mgr)
     }
     node->size = size;
     if ((node->ptr = json_malloc(node->size)) == NULL) {
-        json_free(node);
         JsonErr("malloc failed! %d\n", (int)node->size);
+        json_free(node);
         return NULL;
     }
     node->cur = node->ptr;
@@ -769,7 +769,7 @@ json_object *pjson_create_item_array(json_type_t item_type, void *values, int co
         return NULL;
     }
 
-    for (i = 0; i < count; i++) {
+    for (i = 0; i < count; ++i) {
         switch (item_type) {
         case JSON_BOOL:
             value = ((bool *)values) + i;
@@ -903,6 +903,134 @@ typedef struct _json_print_t {
     char *ptr;
 } json_print_t;
 
+static const char hex_array[] = {
+    '0', '1', '2', '3', '4',
+    '5', '6', '7', '8', '9',
+    'a', 'b', 'c', 'd', 'e', 'f'};
+
+#define INT_TO_STRING_FUNC(fname, ftype)    \
+static int fname(ftype n, char *c)          \
+{                                           \
+    char *s = c;                            \
+    ftype m = n, t = 0;                     \
+    int h = 0, i = 0, j = 0, k = 0, a = 0;  \
+                                            \
+    if (m == 0) {                           \
+        *s++ = '0';                         \
+        *s = '\0';                          \
+        return 1;                           \
+    }                                       \
+                                            \
+    if (n < 0) {                            \
+        m = -n;                             \
+        *s++ = '-';                         \
+        a = 1;                              \
+    }                                       \
+                                            \
+    while (m > 0) {                         \
+        s[i++] = m % 10 + '0';              \
+        m /= 10;                            \
+    }                                       \
+    s[i] = '\0';                            \
+                                            \
+    h = i >> 1;                             \
+    while (j < h) {                         \
+        k = i - j - 1;                      \
+        t = s[k];                           \
+        s[k] = s[j];                        \
+        s[j++] = t;                         \
+    }                                       \
+                                            \
+    return i + a;                           \
+}
+
+#define HEX_TO_STRING_FUNC(fname, ftype)    \
+static int fname(ftype n, char *c)          \
+{                                           \
+    char *s = c;                            \
+    ftype m = n, t = 0;                     \
+    int h = 0, i = 0, j = 0, k = 0, a = 0;  \
+                                            \
+    *s++ = '0';                             \
+    *s++ = 'x';                             \
+    if (m == 0) {                           \
+        *s++ = '0';                         \
+        *s = '\0';                          \
+        return 3;                           \
+    }                                       \
+    a = 2;                                  \
+                                            \
+    while (m > 0) {                         \
+        s[i++] = hex_array[m & 0xf];        \
+        m >>= 4;                            \
+    }                                       \
+    s[i] = '\0';                            \
+                                            \
+    h = i >> 1;                             \
+    while (j < h)                           \
+    {                                       \
+        t = i - j - 1;                      \
+        k = s[t];                           \
+        s[t] = s[j];                        \
+        s[j++] = k;                         \
+    }                                       \
+                                            \
+    return i + a;                           \
+}
+
+INT_TO_STRING_FUNC(int_to_string, int)
+INT_TO_STRING_FUNC(lint_to_string, long long int)
+HEX_TO_STRING_FUNC(hex_to_string, unsigned int)
+
+static int double_to_string(double n, char *c)
+{
+    char *s = c;
+    long long int x = 0;
+    double y = 0, z = n;
+    int a = 0, i = 0;
+
+    x = (long long int)z;
+    y = z - x;
+
+    if (x == 0) {
+        *s++ = '0';
+        if (y == 0) {
+            *s++ = '\0';
+            return 1;
+        } else {
+            *s++ = '.';
+            a = 2;
+            goto next;
+        }
+    } else {
+        a = lint_to_string(x, s);
+        if (y == 0) {
+            return a;
+        } else {
+            s += a;
+            *s++ = '.';
+            a += 1;
+            goto next;
+        }
+    }
+
+next:
+    if (n < 0) {
+        z = -n;
+        y = -y;
+    }
+
+    while (y) {
+        z *= 10;
+        x = (long long int)z;
+        y = z - x;
+        s[i++] = x % 10 + '0';
+    }
+    s[i] = '\0';
+
+    return i + a;
+}
+
 static int _print_file_ptr_realloc(json_print_t *print_ptr, size_t slen)
 {
     size_t len = print_ptr->used + slen + 1;
@@ -1000,7 +1128,7 @@ static int _json_print_string(json_print_t *print_ptr, const char *value)
     if (value) {
         vlen = strlen(value);
         len += vlen;
-        for (i = 0; i < vlen; i++) {
+        for (i = 0; i < vlen; ++i) {
             if (strchr("\"\\\b\f\n\r\t\v", value[i])) {
                 ++len;
 #if JSON_PRINT_UTF16_SUPPORT
@@ -1013,7 +1141,7 @@ static int _json_print_string(json_print_t *print_ptr, const char *value)
         _PRINT_PTR_REALLOC(print_ptr, len);
 
         print_ptr->ptr[print_ptr->used++] = '\"';
-        for (i = 0; i < vlen; i++) {
+        for (i = 0; i < vlen; ++i) {
             if (
 #if JSON_PRINT_UTF16_SUPPORT
                 (unsigned char)value[i] >= ' ' &&
@@ -1033,10 +1161,16 @@ static int _json_print_string(json_print_t *print_ptr, const char *value)
                 case '\v': print_ptr->ptr[print_ptr->used++] = 'v' ; break;
                 default:
 #if JSON_PRINT_UTF16_SUPPORT
-                   sprintf(print_ptr->ptr + print_ptr->used, "u%04x", (unsigned char)value[i]);
-                   print_ptr->used += 5;
+                    {
+                        unsigned char uc = (unsigned char)value[i];
+                        print_ptr->ptr[print_ptr->used++] = 'u';
+                        print_ptr->ptr[print_ptr->used++] = '0';
+                        print_ptr->ptr[print_ptr->used++] = '0';
+                        print_ptr->ptr[print_ptr->used++] = hex_array[uc >> 4 & 0xf];
+                        print_ptr->ptr[print_ptr->used++] = hex_array[uc & 0xf];
+                    }
 #endif
-                   break;
+                    break;
                 }
             }
         }
@@ -1055,6 +1189,7 @@ static int _json_print(json_print_t *print_ptr, json_object *json, int depth, bo
 {
     json_object *item = NULL;
     char nbuf[64] = {0};
+    int nlen = 0;
     int new_depth = 0;
 
     if (print_key) {
@@ -1079,16 +1214,16 @@ static int _json_print(json_print_t *print_ptr, json_object *json, int depth, bo
         }
         break;
     case JSON_INT:
-        sprintf(nbuf, "%d", json->value.vnum.vint);
-        _PRINT_PTR_STRNCAT(print_ptr, nbuf, strlen(nbuf));
+        nlen = int_to_string(json->value.vnum.vint, nbuf);
+        _PRINT_PTR_STRNCAT(print_ptr, nbuf, nlen);
         break;
     case JSON_HEX:
-        sprintf(nbuf, "0x%x", json->value.vnum.vhex);
-        _PRINT_PTR_STRNCAT(print_ptr, nbuf, strlen(nbuf));
+        nlen = hex_to_string(json->value.vnum.vhex, nbuf);
+        _PRINT_PTR_STRNCAT(print_ptr, nbuf, nlen);
         break;
     case JSON_DOUBLE:
-        sprintf(nbuf, "%.1lf", json->value.vnum.vdbl);
-        _PRINT_PTR_STRNCAT(print_ptr, nbuf, strlen(nbuf));
+        nlen = double_to_string(json->value.vnum.vdbl, nbuf);
+        _PRINT_PTR_STRNCAT(print_ptr, nbuf, nlen);
         break;
     case JSON_STRING:
         _JSON_PRINT_STRING(print_ptr, json->value.vstr);
@@ -1269,6 +1404,7 @@ int json_sax_print_value(json_sax_print_hd handle, json_type_t type, const char 
     json_sax_print_t *print_handle = handle;
     json_print_t *print_ptr = &print_handle->print_val;
     char nbuf[64] = {0};
+    int nlen = 0;
     int cur_pos = print_handle->count - 1;
 
     if (print_handle->error_flag) {
@@ -1321,16 +1457,16 @@ int json_sax_print_value(json_sax_print_hd handle, json_type_t type, const char 
         break;
 
     case JSON_INT:
-        sprintf(nbuf, "%d", (*(int*)value));
-        _PRINT_PTR_STRNCAT(print_ptr, nbuf, strlen(nbuf));
+        nlen = int_to_string(*(int*)value, nbuf);
+        _PRINT_PTR_STRNCAT(print_ptr, nbuf, nlen);
         break;
     case JSON_HEX:
-        sprintf(nbuf, "0x%x", (*(unsigned int*)value));
-        _PRINT_PTR_STRNCAT(print_ptr, nbuf, strlen(nbuf));
+        nlen = hex_to_string(*(unsigned int*)value, nbuf);
+        _PRINT_PTR_STRNCAT(print_ptr, nbuf, nlen);
         break;
     case JSON_DOUBLE:
-        sprintf(nbuf, "%.1lf", (*(double*)value));
-        _PRINT_PTR_STRNCAT(print_ptr, nbuf, strlen(nbuf));
+        nlen = double_to_string(*(double*)value, nbuf);
+        _PRINT_PTR_STRNCAT(print_ptr, nbuf, nlen);
         break;
     case JSON_STRING:
         _JSON_PRINT_STRING(print_ptr, ((char*)value));
@@ -1757,7 +1893,7 @@ static inline unsigned int _parse_hex4(const unsigned char *str)
     int i = 0;
     unsigned int val = 0;
 
-    for (i = 0; i < 4; i++) {
+    for (i = 0; i < 4; ++i) {
         switch (str[i]) {
         case '0': case '1': case '2': case '3': case '4':
         case '5': case '6': case '7': case '8': case '9':
@@ -1985,9 +2121,8 @@ static int _json_parse_string(json_parse_t *parse_ptr, char **pptr, bool key_fla
     return 0;
 
 err:
-    if (!parse_ptr->reuse_flag && parse_ptr->alloc == json_memory_alloc) {
+    if (parse_ptr->mem == &s_invalid_json_mem)
         json_free(ptr);
-    }
     if (parse_ptr->str)
         JsonErr("parse string failed!\n%s\n", parse_ptr->str + parse_ptr->offset);
     return -1;
@@ -2143,10 +2278,11 @@ end:
     *item = out_item;
     return 0;
 err:
-    if (!parse_ptr->mem) {
+    if (parse_ptr->mem == &s_invalid_json_mem) {
         if (out_item)
             json_free(out_item);
-        json_free(key);
+        if (key)
+            json_free(key);
     }
     return -1;
 }
@@ -2292,7 +2428,7 @@ static int _json_sax_parse_value(json_parse_t *parse_ptr, json_sax_str_t *key)
     if (parse_ptr->parser.count == parse_ptr->parser.total) {
         parse_ptr->parser.total += JSON_PARSE_NUM_PLUS_DEF;
         if ((tmp_array = json_malloc(parse_ptr->parser.total * sizeof(json_sax_depth_t))) == NULL) {
-            for (i = 0; i < parse_ptr->parser.count; i++) {
+            for (i = 0; i < parse_ptr->parser.count; ++i) {
                 if (parse_ptr->parser.array[i].key.alloc == 1 && parse_ptr->parser.array[i].key.str) {
                     json_free(parse_ptr->parser.array[i].key.str);
                 }
@@ -2515,7 +2651,7 @@ int json_sax_parse_common(json_sax_parse_choice_t *choice)
 
 end:
     if (parse_val.parser.array) {
-        for (i = 0; i < parse_val.parser.count; i++) {
+        for (i = 0; i < parse_val.parser.count; ++i) {
             if (parse_val.parser.array[i].key.alloc == 1 && parse_val.parser.array[i].key.str) {
                 json_free(parse_val.parser.array[i].key.str);
             }
