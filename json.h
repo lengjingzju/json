@@ -11,6 +11,7 @@
 
 #define JSON_VERSION                    0x010003
 #define JSON_SAX_APIS_SUPPORT           1
+#define JSON_LONG_LONG_SUPPORT          1
 
 /******** json object structure ********/
 
@@ -23,6 +24,10 @@ typedef enum {
     JSON_BOOL,
     JSON_INT,
     JSON_HEX,
+#if JSON_LONG_LONG_SUPPORT
+    JSON_LINT,
+    JSON_LHEX,
+#endif
     JSON_DOUBLE,
     JSON_STRING,
     JSON_ARRAY,
@@ -33,6 +38,10 @@ typedef union {
     bool vbool;
     int vint;
     unsigned int vhex;
+#if JSON_LONG_LONG_SUPPORT
+    long long int vlint;
+    unsigned long long int vlhex;
+#endif
     double vdbl;
 } json_number_t;
 
@@ -79,6 +88,18 @@ static inline json_object *json_create_hex(unsigned int value)
     return json_create_item(JSON_HEX, &value);
 }
 
+#if JSON_LONG_LONG_SUPPORT
+static inline json_object *json_create_lint(long long int value)
+{
+    return json_create_item(JSON_LINT, &value);
+}
+
+static inline json_object *json_create_lhex(unsigned long long int value)
+{
+    return json_create_item(JSON_LHEX, &value);
+}
+#endif
+
 static inline json_object *json_create_double(double value)
 {
     return json_create_item(JSON_DOUBLE, &value);
@@ -117,6 +138,18 @@ static inline json_object *json_create_hex_array(unsigned int *values, int count
     return json_create_item_array(JSON_HEX, values, count);
 }
 
+#if JSON_LONG_LONG_SUPPORT
+static inline json_object *json_create_lint_array(long long int *values, int count)
+{
+    return json_create_item_array(JSON_LINT, values, count);
+}
+
+static inline json_object *json_create_lhex_array(unsigned long long int *values, int count)
+{
+    return json_create_item_array(JSON_LHEX, values, count);
+}
+#endif
+
 static inline json_object *json_create_double_array(double *values, int count)
 {
     return json_create_item_array(JSON_DOUBLE, values, count);
@@ -154,6 +187,22 @@ static inline unsigned int json_get_hex_value(json_object *json)
     return value;
 }
 
+#if JSON_LONG_LONG_SUPPORT
+static inline long long int json_get_lint_value(json_object *json)
+{
+    long long int value = 0;
+    json_get_number_value(json, JSON_LINT, &value);
+    return value;
+}
+
+static inline unsigned long long int json_get_lhex_value(json_object *json)
+{
+    unsigned long long int value = 0;
+    json_get_number_value(json, JSON_LHEX, &value);
+    return value;
+}
+#endif
+
 static inline double json_get_double_value(json_object *json)
 {
     double value = 0;
@@ -175,6 +224,18 @@ static inline int json_set_hex_value(json_object *json, unsigned int value)
 {
     return json_set_number_value(json, JSON_HEX, &value);
 }
+
+#if JSON_LONG_LONG_SUPPORT
+static inline int json_set_lint_value(json_object *json, long long int value)
+{
+    return json_set_number_value(json, JSON_LINT, &value);
+}
+
+static inline int json_set_lhex_value(json_object *json, unsigned long long int value)
+{
+    return json_set_number_value(json, JSON_LHEX, &value);
+}
+#endif
 
 static inline int json_set_double_value(json_object *json, double value)
 {
@@ -224,6 +285,18 @@ static inline int json_add_hex_to_object(json_object *object, const char *key, u
 {
     return json_add_new_item_to_object(object, JSON_HEX, key, &value);
 }
+
+#if JSON_LONG_LONG_SUPPORT
+static inline int json_add_lint_to_object(json_object *object, const char *key, long long int value)
+{
+    return json_add_new_item_to_object(object, JSON_LINT, key, &value);
+}
+
+static inline int json_add_lhex_to_object(json_object *object, const char *key, unsigned long long int value)
+{
+    return json_add_new_item_to_object(object, JSON_LHEX, key, &value);
+}
+#endif
 
 static inline int json_add_double_to_object(json_object *object, const char *key, double value)
 {
@@ -289,6 +362,18 @@ static inline json_object *pjson_create_hex(unsigned int value, json_mem_t *mem)
     return pjson_create_item(JSON_HEX, &value, mem);
 }
 
+#if JSON_LONG_LONG_SUPPORT
+static inline json_object *pjson_create_lint(long long int value, json_mem_t *mem)
+{
+    return pjson_create_item(JSON_LINT, &value, mem);
+}
+
+static inline json_object *pjson_create_lhex(unsigned long long int value, json_mem_t *mem)
+{
+    return pjson_create_item(JSON_LHEX, &value, mem);
+}
+#endif
+
 static inline json_object *pjson_create_double(double value, json_mem_t *mem)
 {
     return pjson_create_item(JSON_DOUBLE, &value, mem);
@@ -327,6 +412,18 @@ static inline json_object *pjson_create_hex_array(unsigned int *values, int coun
     return pjson_create_item_array(JSON_HEX, values, count, mem);
 }
 
+#if JSON_LONG_LONG_SUPPORT
+static inline json_object *pjson_create_lint_array(long long int *values, int count, json_mem_t *mem)
+{
+    return pjson_create_item_array(JSON_LINT, values, count, mem);
+}
+
+static inline json_object *pjson_create_lhex_array(unsigned long long int *values, int count, json_mem_t *mem)
+{
+    return pjson_create_item_array(JSON_LHEX, values, count, mem);
+}
+#endif
+
 static inline json_object *pjson_create_double_array(double *values, int count, json_mem_t *mem)
 {
     return pjson_create_item_array(JSON_DOUBLE, values, count, mem);
@@ -360,6 +457,18 @@ static inline int pjson_add_hex_to_object(json_object *object, const char *key, 
 {
     return pjson_add_new_item_to_object(object, JSON_HEX, key, &value, mem);
 }
+
+#if JSON_LONG_LONG_SUPPORT
+static inline int pjson_add_lint_to_object(json_object *object, const char *key, long long int value, json_mem_t *mem)
+{
+    return pjson_add_new_item_to_object(object, JSON_LINT, key, &value, mem);
+}
+
+static inline int pjson_add_lhex_to_object(json_object *object, const char *key, unsigned long long int value, json_mem_t *mem)
+{
+    return pjson_add_new_item_to_object(object, JSON_LHEX, key, &value, mem);
+}
+#endif
 
 static inline int pjson_add_double_to_object(json_object *object, const char *key, double value, json_mem_t *mem)
 {
@@ -543,6 +652,18 @@ static inline int json_sax_print_hex(json_sax_print_hd handle, const char *key, 
 {
     return json_sax_print_value(handle, JSON_HEX, key, &value);
 }
+
+#if JSON_LONG_LONG_SUPPORT
+static inline int json_sax_print_lint(json_sax_print_hd handle, const char *key, long long int value)
+{
+    return json_sax_print_value(handle, JSON_LINT, key, &value);
+}
+
+static inline int json_sax_print_lhex(json_sax_print_hd handle, const char *key, unsigned long long int value)
+{
+    return json_sax_print_value(handle, JSON_LHEX, key, &value);
+}
+#endif
 
 static inline int json_sax_print_double(json_sax_print_hd handle, const char *key, double value)
 {

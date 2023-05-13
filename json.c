@@ -208,22 +208,17 @@ json_object *json_create_item(json_type_t type, void *value)
     switch (type) {
     case JSON_NULL:
         break;
-    case JSON_BOOL:
-        json->value.vnum.vbool = *(bool *)value;
-        break;
-    case JSON_INT:
-        json->value.vnum.vint = *(int *)value;
-        break;
-    case JSON_HEX:
-        json->value.vnum.vhex = *(unsigned int *)value;
-        break;
-    case JSON_DOUBLE:
-        json->value.vnum.vdbl = *(double *)value;
-        break;
+    case JSON_BOOL:   json->value.vnum.vbool = *(bool *)value;                  break;
+    case JSON_INT:    json->value.vnum.vint  = *(int *)value;                   break;
+    case JSON_HEX:    json->value.vnum.vhex  = *(unsigned int *)value;          break;
+#if JSON_LONG_LONG_SUPPORT
+    case JSON_LINT:   json->value.vnum.vlint = *(long long int *)value;         break;
+    case JSON_LHEX:   json->value.vnum.vlhex = *(unsigned long long int *)value;break;
+#endif
+    case JSON_DOUBLE: json->value.vnum.vdbl  = *(double *)value;                break;
     case JSON_STRING:
-        if (json_set_string_value(json, *(char **)value) < 0) {
+        if (json_set_string_value(json, *(char **)value) < 0)
             return NULL;
-        }
         break;
     case JSON_ARRAY:
     case JSON_OBJECT:
@@ -249,24 +244,16 @@ json_object *json_create_item_array(json_type_t type, void *values, int count)
 
     for (i = 0; i < count; ++i) {
         switch (type) {
-        case JSON_BOOL:
-            value = ((bool *)values) + i;
-            break;
-        case JSON_INT:
-            value = ((int *)values) + i;
-            break;
-        case JSON_HEX:
-            value = ((unsigned int *)values) + i;
-            break;
-        case JSON_DOUBLE:
-            value = ((double *)values) + i;
-            break;
-        case JSON_STRING:
-            value = ((char **)values) + i;
-            break;
-        default:
-            JsonErr("not support json type.\n");
-            goto err;
+        case JSON_BOOL:   value = ((bool *)values) + i;                  break;
+        case JSON_INT:    value = ((int *)values) + i;                   break;
+        case JSON_HEX:    value = ((unsigned int *)values) + i;          break;
+#if JSON_LONG_LONG_SUPPORT
+        case JSON_LINT:   value = ((long long int *)values) + i;         break;
+        case JSON_LHEX:   value = ((unsigned long long int *)values) + i;break;
+#endif
+        case JSON_DOUBLE: value = ((double *)values) + i;                break;
+        case JSON_STRING: value = ((char **)values) + i;                 break;
+        default:          JsonErr("not support json type.\n");        goto err;
         }
 
         if ((node = json_create_item(type, value)) == NULL) {
@@ -325,22 +312,35 @@ int json_set_string_value(json_object *json, const char *str)
 
 int json_get_number_value(json_object *json, json_type_t type, void *value)
 {
-#define _get_number(json, etype, val) do {                                  \
-    switch (json->type) {                                                   \
-    case JSON_BOOL:   *(etype *)val = (etype)json->value.vnum.vbool; break; \
-    case JSON_INT:    *(etype *)val = (etype)json->value.vnum.vint;  break; \
-    case JSON_HEX:    *(etype *)val = (etype)json->value.vnum.vhex;  break; \
-    case JSON_DOUBLE: *(etype *)val = (etype)json->value.vnum.vdbl;  break; \
-    default: *(etype *)val = (etype)0; JsonErr("wrong type!\n"); return -1; \
-    }                                                                       \
+#if JSON_LONG_LONG_SUPPORT
+#define _get_lnumber(json, etype, val)                                        \
+    case JSON_LINT:   *(etype *)val = (etype)json->value.vnum.vlint;   break; \
+    case JSON_LHEX:   *(etype *)val = (etype)json->value.vnum.vlhex;   break;
+#else
+#define _get_lnumber(json, etype, val)
+#endif
+
+#define _get_number(json, etype, val) do {                                    \
+    switch (json->type) {                                                     \
+    case JSON_BOOL:   *(etype *)val = (etype)json->value.vnum.vbool;   break; \
+    case JSON_INT:    *(etype *)val = (etype)json->value.vnum.vint;    break; \
+    case JSON_HEX:    *(etype *)val = (etype)json->value.vnum.vhex;    break; \
+    _get_lnumber(json, etype, val)                                            \
+    case JSON_DOUBLE: *(etype *)val = (etype)json->value.vnum.vdbl;    break; \
+    default: *(etype *)val = (etype)0; JsonErr("wrong type!\n");   return -1; \
+    }                                                                         \
 } while(0)
 
     switch (type) {
-    case JSON_BOOL:   _get_number(json, bool, value);         break;
-    case JSON_INT:    _get_number(json, int, value);          break;
-    case JSON_HEX:    _get_number(json, unsigned int, value); break;
-    case JSON_DOUBLE: _get_number(json, double, value);       break;
-    default:          JsonErr("wrong type!\n");           return -1;
+    case JSON_BOOL:   _get_number(json, bool, value);                  break;
+    case JSON_INT:    _get_number(json, int, value);                   break;
+    case JSON_HEX:    _get_number(json, unsigned int, value);          break;
+#if JSON_LONG_LONG_SUPPORT
+    case JSON_LINT:   _get_number(json, long long int, value);         break;
+    case JSON_LHEX:   _get_number(json, unsigned long long int, value);break;
+#endif
+    case JSON_DOUBLE: _get_number(json, double, value);                break;
+    default:          JsonErr("wrong type!\n");                    return -1;
     }
 
     return json->type == type ? 0 : json->type;
@@ -351,16 +351,30 @@ int json_set_number_value(json_object *json, json_type_t type, void *value)
     int ret = 0;
 
     switch (json->type) {
-    case JSON_BOOL: case JSON_INT: case JSON_HEX: case JSON_DOUBLE:   break;
-    default:          JsonErr("wrong type!\n");                   return -1;
+    case JSON_BOOL:
+    case JSON_INT:
+    case JSON_HEX:
+#if JSON_LONG_LONG_SUPPORT
+    case JSON_LINT:
+    case JSON_LHEX:
+#endif
+    case JSON_DOUBLE:
+        break;
+    default:
+        JsonErr("wrong type!\n");
+        return -1;
     }
 
     switch (type) {
-    case JSON_BOOL:   json->value.vnum.vbool= *(bool *)value;         break;
-    case JSON_INT:    json->value.vnum.vint = *(int *)value;          break;
-    case JSON_HEX:    json->value.vnum.vhex = *(unsigned int *)value; break;
-    case JSON_DOUBLE: json->value.vnum.vdbl = *(double *)value;       break;
-    default:                                                      return -1;
+    case JSON_BOOL:   json->value.vnum.vbool = *(bool *)value;                  break;
+    case JSON_INT:    json->value.vnum.vint  = *(int *)value;                   break;
+    case JSON_HEX:    json->value.vnum.vhex  = *(unsigned int *)value;          break;
+#if JSON_LONG_LONG_SUPPORT
+    case JSON_LINT:   json->value.vnum.vlint = *(long long int *)value;         break;
+    case JSON_LHEX:   json->value.vnum.vlhex = *(unsigned long long int *)value;break;
+#endif
+    case JSON_DOUBLE: json->value.vnum.vdbl  = *(double *)value;                break;
+    default:                                                                return -1;
     }
 
     if (json->type != type) {
@@ -526,15 +540,19 @@ json_object *json_deepcopy(json_object *json)
     json_object *item = NULL, *node = NULL;
 
     switch (json->type) {
-    case JSON_NULL:   new_json = json_create_null(); break;
-    case JSON_BOOL:   new_json = json_create_bool(json->value.vnum.vbool); break;
-    case JSON_INT:    new_json = json_create_int(json->value.vnum.vint); break;
-    case JSON_HEX:    new_json = json_create_hex(json->value.vnum.vhex); break;
+    case JSON_NULL:   new_json = json_create_null();                        break;
+    case JSON_BOOL:   new_json = json_create_bool(json->value.vnum.vbool);  break;
+    case JSON_INT:    new_json = json_create_int(json->value.vnum.vint);    break;
+    case JSON_HEX:    new_json = json_create_hex(json->value.vnum.vhex);    break;
+#if JSON_LONG_LONG_SUPPORT
+    case JSON_LINT:   new_json = json_create_lint(json->value.vnum.vlint);  break;
+    case JSON_LHEX:   new_json = json_create_lhex(json->value.vnum.vlhex);  break;
+#endif
     case JSON_DOUBLE: new_json = json_create_double(json->value.vnum.vdbl); break;
-    case JSON_STRING: new_json = json_create_string(json->value.vstr); break;
-    case JSON_ARRAY:  new_json = json_create_array(); break;
-    case JSON_OBJECT: new_json = json_create_object(); break;
-    default: break;
+    case JSON_STRING: new_json = json_create_string(json->value.vstr);      break;
+    case JSON_ARRAY:  new_json = json_create_array();                       break;
+    case JSON_OBJECT: new_json = json_create_object();                      break;
+    default:                                                                break;
     }
 
     if (new_json) {
@@ -608,6 +626,10 @@ int json_add_new_item_to_object(json_object *object, json_type_t type, const cha
         case JSON_BOOL:
         case JSON_INT:
         case JSON_HEX:
+#if JSON_LONG_LONG_SUPPORT
+        case JSON_LINT:
+        case JSON_LHEX:
+#endif
         case JSON_DOUBLE:
         case JSON_STRING:
             if ((item = json_create_item(type, value)) == NULL) {
@@ -747,22 +769,17 @@ json_object *pjson_create_item(json_type_t type, void *value, json_mem_t *mem)
     switch (json->type) {
     case JSON_NULL:
         break;
-    case JSON_BOOL:
-        json->value.vnum.vbool = *(bool *)value;
-        break;
-    case JSON_INT:
-        json->value.vnum.vint = *(int *)value;
-        break;
-    case JSON_HEX:
-        json->value.vnum.vhex = *(unsigned int *)value;
-        break;
-    case JSON_DOUBLE:
-        json->value.vnum.vdbl = *(double *)value;
-        break;
+    case JSON_BOOL:   json->value.vnum.vbool = *(bool *)value;                  break;
+    case JSON_INT:    json->value.vnum.vint  = *(int *)value;                   break;
+    case JSON_HEX:    json->value.vnum.vhex  = *(unsigned int *)value;          break;
+#if JSON_LONG_LONG_SUPPORT
+    case JSON_LINT:   json->value.vnum.vlint = *(long long int *)value;         break;
+    case JSON_LHEX:   json->value.vnum.vlhex = *(unsigned long long int *)value;break;
+#endif
+    case JSON_DOUBLE: json->value.vnum.vdbl  = *(double *)value;                break;
     case JSON_STRING:
-        if (pjson_set_string_value(json, *(char **)value, mem) < 0) {
+        if (pjson_set_string_value(json, *(char **)value, mem) < 0)
             return NULL;
-        }
         break;
     case JSON_ARRAY:
     case JSON_OBJECT:
@@ -788,24 +805,16 @@ json_object *pjson_create_item_array(json_type_t item_type, void *values, int co
 
     for (i = 0; i < count; ++i) {
         switch (item_type) {
-        case JSON_BOOL:
-            value = ((bool *)values) + i;
-            break;
-        case JSON_INT:
-            value = ((int *)values) + i;
-            break;
-        case JSON_HEX:
-            value = ((unsigned int *)values) + i;
-            break;
-        case JSON_DOUBLE:
-            value = ((double *)values) + i;
-            break;
-        case JSON_STRING:
-            value = ((char **)values) + i;
-            break;
-        default:
-            JsonErr("not support json type.\n");
-            return NULL;
+        case JSON_BOOL:   value = ((bool *)values) + i;                   break;
+        case JSON_INT:    value = ((int *)values) + i;                    break;
+        case JSON_HEX:    value = ((unsigned int *)values) + i;           break;
+#if JSON_LONG_LONG_SUPPORT
+        case JSON_LINT:   value = ((long long int *)values) + i;          break;
+        case JSON_LHEX:   value = ((unsigned long long int *)values) + i; break;
+#endif
+        case JSON_DOUBLE: value = ((double *)values) + i;                 break;
+        case JSON_STRING: value = ((char **)values) + i;                  break;
+        default: JsonErr("not support json type.\n");               return NULL;
         }
 
         if ((node = pjson_create_item(item_type, value, mem)) == NULL) {
@@ -882,6 +891,10 @@ int pjson_add_new_item_to_object(json_object *object, json_type_t type, const ch
         case JSON_BOOL:
         case JSON_INT:
         case JSON_HEX:
+#if JSON_LONG_LONG_SUPPORT
+        case JSON_LINT:
+        case JSON_LHEX:
+#endif
         case JSON_DOUBLE:
         case JSON_STRING:
             if ((item = pjson_create_item(type, value, mem)) == NULL) {
@@ -998,6 +1011,9 @@ static int fname(ftype n, char *c)          \
 INT_TO_STRING_FUNC(int_to_string, int)
 INT_TO_STRING_FUNC(lint_to_string, long long int)
 HEX_TO_STRING_FUNC(hex_to_string, unsigned int)
+#if JSON_LONG_LONG_SUPPORT
+HEX_TO_STRING_FUNC(lhex_to_string, unsigned long long int)
+#endif
 
 static int double_to_string(double n, char *c)
 {
@@ -1238,6 +1254,16 @@ static int _json_print(json_print_t *print_ptr, json_object *json, int depth, bo
         nlen = hex_to_string(json->value.vnum.vhex, nbuf);
         _PRINT_PTR_STRNCAT(print_ptr, nbuf, nlen);
         break;
+#if JSON_LONG_LONG_SUPPORT
+    case JSON_LINT:
+        nlen = lint_to_string(json->value.vnum.vlint, nbuf);
+        _PRINT_PTR_STRNCAT(print_ptr, nbuf, nlen);
+        break;
+    case JSON_LHEX:
+        nlen = lhex_to_string(json->value.vnum.vlhex, nbuf);
+        _PRINT_PTR_STRNCAT(print_ptr, nbuf, nlen);
+        break;
+#endif
     case JSON_DOUBLE:
         nlen = double_to_string(json->value.vnum.vdbl, nbuf);
         _PRINT_PTR_STRNCAT(print_ptr, nbuf, nlen);
@@ -1481,6 +1507,16 @@ int json_sax_print_value(json_sax_print_hd handle, json_type_t type, const char 
         nlen = hex_to_string(*(unsigned int*)value, nbuf);
         _PRINT_PTR_STRNCAT(print_ptr, nbuf, nlen);
         break;
+#if JSON_LONG_LONG_SUPPORT
+    case JSON_LINT:
+        nlen = lint_to_string(*(long long int*)value, nbuf);
+        _PRINT_PTR_STRNCAT(print_ptr, nbuf, nlen);
+        break;
+    case JSON_LHEX:
+        nlen = lhex_to_string(*(unsigned long long int*)value, nbuf);
+        _PRINT_PTR_STRNCAT(print_ptr, nbuf, nlen);
+        break;
+#endif
     case JSON_DOUBLE:
         nlen = double_to_string(*(double*)value, nbuf);
         _PRINT_PTR_STRNCAT(print_ptr, nbuf, nlen);
@@ -1831,8 +1867,18 @@ static int _parse_num(char **sstr, json_number_t *vnum)
             m = (m << 4) + _hex_char_calculate(*num++);
 
         *sstr = num;
-        vnum->vhex = m;
-        return JSON_HEX;
+        if (m > UINT_MAX) {
+#if JSON_LONG_LONG_SUPPORT
+            vnum->vlhex = m;
+            return JSON_LHEX;
+#else
+            vnum->vdbl = m;
+            return JSON_DOUBLE;
+#endif
+        } else {
+            vnum->vhex = m;
+            return JSON_HEX;
+        }
     } else {
         switch (*num) {
         case '-': num++; sign = -1; break;
@@ -1859,8 +1905,13 @@ static int _parse_num(char **sstr, json_number_t *vnum)
         } else {
             *sstr = num;
             if (m > INT_MAX) {
+#if JSON_LONG_LONG_SUPPORT
+                vnum->vlint = sign == 1 ? m : -m;
+                return JSON_LINT;
+#else
                 vnum->vdbl = sign == 1 ? m : -m;
                 return JSON_DOUBLE;
+#endif
             } else {
                 vnum->vint = sign == 1 ? m : -m;
                 return JSON_INT;
@@ -1881,17 +1932,34 @@ static json_type_t _json_parse_number(char **sstr, json_number_t *vnum)
     ret = _parse_num(sstr, vnum);
     switch (ret) {
     case JSON_HEX:
+#if JSON_LONG_LONG_SUPPORT
+    case JSON_LHEX:
+#endif
         return ret;
     case JSON_INT:
+#if JSON_LONG_LONG_SUPPORT
+    case JSON_LINT:
+#endif
     case JSON_DOUBLE:
         switch (**sstr) {
         case 'e': case 'E':
             *sstr += 1;
-            nbase = (ret == JSON_INT) ? vnum->vint : vnum->vdbl;
+            switch (ret) {
+            case JSON_INT:     nbase = vnum->vint;  break;
+#if JSON_LONG_LONG_SUPPORT
+            case JSON_LINT:    nbase = vnum->vlint; break;
+#endif
+            case JSON_DOUBLE:  nbase = vnum->vdbl;  break;
+            default: break;
+            }
+
             tret = _parse_num(sstr, &tnum);
             switch (tret) {
-            case JSON_INT: nindex = tnum.vint; break;
-            case JSON_DOUBLE: nindex = tnum.vdbl; break;
+            case JSON_INT:    nindex = tnum.vint;   break;
+#if JSON_LONG_LONG_SUPPORT
+            case JSON_LINT:   nindex = tnum.vlint;  break;
+#endif
+            case JSON_DOUBLE: nindex = tnum.vdbl;   break;
             default: return JSON_NULL;
             }
             vnum->vdbl = nbase * pow (10.0, nindex);
@@ -2183,10 +2251,14 @@ static int _json_parse_value(json_parse_t *parse_ptr, json_object **item, json_o
             nret = _json_parse_number(&str, &vnum);
             out_item->type = nret;
             switch (nret) {
-            case JSON_INT:    out_item->value.vnum.vint = vnum.vint; break;
-            case JSON_HEX:    out_item->value.vnum.vhex = vnum.vhex; break;
-            case JSON_DOUBLE: out_item->value.vnum.vdbl = vnum.vdbl; break;
-            default:          JsonPareseErr("Not number!");       goto err;
+            case JSON_INT:    out_item->value.vnum.vint  = vnum.vint;  break;
+            case JSON_HEX:    out_item->value.vnum.vhex  = vnum.vhex;  break;
+#if JSON_LONG_LONG_SUPPORT
+            case JSON_LINT:   out_item->value.vnum.vlint = vnum.vlint; break;
+            case JSON_LHEX:   out_item->value.vnum.vlhex = vnum.vlhex; break;
+#endif
+            case JSON_DOUBLE: out_item->value.vnum.vdbl  = vnum.vdbl;  break;
+            default:          JsonPareseErr("Not number!");         goto err;
             }
             _update_parse_offset(parse_ptr, str-str_bak);
             break;
@@ -2487,10 +2559,14 @@ static int _json_sax_parse_value(json_parse_t *parse_ptr, json_sax_str_t *key)
             nret = _json_parse_number(&str, &vnum);
             parse_ptr->parser.array[cur_depth].type = nret;
             switch (nret) {
-            case JSON_INT:    parse_ptr->parser.value.vnum.vint = vnum.vint; break;
-            case JSON_HEX:    parse_ptr->parser.value.vnum.vhex = vnum.vhex; break;
-            case JSON_DOUBLE: parse_ptr->parser.value.vnum.vdbl = vnum.vdbl; break;
-            default:          JsonPareseErr("Not number!");               goto end;
+            case JSON_INT:    parse_ptr->parser.value.vnum.vint  = vnum.vint;  break;
+            case JSON_HEX:    parse_ptr->parser.value.vnum.vhex  = vnum.vhex;  break;
+#if JSON_LONG_LONG_SUPPORT
+            case JSON_LINT:   parse_ptr->parser.value.vnum.vlint = vnum.vlint; break;
+            case JSON_LHEX:   parse_ptr->parser.value.vnum.vlhex = vnum.vlhex; break;
+#endif
+            case JSON_DOUBLE: parse_ptr->parser.value.vnum.vdbl  = vnum.vdbl;  break;
+            default:          JsonPareseErr("Not number!");                 goto end;
             }
             _update_parse_offset(parse_ptr, str-str_bak);
             break;

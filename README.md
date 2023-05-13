@@ -38,6 +38,8 @@
 
 ## json对象结构
 
+使用 long long 类型支持，编译时需要设置 json.h 中的 `JSON_LONG_LONG_SUPPORT` 值为 1
+
 ```c
 struct json_list_head {
     struct json_list_head *next, *prev;
@@ -48,6 +50,10 @@ typedef enum {
     JSON_BOOL,
     JSON_INT,
     JSON_HEX,
+#if JSON_LONG_LONG_SUPPORT
+    JSON_LINT,
+    JSON_LHEX,
+#endif
     JSON_DOUBLE,
     JSON_STRING,
     JSON_ARRAY,
@@ -58,6 +64,10 @@ typedef union {
     bool vbool;
     int vint;
     unsigned int vhex;
+#if JSON_LONG_LONG_SUPPORT
+    long long int vlint;
+    unsigned long long int vlhex;
+#endif
     double vdbl;
 } json_number_t;                        // json数字对象值
 
@@ -95,6 +105,10 @@ static inline json_object *json_create_null(void);
 static inline json_object *json_create_bool(bool value);
 static inline json_object *json_create_int(int value);
 static inline json_object *json_create_hex(unsigned int value);
+#if JSON_LONG_LONG_SUPPORT
+static inline json_object *json_create_lint(long long int value);
+static inline json_object *json_create_lhex(unsigned long long int value);
+#endif
 static inline json_object *json_create_double(double value);
 static inline json_object *json_create_string(const char *value);
 static inline json_object *json_create_array(void);
@@ -103,6 +117,10 @@ static inline json_object *json_create_object(void);
 static inline json_object *json_create_bool_array(bool *values, int count);
 static inline json_object *json_create_int_array(int *values, int count);
 static inline json_object *json_create_hex_array(unsigned int *values, int count);
+#if JSON_LONG_LONG_SUPPORT
+static inline json_object *json_create_lint_array(long long int *values, int count);
+static inline json_object *json_create_lhex_array(unsigned long long int *values, int count);
+#endif
 static inline json_object *json_create_double_array(double *values, int count);
 static inline json_object *json_create_string_array(char **values, int count);
 ```
@@ -122,11 +140,19 @@ int json_set_number_value(json_object *json, json_type_t type, void *value);
 static inline bool json_get_bool_value(json_object *json);
 static inline int json_get_int_value(json_object *json);
 static inline unsigned int json_get_hex_value(json_object *json);
+#if JSON_LONG_LONG_SUPPORT
+static inline long long int json_get_lint_value(json_object *json);
+static inline unsigned long long int json_get_lhex_value(json_object *json);
+#endif
 static inline double json_get_double_value(json_object *json);
 
 static inline int json_set_bool_value(json_object *json, bool value);
 static inline int json_set_int_value(json_object *json, int value);
 static inline int json_set_hex_value(json_object *json, unsigned int value);
+#if JSON_LONG_LONG_SUPPORT
+static inline int json_set_lint_value(json_object *json, long long int value);
+static inline int json_set_lhex_value(json_object *json, unsigned long long int value);
+#endif
 static inline int json_set_double_value(json_object *json, double value);
 ```
 
@@ -194,6 +220,10 @@ static inline int json_add_null_to_object(json_object *object, const char *key);
 static inline int json_add_bool_to_object(json_object *object, const char *key, bool value);
 static inline int json_add_int_to_object(json_object *object, const char *key, int value);
 static inline int json_add_hex_to_object(json_object *object, const char *key, unsigned int value);
+#if JSON_LONG_LONG_SUPPORT
+static inline int json_add_lint_to_object(json_object *object, const char *key, long long int value);
+static inline int json_add_lhex_to_object(json_object *object, const char *key, unsigned long long int value);
+#endif
 static inline int json_add_double_to_object(json_object *object, const char *key, double value);
 static inline int json_add_string_to_object(json_object *object, const char *key, const char *value);
 ```
@@ -256,6 +286,10 @@ static inline json_object *pjson_create_null(json_mem_t *mem);
 static inline json_object *pjson_create_bool(bool value, json_mem_t *mem);
 static inline json_object *pjson_create_int(int value, json_mem_t *mem);
 static inline json_object *pjson_create_hex(unsigned int value, json_mem_t *mem);
+#if JSON_LONG_LONG_SUPPORT
+static inline json_object *pjson_create_lint(long long int value, json_mem_t *mem);
+static inline json_object *pjson_create_lhex(unsigned long long int value, json_mem_t *mem);
+#endif
 static inline json_object *pjson_create_double(double value, json_mem_t *mem);
 static inline json_object *pjson_create_string(const char *value, json_mem_t *mem);
 static inline json_object *pjson_create_array(json_mem_t *mem);
@@ -264,6 +298,10 @@ static inline json_object *pjson_create_object(json_mem_t *mem);
 static inline json_object *pjson_create_bool_array(bool *values, int count, json_mem_t *mem);
 static inline json_object *pjson_create_int_array(int *values, int count, json_mem_t *mem);
 static inline json_object *pjson_create_hex_array(unsigned int *values, int count, json_mem_t *mem);
+#if JSON_LONG_LONG_SUPPORT
+static inline json_object *pjson_create_lint_array(long long int *values, int count, json_mem_t *mem);
+static inline json_object *pjson_create_lhex_array(unsigned long long int *values, int count, json_mem_t *mem);
+#endif
 static inline json_object *pjson_create_double_array(double *values, int count, json_mem_t *mem);
 static inline json_object *pjson_create_string_array(char **values, int count, json_mem_t *mem);
 ```
@@ -280,6 +318,10 @@ static inline int pjson_add_null_to_object(json_object *object, const char *key,
 static inline int pjson_add_bool_to_object(json_object *object, const char *key, bool value, json_mem_t *mem);
 static inline int pjson_add_int_to_object(json_object *object, const char *key, int value, json_mem_t *mem);
 static inline int pjson_add_hex_to_object(json_object *object, const char *key, unsigned int value, json_mem_t *mem);
+#if JSON_LONG_LONG_SUPPORT
+static inline int pjson_add_lint_to_object(json_object *object, const char *key, long long int value, json_mem_t *mem);
+static inline int pjson_add_lhex_to_object(json_object *object, const char *key, unsigned long long int value, json_mem_t *mem);
+#endif
 static inline int pjson_add_double_to_object(json_object *object, const char *key, double value, json_mem_t *mem);
 static inline int pjson_add_string_to_object(json_object *object, const char *key, const char *value, json_mem_t *mem);
 ```
@@ -373,6 +415,8 @@ static inline json_object *json_fast_parse_file(const char *path, json_mem_t *me
 
 ## SAX打印/SAX解析
 
+使用 SAX APIs 编译时需要设置 json.h 中的 `JSON_SAX_APIS_SUPPORT` 值为 1
+
 ```c
 typedef enum {
     JSON_SAX_START = 0,
@@ -389,6 +433,10 @@ static inline int json_sax_print_null(json_sax_print_hd handle, const char *key)
 static inline int json_sax_print_bool(json_sax_print_hd handle, const char *key, bool value);
 static inline int json_sax_print_int(json_sax_print_hd handle, const char *key, int value);
 static inline int json_sax_print_hex(json_sax_print_hd handle, const char *key, unsigned int value);
+#if JSON_LONG_LONG_SUPPORT
+static inline int json_sax_print_lint(json_sax_print_hd handle, const char *key, long long int value);
+static inline int json_sax_print_lhex(json_sax_print_hd handle, const char *key, unsigned long long int value);
+#endif
 static inline int json_sax_print_double(json_sax_print_hd handle, const char *key, double value);
 static inline int json_sax_print_string(json_sax_print_hd handle, const char *key, const char *value);
 static inline int json_sax_print_array(json_sax_print_hd handle, const char *key, json_sax_cmd_t value);
