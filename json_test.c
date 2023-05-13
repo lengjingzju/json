@@ -142,6 +142,7 @@ json_sax_ret_t _sax_parser_cb(json_sax_parser_t *parser)
     char key_buf[KEY_BUF_LEN] = {0};
     char str_buf[STR_BUF_LEN] = {0};
     json_sax_depth_t *depth = &parser->array[parser->count-1];
+
     if (depth->key.alloc == 0 && depth->key.str != NULL) {
         if (depth->key.len < KEY_BUF_LEN) {
             key = key_buf;
@@ -155,75 +156,82 @@ json_sax_ret_t _sax_parser_cb(json_sax_parser_t *parser)
         key = depth->key.str;
     }
 
-    switch (parser->array[parser->count-1].type) {
-        case JSON_NULL:
-            json_sax_print_null(handle, key);
-            break;
-        case JSON_BOOL:
-            json_sax_print_bool(handle, key, parser->value.vnum.vbool);
-            break;
-        case JSON_INT:
-            json_sax_print_int(handle, key, parser->value.vnum.vint);
-            break;
-        case JSON_HEX:
-            json_sax_print_hex(handle, key, parser->value.vnum.vhex);
-            break;
-#if JSON_LONG_LONG_SUPPORT
-        case JSON_LINT:
-            json_sax_print_lint(handle, key, parser->value.vnum.vlint);
-            break;
-        case JSON_LHEX:
-            json_sax_print_lhex(handle, key, parser->value.vnum.vlhex);
-            break;
-#endif
-        case JSON_DOUBLE:
-            json_sax_print_double(handle, key, parser->value.vnum.vdbl);
-            break;
-        case JSON_STRING:
-            if (parser->value.vstr.alloc == 0 && parser->value.vstr.str != NULL) {
-                if (parser->value.vstr.len < STR_BUF_LEN) {
-                    str = str_buf;
-                } else {
-                    str = malloc(parser->value.vstr.len + 1);
-                    str_alloc_flag = 1;
-                }
-                memcpy(str, parser->value.vstr.str, parser->value.vstr.len);
-                str[parser->value.vstr.len] = 0;
-                json_sax_print_string(handle, key, str);
-                if (str_alloc_flag)
-                    free(str);
-            } else {
-                json_sax_print_string(handle, key, parser->value.vstr.str);
-            }
-            break;
+    if (parser->count == 1) {
+        switch (parser->array[parser->count-1].type) {
         case JSON_ARRAY:
-            if (parser->count == 1) {
-                if (parser->value.vcmd == JSON_SAX_START) {
-                    handle = json_sax_fprint_format_start(s_dst_json_path);
-                    json_sax_print_array(handle, key, parser->value.vcmd);
-                } else {
-                    json_sax_print_array(handle, key, parser->value.vcmd);
-                    json_sax_print_finish(handle);
-                }
-            } else {
-                json_sax_print_array(handle, key, parser->value.vcmd);
-            }
-            break;
         case JSON_OBJECT:
-            if (parser->count == 1) {
-                if (parser->value.vcmd == JSON_SAX_START) {
-                    handle = json_sax_fprint_format_start(s_dst_json_path);
-                    json_sax_print_object(handle, key, parser->value.vcmd);
-                } else {
-                    json_sax_print_object(handle, key, parser->value.vcmd);
-                    json_sax_print_finish(handle);
-                }
-            } else {
-                json_sax_print_object(handle, key, parser->value.vcmd);
-            }
-           break;
+            if (parser->value.vcmd == JSON_SAX_START)
+                handle = json_sax_fprint_format_start(s_dst_json_path);
+            break;
         default:
-           break;
+            handle = json_sax_fprint_format_start(s_dst_json_path);
+            break;
+        }
+    }
+
+    switch (parser->array[parser->count-1].type) {
+    case JSON_NULL:
+        json_sax_print_null(handle, key);
+        break;
+    case JSON_BOOL:
+        json_sax_print_bool(handle, key, parser->value.vnum.vbool);
+        break;
+    case JSON_INT:
+        json_sax_print_int(handle, key, parser->value.vnum.vint);
+        break;
+    case JSON_HEX:
+        json_sax_print_hex(handle, key, parser->value.vnum.vhex);
+        break;
+#if JSON_LONG_LONG_SUPPORT
+    case JSON_LINT:
+        json_sax_print_lint(handle, key, parser->value.vnum.vlint);
+        break;
+    case JSON_LHEX:
+        json_sax_print_lhex(handle, key, parser->value.vnum.vlhex);
+        break;
+#endif
+    case JSON_DOUBLE:
+        json_sax_print_double(handle, key, parser->value.vnum.vdbl);
+        break;
+    case JSON_STRING:
+        if (parser->value.vstr.alloc == 0 && parser->value.vstr.str != NULL) {
+            if (parser->value.vstr.len < STR_BUF_LEN) {
+                str = str_buf;
+            } else {
+                str = malloc(parser->value.vstr.len + 1);
+                str_alloc_flag = 1;
+            }
+            memcpy(str, parser->value.vstr.str, parser->value.vstr.len);
+            str[parser->value.vstr.len] = 0;
+            json_sax_print_string(handle, key, str);
+            if (str_alloc_flag)
+                free(str);
+        } else {
+            json_sax_print_string(handle, key, parser->value.vstr.str);
+        }
+        break;
+
+    case JSON_ARRAY:
+        json_sax_print_array(handle, key, parser->value.vcmd);
+        break;
+    case JSON_OBJECT:
+        json_sax_print_object(handle, key, parser->value.vcmd);
+        break;
+    default:
+        break;
+    }
+
+    if (parser->count == 1) {
+        switch (parser->array[parser->count-1].type) {
+        case JSON_ARRAY:
+        case JSON_OBJECT:
+            if (parser->value.vcmd == JSON_SAX_FINISH)
+                json_sax_print_finish(handle);
+            break;
+        default:
+            json_sax_print_finish(handle);
+            break;
+        }
     }
 
     if (key_alloc_flag)
@@ -268,7 +276,7 @@ int main(int argc, char *argv[])
 
     file = argv[1];
     if (strlen(file) == 0 || access(file, F_OK) != 0) {
-            printf("%s is not exist!\n", file);
+        printf("%s is not exist!\n", file);
         return -1;
     }
 
@@ -276,68 +284,68 @@ int main(int argc, char *argv[])
     choice = atoi(argv[2]);
     switch(choice)
     {
-        case 1:
-        case 2:
-        case 3:
+    case 1:
+    case 2:
+    case 3:
 #if JSON_SAX_APIS_SUPPORT
-        case 6:
+    case 6:
 #endif
-            if (read_file_to_data(file, &orig_data, &orig_size) < 0) {
-                printf("read file %s failed!\n", file);
-                return -1;
-            }
-            break;
-        case 4:
-        case 5:
-#if JSON_SAX_APIS_SUPPORT
-        case 7:
-#endif
-            break;
-        default:
-            usage_print(argv[0]);
+        if (read_file_to_data(file, &orig_data, &orig_size) < 0) {
+            printf("read file %s failed!\n", file);
             return -1;
+        }
+        break;
+    case 4:
+    case 5:
+#if JSON_SAX_APIS_SUPPORT
+    case 7:
+#endif
+        break;
+    default:
+        usage_print(argv[0]);
+        return -1;
     }
 
     snprintf(s_dst_json_path, sizeof(s_dst_json_path), "%s-%d.format.json", file, choice);
     switch(choice)
     {
-        case 1:
-            json = json_parse_str(orig_data);
-            break;
-        case 2:
-            json = json_fast_parse_str(orig_data, &mem, orig_size);
-            fast_flag = 1;
-            break;
-        case 3:
-            json = json_reuse_parse_str(orig_data, &mem, orig_size);
-            fast_flag = 1;
-            break;
-        case 4:
-            json = json_parse_file(file);
-            break;
-        case 5:
-            json = json_fast_parse_file(file, &mem);
-            fast_flag = 1;
-            break;
+    case 1:
+        json = json_parse_str(orig_data);
+        break;
+    case 2:
+        json = json_fast_parse_str(orig_data, &mem, orig_size);
+        fast_flag = 1;
+        break;
+    case 3:
+        json = json_reuse_parse_str(orig_data, &mem, orig_size);
+        fast_flag = 1;
+        break;
+    case 4:
+        json = json_parse_file(file);
+        break;
+    case 5:
+        json = json_fast_parse_file(file, &mem);
+        fast_flag = 1;
+        break;
 #if JSON_SAX_APIS_SUPPORT
-        case 6:
-            if (json_sax_parse_str(orig_data, _sax_parser_cb) < 0) {
-                printf("json_sax_parse_str failed!\n");
-                read_file_data_free(&orig_data, &orig_size);
-                return -1;
-            }
-            ms2 = _system_ms_get();
-            goto end;
-        case 7:
-            if (json_sax_parse_file(file, _sax_parser_cb) < 0) {
-                printf("json_sax_parse_file failed!\n");
-                return -1;
-            }
-            ms2 = _system_ms_get();
-            goto end;
+    case 6:
+        if (json_sax_parse_str(orig_data, _sax_parser_cb) < 0) {
+            printf("json_sax_parse_str failed!\n");
+            read_file_data_free(&orig_data, &orig_size);
+            return -1;
+        }
+        ms2 = _system_ms_get();
+        goto end;
+    case 7:
+        if (json_sax_parse_file(file, _sax_parser_cb) < 0) {
+            printf("json_sax_parse_file failed!\n");
+            return -1;
+        }
+        ms2 = _system_ms_get();
+        goto end;
 #endif
-        default:
-            break;
+    default:
+        break;
     }
 
     if (json == NULL) {
@@ -352,23 +360,23 @@ int main(int argc, char *argv[])
     snprintf(s_dst_json_path, sizeof(s_dst_json_path), "%s-%d.format.json", file, choice);
     switch(choice)
     {
-        case 1:
-            print_str = json_print_format(json);
-            break;
-        case 2:
-            print_str = json_print_format(json);
-            break;
-        case 3:
-            print_str = json_print_format(json);
-            break;
-        case 4:
-            json_fprint_format(json, s_dst_json_path);
-            break;
-        case 5:
-            json_fprint_format(json, s_dst_json_path);
-            break;
-        default:
-            break;
+    case 1:
+        print_str = json_print_format(json);
+        break;
+    case 2:
+        print_str = json_print_format(json);
+        break;
+    case 3:
+        print_str = json_print_format(json);
+        break;
+    case 4:
+        json_fprint_format(json, s_dst_json_path);
+        break;
+    case 5:
+        json_fprint_format(json, s_dst_json_path);
+        break;
+    default:
+        break;
     }
     if (print_str) {
         copy_data_to_file(print_str, strlen(print_str), s_dst_json_path);
@@ -381,23 +389,23 @@ int main(int argc, char *argv[])
     snprintf(s_dst_json_path, sizeof(s_dst_json_path), "%s-%d.unformat.json", file, choice);
     switch(choice)
     {
-        case 1:
-            print_str = json_print_unformat(json);
-            break;
-        case 2:
-            print_str = json_print_unformat(json);
-            break;
-        case 3:
-            print_str = json_print_unformat(json);
-            break;
-        case 4:
-            json_fprint_unformat(json, s_dst_json_path);
-            break;
-        case 5:
-            json_fprint_unformat(json, s_dst_json_path);
-            break;
-        default:
-            break;
+    case 1:
+        print_str = json_print_unformat(json);
+        break;
+    case 2:
+        print_str = json_print_unformat(json);
+        break;
+    case 3:
+        print_str = json_print_unformat(json);
+        break;
+    case 4:
+        json_fprint_unformat(json, s_dst_json_path);
+        break;
+    case 5:
+        json_fprint_unformat(json, s_dst_json_path);
+        break;
+    default:
+        break;
     }
     if (print_str) {
         copy_data_to_file(print_str, strlen(print_str), s_dst_json_path);
@@ -421,4 +429,3 @@ end:
         printf("sax parse+print ms=%d\n", ms2-ms1);
     return 0;
 }
-

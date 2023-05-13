@@ -933,6 +933,8 @@ typedef struct _json_print_t {
     char *ptr;
 } json_print_t;
 
+#define NUMBER_MAX_STR_SIZE                 64
+
 static const char hex_array[] = {
     '0', '1', '2', '3', '4',
     '5', '6', '7', '8', '9',
@@ -1025,6 +1027,17 @@ static int double_to_string(double n, char *c)
     x = (long long int)z;
     y = z - x;
 
+    if (n < 0) {
+        z = -n;
+        y = -y;
+    }
+
+    /* 16 is equal to MB_LEN_MAX */
+    if (z > LLONG_MAX || y <= 1e-16) {
+        sprintf(c, "%e", n);
+        return strlen(c);
+    }
+
     if (x == 0) {
         *s++ = '0';
         if (y == 0) {
@@ -1048,16 +1061,15 @@ static int double_to_string(double n, char *c)
     }
 
 next:
-    if (n < 0) {
-        z = -n;
-        y = -y;
-    }
-
     while (y) {
         z *= 10;
         x = (long long int)z;
         y = z - x;
         s[i++] = x % 10 + '0';
+        if (i >= MB_LEN_MAX) {
+            sprintf(c, "%e", n);
+            return strlen(c);
+        }
     }
     s[i] = '\0';
 
@@ -1221,7 +1233,7 @@ err:
 static int _json_print(json_print_t *print_ptr, json_object *json, int depth, bool print_key)
 {
     json_object *item = NULL;
-    char nbuf[64] = {0};
+    char nbuf[NUMBER_MAX_STR_SIZE] = {0};
     int nlen = 0;
     int new_depth = 0;
 
@@ -1446,7 +1458,7 @@ int json_sax_print_value(json_sax_print_hd handle, json_type_t type, const char 
 {
     json_sax_print_t *print_handle = handle;
     json_print_t *print_ptr = &print_handle->print_val;
-    char nbuf[64] = {0};
+    char nbuf[NUMBER_MAX_STR_SIZE] = {0};
     int nlen = 0;
     int cur_pos = print_handle->count - 1;
 
@@ -2426,8 +2438,12 @@ json_object *json_parse_common(json_parse_choice_t *choice)
         json = NULL;
     }
 
-    if (parse_val.fd >= 0)
-        close(parse_val.fd);
+    if (choice->path) {
+        if (parse_val.str)
+            json_free(parse_val.str);
+        if (parse_val.fd >= 0)
+            close(parse_val.fd);
+    }
     return json;
 }
 
@@ -2748,8 +2764,13 @@ end:
         }
         json_free(parse_val.parser.array);
     }
-    if (parse_val.fd >= 0)
-        close(parse_val.fd);
+
+    if (choice->path) {
+        if (parse_val.str)
+            json_free(parse_val.str);
+        if (parse_val.fd >= 0)
+            close(parse_val.fd);
+    }
 
     return ret;
 }
