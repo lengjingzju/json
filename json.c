@@ -16,6 +16,15 @@
 
 /**************** debug ****************/
 
+/*
+ * JSON_STRICT_PARSE_MODE can be: 0 / 1 / 2
+ * 0: not strict mode
+ * 1: will enable more checks
+ * 2: further turns off some features that are not standard, such as hexadecimal
+ */
+#define JSON_STRICT_PARSE_MODE          1
+
+/* error print */
 #define JSON_ERROR_PRINT_ENABLE         0
 
 #if JSON_ERROR_PRINT_ENABLE
@@ -1483,7 +1492,11 @@ int json_sax_print_value(json_sax_print_hd handle, json_type_t type, const char 
 
             // add key
             if (print_handle->array[cur_pos].type == JSON_OBJECT) {
-                if (!key || strlen(key) == 0) {
+                if (!key
+#if !JSON_STRICT_PARSE_MODE
+                    || strlen(key) == 0
+#endif
+                    ) {
                     JsonErr("key is null!\n");
                     goto err;
                 }
@@ -1797,8 +1810,9 @@ static inline void _skip_blank(json_parse_t *parse_ptr)
     unsigned char *str = NULL;
     unsigned char c = 0;
     int cnt = 0;
+    int size = 0;
 
-    while (_get_parse_ptr(parse_ptr, cnt, 64, (char **)&str) != 0) {
+    while ((size = _get_parse_ptr(parse_ptr, cnt, 64, (char **)&str)) != 0) {
         while ((c = *str)) {
             if (c <= ' ') {
                 str++, ++cnt;
@@ -1808,6 +1822,12 @@ static inline void _skip_blank(json_parse_t *parse_ptr)
             }
         }
     }
+
+#if JSON_STRICT_PARSE_MODE
+    /* process trailing space characters */
+    if (size == 0)
+        _update_parse_offset(parse_ptr, cnt);
+#endif
 }
 
 static inline bool _hex_char_check(char c)
@@ -1941,6 +1961,16 @@ static json_type_t _json_parse_number(char **sstr, json_number_t *vnum)
     json_number_t tnum;
     double nbase = 0, nindex = 0;
 
+#if JSON_STRICT_PARSE_MODE
+    char *num = *sstr;
+#endif
+#if JSON_STRICT_PARSE_MODE == 2
+    if (*num == '0' && (*(num+1) == 'x' || *(num+1) == 'X' || _dec_char_check(*(num+1)))) {
+        JsonErr("leading zero can't be parsed in strict mode!\n");
+        return JSON_NULL;
+    }
+#endif
+
     ret = _parse_num(sstr, vnum);
     switch (ret) {
     case JSON_HEX:
@@ -1956,6 +1986,13 @@ static json_type_t _json_parse_number(char **sstr, json_number_t *vnum)
         switch (**sstr) {
         case 'e': case 'E':
             *sstr += 1;
+#if JSON_STRICT_PARSE_MODE
+            num = *sstr;
+            if (!_dec_char_check(*num) && !((*num == '-' || *num == '+') && _dec_char_check(*(num+1)))) {
+                JsonErr("invalid index of e in strict mode!\n");
+                return JSON_NULL;
+            }
+#endif
             switch (ret) {
             case JSON_INT:     nbase = vnum->vint;  break;
 #if JSON_LONG_LONG_SUPPORT
@@ -2132,30 +2169,44 @@ static int _parse_strlen(json_parse_t *parse_ptr, int *string_len, int *total_le
 
     while ((rsize = _get_parse_ptr(parse_ptr, total, 128, &str))) {
         cnt = 0;
-        while(*str && *str != '\"') {
-            if (*str != '\\') {
-                ++str, ++cnt, ++len;
-            } else {
+        while (1) {
+            switch (*str) {
+            case '\0':
+                goto next;
+            case '\"':
+                total += cnt;
+                goto end;
+#if JSON_STRICT_PARSE_MODE == 2
+            case '\t':
+            case '\n':
+                JsonErr("tab and linebreak can't be existed in string in strict mode!\n");
+                goto err;
+#endif
+            case '\\':
                 if (rsize - cnt >= 2) {
                     str += 2, cnt += 2, ++len;
                 } else {
-                    break;
+                    goto next;
                 }
+                break;
+            default:
+                ++str, ++cnt, ++len;
+                break;
             }
         }
+next:
         total += cnt;
-
-        if (*str == '\"') {
-            ++total;
-            *string_len = len;
-            *total_len = total;
-            return 0;
-        }
     }
 
 err:
     JsonPareseErr("str format err!");
     return -1;
+
+end:
+    ++total;
+    *string_len = len;
+    *total_len = total;
+    return 0;
 }
 
 static int _json_parse_string(json_parse_t *parse_ptr, char **pptr, bool key_flag, json_mem_mgr_t *mgr)
@@ -2200,10 +2251,12 @@ static int _json_parse_string(json_parse_t *parse_ptr, char **pptr, bool key_fla
     _update_parse_offset(parse_ptr, total);
 
     if (key_flag) {
+#if !JSON_STRICT_PARSE_MODE
         if (len == 0) {
             JsonErr("key is space!\n");
             goto err;
         }
+#endif
         _skip_blank(parse_ptr);
         _get_parse_ptr(parse_ptr, 0, 1, &str);
         if (*str != ':') {
@@ -2429,7 +2482,14 @@ json_object *json_parse_common(json_parse_choice_t *choice)
         parse_val.alloc = json_memory_alloc;
     }
 
-    if (_json_parse_value(&parse_val, &json, NULL, NULL) < 0) {
+#if JSON_STRICT_PARSE_MODE == 2
+    _skip_blank(&parse_val);
+    if (parse_val.str[parse_val.offset] != '{' && parse_val.str[parse_val.offset] != '[') {
+        JsonErr("The first object isn't object or array\n");
+    } else
+#endif
+    if (_json_parse_value(&parse_val, &json, NULL, NULL) < 0
+       ) {
         if (choice->mem) {
             pjson_memory_free(choice->mem);
         } else {
@@ -2437,6 +2497,20 @@ json_object *json_parse_common(json_parse_choice_t *choice)
         }
         json = NULL;
     }
+#if JSON_STRICT_PARSE_MODE
+    else {
+        _skip_blank(&parse_val);
+        if (parse_val.str[parse_val.offset]) {
+            JsonErr("Extra trailing characters!\n%s\n", parse_val.str + parse_val.offset);
+            if (choice->mem) {
+                pjson_memory_free(choice->mem);
+            } else {
+                json_del_object(json);
+            }
+            json = NULL;
+        }
+    }
+#endif
 
     if (choice->path) {
         if (parse_val.str)
@@ -2491,10 +2565,12 @@ static inline int _json_sax_parse_string(json_parse_t *parse_ptr, json_sax_str_t
     _update_parse_offset(parse_ptr, total);
 
     if (key_flag) {
+#if !JSON_STRICT_PARSE_MODE
         if (len == 0) {
             JsonErr("key is space!\n");
             goto err;
         }
+#endif
         _skip_blank(parse_ptr);
         _get_parse_ptr(parse_ptr, 0, 1, &str);
         if (*str != ':') {
@@ -2753,7 +2829,25 @@ int json_sax_parse_common(json_sax_parse_choice_t *choice)
     parse_val.parser.total = JSON_PARSE_NUM_PLUS_DEF;
     parse_val.cb = choice->cb;
 
+#if JSON_STRICT_PARSE_MODE == 2
+    _skip_blank(&parse_val);
+    if (parse_val.str[parse_val.offset] != '{' && parse_val.str[parse_val.offset] != '[') {
+        JsonErr("The first object isn't object or array!\n");
+        goto end;
+    }
+#endif
+
     ret = _json_sax_parse_value(&parse_val, &key_str);
+
+#if JSON_STRICT_PARSE_MODE
+    if (ret == 0) {
+        _skip_blank(&parse_val);
+        if (parse_val.str[parse_val.offset]) {
+            JsonErr("Extra trailing characters!\n%s\n", parse_val.str + parse_val.offset);
+            ret = -1;
+        }
+    }
+#endif
 
 end:
     if (parse_val.parser.array) {

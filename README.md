@@ -14,15 +14,27 @@
 
 ### 编译方法
 
-> gcc -o json json.c json_test.c -lm -O2 -ffunction-sections -fdata-sections -W -Wall
+```sh
+gcc -o json json.c json_test.c -lm -O2 -ffunction-sections -fdata-sections -W -Wall
+```
 
 ### 运行方法
 
-> ./json <json文件名> <测试序号0-7>
+```sh
+./json <json文件名> <测试序号0-7>
+```
 
 ### 调试方法
 
-> 设置 json.c 中的变量 JSON_ERROR_PRINT_ENABLE 的值为 1 后重新编译
+* 设置 json.c 中的变量 `JSON_ERROR_PRINT_ENABLE` 的值为 `1` 后重新编译
+
+### 错误检测
+
+* 设置 json.c 中的变量 `JSON_STRICT_PARSE_MODE` 的值为 `0` / `1` / `2` 后重新编译
+    * 0: 关闭不是常见的错误检测，例如解析完成后还剩尾后字符
+    * 1: 检测更多的错误，且允许 key 为空字符串
+    * 2: 除去 1 开启的错误检测之外，还关闭某些不是标准的特性，例如十六进制数字，第一个json对象不是array或object
+        * 设置为2时 100% 符合 [ativejson-benchmark](https://github.com/miloyip/nativejson-benchmark) 的测试用例
 
 ### 测试结果
 
