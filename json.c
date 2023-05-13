@@ -14,6 +14,36 @@
 #include <limits.h>
 #include "json.h"
 
+/**************** debug ****************/
+
+#define JSON_ERROR_PRINT_ENABLE         0
+
+#if JSON_ERROR_PRINT_ENABLE
+#define JsonErr(fmt, args...) do {                                  \
+    printf("[JsonErr][%s:%d] ", __func__, __LINE__);                \
+    printf(fmt, ##args);                                            \
+} while(0)
+
+#define JsonPareseErr(s)      do {                                  \
+    if (parse_ptr->str) {                                           \
+        JsonErr("%s\n%s\n", s, parse_ptr->str + parse_ptr->offset); \
+    } else {                                                        \
+        JsonErr("%s\n", s);                                         \
+    }                                                               \
+} while(0)
+
+#else
+#define JsonErr(fmt, args...) do {} while(0)
+#define JsonPareseErr(s)      do {} while(0)
+#endif
+
+/* fix warning */
+#if defined(__GNUC__)
+#define UNUSED_ATTR                     __attribute__((unused))
+#else
+#define UNUSED_ATTR
+#endif
+
 /**************** definition ****************/
 
 /* head apis */
@@ -36,19 +66,6 @@
 #define JSON_PARSE_ERROR_STR            "Z"
 #define JSON_PARSE_READ_SIZE_DEF        8096
 #define JSON_PARSE_NUM_PLUS_DEF         8
-
-/* fix warning */
-#if defined(__GNUC__)
-#define UNUSED_ATTR                     __attribute__((unused))
-#else
-#define UNUSED_ATTR
-#endif
-
-/* debug */
-#define JsonErr(fmt, args...)  do {                             \
-    printf("[JsonErr][%s:%d] ", __func__, __LINE__);            \
-    printf(fmt, ##args);                                        \
-} while(0)
 
 /**************** json list ****************/
 
@@ -2057,8 +2074,7 @@ static int _parse_strlen(json_parse_t *parse_ptr, int *string_len, int *total_le
     }
 
 err:
-    if (parse_ptr->str)
-        JsonErr("str format err!\n%s\n", parse_ptr->str + parse_ptr->offset);
+    JsonPareseErr("str format err!");
     return -1;
 }
 
@@ -2123,8 +2139,7 @@ static int _json_parse_string(json_parse_t *parse_ptr, char **pptr, bool key_fla
 err:
     if (parse_ptr->mem == &s_invalid_json_mem)
         json_free(ptr);
-    if (parse_ptr->str)
-        JsonErr("parse string failed!\n%s\n", parse_ptr->str + parse_ptr->offset);
+    JsonPareseErr("parse string failed!");
     return -1;
 }
 
@@ -2171,7 +2186,7 @@ static int _json_parse_value(json_parse_t *parse_ptr, json_object **item, json_o
             case JSON_INT:    out_item->value.vnum.vint = vnum.vint; break;
             case JSON_HEX:    out_item->value.vnum.vhex = vnum.vhex; break;
             case JSON_DOUBLE: out_item->value.vnum.vdbl = vnum.vdbl; break;
-            default:                              goto err;
+            default:          JsonPareseErr("Not number!");       goto err;
             }
             _update_parse_offset(parse_ptr, str-str_bak);
             break;
@@ -2204,7 +2219,7 @@ static int _json_parse_value(json_parse_t *parse_ptr, json_object **item, json_o
                         _update_parse_offset(parse_ptr, 1);
                         break;
                     default:
-                        JsonErr("invalid object!\n");
+                        JsonPareseErr("invalid object!");
                         goto err;
                     }
 
@@ -2238,7 +2253,7 @@ static int _json_parse_value(json_parse_t *parse_ptr, json_object **item, json_o
                         _update_parse_offset(parse_ptr, 1);
                         break;
                     default:
-                        JsonErr("invalid array!\n");
+                        JsonPareseErr("invalid array!");
                         goto err;
                     }
                 }
@@ -2262,7 +2277,7 @@ static int _json_parse_value(json_parse_t *parse_ptr, json_object **item, json_o
                 out_item->type = JSON_NULL;
                 _update_parse_offset(parse_ptr, 4);
             } else {
-                JsonErr("invalid next ptr!\n");
+                JsonPareseErr("invalid next ptr!");
                 goto err;
             }
             break;
@@ -2408,8 +2423,7 @@ err:
     }
     memset(data, 0, sizeof(json_sax_str_t));
 
-    if (parse_ptr->str)
-        JsonErr("parse string failed!\n%s\n", parse_ptr->str + parse_ptr->offset);
+    JsonPareseErr("parse string failed!");
     return -1;
 }
 
@@ -2476,7 +2490,7 @@ static int _json_sax_parse_value(json_parse_t *parse_ptr, json_sax_str_t *key)
             case JSON_INT:    parse_ptr->parser.value.vnum.vint = vnum.vint; break;
             case JSON_HEX:    parse_ptr->parser.value.vnum.vhex = vnum.vhex; break;
             case JSON_DOUBLE: parse_ptr->parser.value.vnum.vdbl = vnum.vdbl; break;
-            default: goto end;
+            default:          JsonPareseErr("Not number!");               goto end;
             }
             _update_parse_offset(parse_ptr, str-str_bak);
             break;
@@ -2520,7 +2534,7 @@ static int _json_sax_parse_value(json_parse_t *parse_ptr, json_sax_str_t *key)
                         _update_parse_offset(parse_ptr, 1);
                         break;
                     default:
-                        JsonErr("invalid object!\n");
+                        JsonPareseErr("invalid object!");
                         goto end;
                     }
 
@@ -2566,7 +2580,7 @@ static int _json_sax_parse_value(json_parse_t *parse_ptr, json_sax_str_t *key)
                         _update_parse_offset(parse_ptr, 1);
                         break;
                     default:
-                        JsonErr("invalid object!\n");
+                        JsonPareseErr("invalid array!");
                         goto end;
                     }
                 }
@@ -2591,7 +2605,7 @@ static int _json_sax_parse_value(json_parse_t *parse_ptr, json_sax_str_t *key)
                 parse_ptr->parser.array[cur_depth].type = JSON_NULL;
                 _update_parse_offset(parse_ptr, 4);
             } else {
-                JsonErr("invalid next ptr!\n");
+                JsonPareseErr("invalid next ptr!");
                 goto end;
             }
             break;

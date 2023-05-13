@@ -20,6 +20,10 @@
 
 > ./json <json文件名> <测试序号0-7>
 
+### 调试方法
+
+> 设置 json.c 中的变量 JSON_ERROR_PRINT_ENABLE 的值为 1 后重新编译
+
 ### 测试结果
 
 > 测试平台: Nationalchip STB | CPU: CSKY | DDR3: 128MB, 533MHz | OS: ECOS
