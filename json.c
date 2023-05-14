@@ -1091,7 +1091,7 @@ static int _print_file_ptr_realloc(json_print_t *print_ptr, size_t slen)
 
     if (print_ptr->size < len) {
         if (print_ptr->used > 0) {
-            if (print_ptr->used !=(size_t)write(print_ptr->fd, print_ptr->ptr, print_ptr->used)) {
+            if (print_ptr->used != (size_t)write(print_ptr->fd, print_ptr->ptr, print_ptr->used)) {
                 JsonErr("write failed!\n");
                 return -1;
             }
@@ -1156,12 +1156,8 @@ static inline int _print_ptr_strncat(json_print_t *print_ptr, const char *str, s
 
 static int _print_addi_format(json_print_t *print_ptr, int depth)
 {
-    size_t len = 0;
-
     if (print_ptr->format_flag && depth > 0) {
-        len = depth + 2;
-        _PRINT_PTR_REALLOC(print_ptr, len);
-
+        _PRINT_PTR_REALLOC(print_ptr, depth + 2);
         print_ptr->ptr[print_ptr->used++] = '\n';
         while (depth-- > 0)
             print_ptr->ptr[print_ptr->used++] = '\t';
@@ -1175,57 +1171,74 @@ err:
 
 static int _json_print_string(json_print_t *print_ptr, const char *value)
 {
-    size_t len = 0;
-    size_t vlen = 0;
-    size_t i = 0;
-
     if (value) {
-        vlen = strlen(value);
-        len += vlen;
-        for (i = 0; i < vlen; ++i) {
-            if (strchr("\"\\\b\f\n\r\t\v", value[i])) {
-                ++len;
+        char c = '\0';
+        int cnt = 0;
 #if JSON_PRINT_UTF16_SUPPORT
-            } else if ((unsigned char)value[i] < ' ') {
-                len += 5;
+        const int comped = 0x1f; /* 32 - 1 */
+        const int allocd = 162; /* 32 * 5 + 2 */
+#else
+        const int comped = 0x3f; /* 64 - 1 */
+        const int allocd = 130; /* 64 * 2 + 2 */
 #endif
-            }
-        }
-        len += 3;
-        _PRINT_PTR_REALLOC(print_ptr, len);
 
+        _PRINT_PTR_REALLOC(print_ptr, allocd);
         print_ptr->ptr[print_ptr->used++] = '\"';
-        for (i = 0; i < vlen; ++i) {
-            if (
-#if JSON_PRINT_UTF16_SUPPORT
-                (unsigned char)value[i] >= ' ' &&
-#endif
-                strchr("\"\\\b\f\n\r\t\v", value[i]) == NULL) {
-                print_ptr->ptr[print_ptr->used++] = value[i];
-            } else {
+
+        while ((c = *value++)) {
+            if ((++cnt & comped) == 0)
+                _PRINT_PTR_REALLOC(print_ptr, allocd);
+
+            switch (c) {
+            case '\"':
                 print_ptr->ptr[print_ptr->used++] = '\\';
-                switch (value[i]) {
-                case '\"': print_ptr->ptr[print_ptr->used++] = '\"'; break;
-                case '\\': print_ptr->ptr[print_ptr->used++] = '\\'; break;
-                case '\b': print_ptr->ptr[print_ptr->used++] = 'b' ; break;
-                case '\f': print_ptr->ptr[print_ptr->used++] = 'f' ; break;
-                case '\n': print_ptr->ptr[print_ptr->used++] = 'n' ; break;
-                case '\r': print_ptr->ptr[print_ptr->used++] = 'r' ; break;
-                case '\t': print_ptr->ptr[print_ptr->used++] = 't' ; break;
-                case '\v': print_ptr->ptr[print_ptr->used++] = 'v' ; break;
-                default:
+                print_ptr->ptr[print_ptr->used++] = '\"';
+                break;
+            case '\\':
+                print_ptr->ptr[print_ptr->used++] = '\\';
+                print_ptr->ptr[print_ptr->used++] = '\\';
+                break;
+            case '\b':
+                print_ptr->ptr[print_ptr->used++] = '\\';
+                print_ptr->ptr[print_ptr->used++] = 'b' ;
+                break;
+            case '\f':
+                print_ptr->ptr[print_ptr->used++] = '\\';
+                print_ptr->ptr[print_ptr->used++] = 'f' ;
+                break;
+            case '\n':
+                print_ptr->ptr[print_ptr->used++] = '\\';
+                print_ptr->ptr[print_ptr->used++] = 'n' ;
+                break;
+            case '\r':
+                print_ptr->ptr[print_ptr->used++] = '\\';
+                print_ptr->ptr[print_ptr->used++] = 'r' ;
+                break;
+            case '\t':
+                print_ptr->ptr[print_ptr->used++] = '\\';
+                print_ptr->ptr[print_ptr->used++] = 't' ;
+                break;
+            case '\v':
+                print_ptr->ptr[print_ptr->used++] = '\\';
+                print_ptr->ptr[print_ptr->used++] = 'v' ;
+                break;
+            default:
+                {
 #if JSON_PRINT_UTF16_SUPPORT
-                    {
-                        unsigned char uc = (unsigned char)value[i];
+                    unsigned char uc = (unsigned char)c;
+                    if (uc < ' ') {
                         print_ptr->ptr[print_ptr->used++] = 'u';
                         print_ptr->ptr[print_ptr->used++] = '0';
                         print_ptr->ptr[print_ptr->used++] = '0';
                         print_ptr->ptr[print_ptr->used++] = hex_array[uc >> 4 & 0xf];
                         print_ptr->ptr[print_ptr->used++] = hex_array[uc & 0xf];
-                    }
+                    } else
 #endif
-                    break;
+                    {
+                        print_ptr->ptr[print_ptr->used++] = c;
+                    }
                 }
+                break;
             }
         }
         print_ptr->ptr[print_ptr->used++] = '\"';
@@ -2488,8 +2501,7 @@ json_object *json_parse_common(json_parse_choice_t *choice)
         JsonErr("The first object isn't object or array\n");
     } else
 #endif
-    if (_json_parse_value(&parse_val, &json, NULL, NULL) < 0
-       ) {
+    if (_json_parse_value(&parse_val, &json, NULL, NULL) < 0) {
         if (choice->mem) {
             pjson_memory_free(choice->mem);
         } else {
