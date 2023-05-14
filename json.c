@@ -942,8 +942,6 @@ typedef struct _json_print_t {
     char *ptr;
 } json_print_t;
 
-#define NUMBER_MAX_STR_SIZE                 64
-
 static const char hex_array[] = {
     '0', '1', '2', '3', '4',
     '5', '6', '7', '8', '9',
@@ -969,8 +967,10 @@ static int fname(ftype n, char *c)          \
     }                                       \
                                             \
     while (m > 0) {                         \
-        s[i++] = m % 10 + '0';              \
+        t = m;                              \
         m /= 10;                            \
+        t -= (m << 3) + (m << 1);           \
+        s[i++] = t + '0';                   \
     }                                       \
     s[i] = '\0';                            \
                                             \
@@ -1042,9 +1042,8 @@ static int double_to_string(double n, char *c)
     }
 
     /* 16 is equal to MB_LEN_MAX */
-    if (z > LLONG_MAX || y <= 1e-16) {
-        sprintf(c, "%e", n);
-        return strlen(c);
+    if (z > LLONG_MAX || z <= 1e-16) {
+        return sprintf(c, "%1.15g", n);
     }
 
     if (x == 0) {
@@ -1076,8 +1075,7 @@ next:
         y = z - x;
         s[i++] = x % 10 + '0';
         if (i >= MB_LEN_MAX) {
-            sprintf(c, "%e", n);
-            return strlen(c);
+            return sprintf(c, "%1.15g", n);
         }
     }
     s[i] = '\0';
@@ -1087,45 +1085,18 @@ next:
 
 static int _print_file_ptr_realloc(json_print_t *print_ptr, size_t slen)
 {
-    size_t len = print_ptr->used + slen + 1;
+    size_t len = 0;
 
-    if (print_ptr->size < len) {
-        if (print_ptr->used > 0) {
-            if (print_ptr->used != (size_t)write(print_ptr->fd, print_ptr->ptr, print_ptr->used)) {
-                JsonErr("write failed!\n");
-                return -1;
-            }
-            print_ptr->used = 0;
+    if (print_ptr->used > 0) {
+        if (print_ptr->used != (size_t)write(print_ptr->fd, print_ptr->ptr, print_ptr->used)) {
+            JsonErr("write failed!\n");
+            return -1;
         }
-
-        len = slen + 1;
-        if (print_ptr->size < len) {
-            while (print_ptr->size < len)
-                print_ptr->size += print_ptr->plus_size;
-            if ((print_ptr->ptr = json_realloc(print_ptr->ptr, print_ptr->size)) == NULL) {
-                JsonErr("malloc failed!\n");
-                return -1;
-            }
-        }
+        print_ptr->used = 0;
     }
 
-    return 0;
-}
-
-static int _print_str_ptr_realloc(json_print_t *print_ptr, size_t slen)
-{
-    size_t len = print_ptr->used + slen + 1;
-
+    len = slen + 1;
     if (print_ptr->size < len) {
-        while (print_ptr->item_total < print_ptr->item_count)
-            print_ptr->item_total += JSON_ITEM_NUM_PLUS_DEF;
-        if (print_ptr->item_total - print_ptr->item_count > print_ptr->item_count) {
-            print_ptr->size += print_ptr->size;
-        } else {
-            print_ptr->size += (long long)print_ptr->size *
-                (print_ptr->item_total - print_ptr->item_count) / print_ptr->item_count;
-        }
-
         while (print_ptr->size < len)
             print_ptr->size += print_ptr->plus_size;
         if ((print_ptr->ptr = json_realloc(print_ptr->ptr, print_ptr->size)) == NULL) {
@@ -1137,35 +1108,92 @@ static int _print_str_ptr_realloc(json_print_t *print_ptr, size_t slen)
     return 0;
 }
 
-static inline int _print_ptr_realloc(json_print_t *print_ptr, size_t slen)
+static int _print_str_ptr_realloc(json_print_t *print_ptr, size_t slen)
 {
-    return print_ptr->realloc(print_ptr, slen);
-}
-#define _PRINT_PTR_REALLOC(ptr, len) do { if (_print_ptr_realloc(ptr, len) < 0) goto err; } while(0)
+    size_t len = print_ptr->used + slen + 1;
 
-static inline int _print_ptr_strncat(json_print_t *print_ptr, const char *str, size_t slen)
-{
-    if (print_ptr->realloc(print_ptr, slen) < 0)
+    while (print_ptr->item_total < print_ptr->item_count)
+        print_ptr->item_total += JSON_ITEM_NUM_PLUS_DEF;
+    if (print_ptr->item_total - print_ptr->item_count > print_ptr->item_count) {
+        print_ptr->size += print_ptr->size;
+    } else {
+        print_ptr->size += (long long)print_ptr->size *
+            (print_ptr->item_total - print_ptr->item_count) / print_ptr->item_count;
+    }
+
+    while (print_ptr->size < len)
+        print_ptr->size += print_ptr->plus_size;
+    if ((print_ptr->ptr = json_realloc(print_ptr->ptr, print_ptr->size)) == NULL) {
+        JsonErr("malloc failed!\n");
         return -1;
-
-    memcpy(print_ptr->ptr + print_ptr->used, str, slen);
-    print_ptr->used += slen;
-    return 0;
-}
-#define _PRINT_PTR_STRNCAT(ptr, str, slen) do { if (_print_ptr_strncat(ptr, str, slen) < 0) goto err; } while(0)
-
-static int _print_addi_format(json_print_t *print_ptr, int depth)
-{
-    if (print_ptr->format_flag && depth > 0) {
-        _PRINT_PTR_REALLOC(print_ptr, depth + 2);
-        print_ptr->ptr[print_ptr->used++] = '\n';
-        while (depth-- > 0)
-            print_ptr->ptr[print_ptr->used++] = '\t';
     }
 
     return 0;
-err:
-    return -1;
+}
+
+#define _PRINT_PTR_STR1CAT(c1) do {                 \
+    if (print_ptr->size < print_ptr->used + 2       \
+        && print_ptr->realloc(print_ptr, 1) < 0)    \
+        goto err;                                   \
+    print_ptr->ptr[print_ptr->used++] = c1;         \
+} while(0)
+
+#define _PRINT_PTR_STR2CAT(c1, c2) do {             \
+    if (print_ptr->size < print_ptr->used + 3       \
+        && print_ptr->realloc(print_ptr, 2) < 0)    \
+        goto err;                                   \
+    print_ptr->ptr[print_ptr->used++] = c1;         \
+    print_ptr->ptr[print_ptr->used++] = c2;         \
+} while(0)
+
+#define _PRINT_PTR_STR3CAT(c1, c2, c3) do {         \
+    if (print_ptr->size < print_ptr->used + 4       \
+        && print_ptr->realloc(print_ptr, 3) < 0)    \
+        goto err;                                   \
+    print_ptr->ptr[print_ptr->used++] = c1;         \
+    print_ptr->ptr[print_ptr->used++] = c2;         \
+    print_ptr->ptr[print_ptr->used++] = c3;         \
+} while(0)
+
+#define _PRINT_PTR_STR4CAT(c1, c2, c3, c4) do {     \
+    if (print_ptr->size < print_ptr->used + 5       \
+        && print_ptr->realloc(print_ptr, 4) < 0)    \
+        goto err;                                   \
+    print_ptr->ptr[print_ptr->used++] = c1;         \
+    print_ptr->ptr[print_ptr->used++] = c2;         \
+    print_ptr->ptr[print_ptr->used++] = c3;         \
+    print_ptr->ptr[print_ptr->used++] = c4;         \
+} while(0)
+
+#define _PRINT_PTR_STR5CAT(c1, c2, c3, c4, c5) do { \
+    if (print_ptr->size < print_ptr->used + 6       \
+        && print_ptr->realloc(print_ptr, 5) < 0)    \
+        goto err;                                   \
+    print_ptr->ptr[print_ptr->used++] = c1;         \
+    print_ptr->ptr[print_ptr->used++] = c2;         \
+    print_ptr->ptr[print_ptr->used++] = c3;         \
+    print_ptr->ptr[print_ptr->used++] = c4;         \
+    print_ptr->ptr[print_ptr->used++] = c5;         \
+} while(0)
+
+#define _PRINT_PTR_NUMBER(fname, num) do {          \
+    if (print_ptr->size < print_ptr->used + 129     \
+        && print_ptr->realloc(print_ptr, 128) < 0)  \
+        goto err;                                   \
+    print_ptr->used += fname(num,                   \
+        print_ptr->ptr + print_ptr->used);          \
+} while(0)
+
+static inline int _print_addi_format(json_print_t *print_ptr, int depth)
+{
+    if (print_ptr->size < print_ptr->used + depth + 2
+        && print_ptr->realloc(print_ptr, depth + 1) < 0)
+        return -1;
+    print_ptr->ptr[print_ptr->used++] = '\n';
+    while (depth-- > 0)
+        print_ptr->ptr[print_ptr->used++] = '\t';
+
+    return 0;
 }
 #define _PRINT_ADDI_FORMAT(ptr, depth) do { if (_print_addi_format(ptr, depth) < 0) goto err; } while(0)
 
@@ -1182,12 +1210,18 @@ static int _json_print_string(json_print_t *print_ptr, const char *value)
         const int allocd = 130; /* 64 * 2 + 2 */
 #endif
 
-        _PRINT_PTR_REALLOC(print_ptr, allocd);
+        if (print_ptr->size < print_ptr->used + allocd + 1
+            && print_ptr->realloc(print_ptr, allocd) < 0) {
+            goto err;
+        }
         print_ptr->ptr[print_ptr->used++] = '\"';
 
         while ((c = *value++)) {
-            if ((++cnt & comped) == 0)
-                _PRINT_PTR_REALLOC(print_ptr, allocd);
+            if ((++cnt & comped) == 0
+                && print_ptr->size < print_ptr->used + allocd + 1
+                && print_ptr->realloc(print_ptr, allocd) < 0) {
+                goto err;
+            }
 
             switch (c) {
             case '\"':
@@ -1243,7 +1277,7 @@ static int _json_print_string(json_print_t *print_ptr, const char *value)
         }
         print_ptr->ptr[print_ptr->used++] = '\"';
     } else {
-        _PRINT_PTR_STRNCAT(print_ptr, "\"\"", 2);
+        _PRINT_PTR_STR2CAT('"', '"');
     }
 
     return 0;
@@ -1252,108 +1286,119 @@ err:
 }
 #define _JSON_PRINT_STRING(ptr, val) do { if (_json_print_string(ptr, val) < 0) goto err; } while(0)
 
-static int _json_print(json_print_t *print_ptr, json_object *json, int depth, bool print_key)
+static int _json_print(json_print_t *print_ptr, json_object *json, int depth)
 {
     json_object *item = NULL;
-    char nbuf[NUMBER_MAX_STR_SIZE] = {0};
-    int nlen = 0;
     int new_depth = 0;
-
-    if (print_key) {
-        _PRINT_ADDI_FORMAT(print_ptr, depth);
-        _JSON_PRINT_STRING(print_ptr, json->key);
-        if (print_ptr->format_flag) {
-            _PRINT_PTR_STRNCAT(print_ptr, ":\t", 2);
-        } else {
-            _PRINT_PTR_STRNCAT(print_ptr, ":", 1);
-        }
-    }
 
     switch (json->type) {
     case JSON_NULL:
-        _PRINT_PTR_STRNCAT(print_ptr, "null", 4);
+        _PRINT_PTR_STR4CAT('n', 'u', 'l', 'l');
         break;
     case JSON_BOOL:
         if (json->value.vnum.vbool) {
-            _PRINT_PTR_STRNCAT(print_ptr, "true", 4);
+            _PRINT_PTR_STR4CAT('t', 'r', 'u', 'e');
         } else {
-            _PRINT_PTR_STRNCAT(print_ptr, "false", 5);
+            _PRINT_PTR_STR5CAT('f', 'a', 'l', 's', 'e');
         }
         break;
     case JSON_INT:
-        nlen = int_to_string(json->value.vnum.vint, nbuf);
-        _PRINT_PTR_STRNCAT(print_ptr, nbuf, nlen);
+        _PRINT_PTR_NUMBER(int_to_string, json->value.vnum.vint);
         break;
     case JSON_HEX:
-        nlen = hex_to_string(json->value.vnum.vhex, nbuf);
-        _PRINT_PTR_STRNCAT(print_ptr, nbuf, nlen);
+        _PRINT_PTR_NUMBER(hex_to_string, json->value.vnum.vhex);
         break;
 #if JSON_LONG_LONG_SUPPORT
     case JSON_LINT:
-        nlen = lint_to_string(json->value.vnum.vlint, nbuf);
-        _PRINT_PTR_STRNCAT(print_ptr, nbuf, nlen);
+        _PRINT_PTR_NUMBER(lint_to_string, json->value.vnum.vlint);
         break;
     case JSON_LHEX:
-        nlen = lhex_to_string(json->value.vnum.vlhex, nbuf);
-        _PRINT_PTR_STRNCAT(print_ptr, nbuf, nlen);
+        _PRINT_PTR_NUMBER(lhex_to_string, json->value.vnum.vlhex);
         break;
 #endif
     case JSON_DOUBLE:
-        nlen = double_to_string(json->value.vnum.vdbl, nbuf);
-        _PRINT_PTR_STRNCAT(print_ptr, nbuf, nlen);
+        _PRINT_PTR_NUMBER(double_to_string, json->value.vnum.vdbl);
         break;
     case JSON_STRING:
         _JSON_PRINT_STRING(print_ptr, json->value.vstr);
         break;
+
     case JSON_ARRAY:
         new_depth = depth + 1;
-        _PRINT_PTR_STRNCAT(print_ptr, "[", 1);
-        json_list_for_each_entry(item, &json->value.head, list) {
-            if (print_ptr->format_flag && item->list.prev == &json->value.head) {
-                if (item->type == JSON_OBJECT || item->type == JSON_ARRAY)
-                    _PRINT_ADDI_FORMAT(print_ptr, new_depth);
-            }
-            if (_json_print(print_ptr, item, new_depth, false) < 0) {
-                return -1;
-            }
-            if (item->list.next != &json->value.head) {
-                _PRINT_PTR_STRNCAT(print_ptr, ",", 1);
-                if (print_ptr->format_flag)
-                    _PRINT_PTR_STRNCAT(print_ptr, " ", 1);
-            }
-        }
-        if (print_ptr->format_flag && json->value.head.prev != &json->value.head) {
-            item = (json_object *)json->value.head.prev;
-            if (item->type == JSON_OBJECT || item->type == JSON_ARRAY) {
-                if (depth) {
-                    _PRINT_ADDI_FORMAT(print_ptr, depth);
-                } else {
-                    _PRINT_PTR_STRNCAT(print_ptr, "\n", 1);
+        _PRINT_PTR_STR1CAT('[');
+        if (print_ptr->format_flag) {
+            json_list_for_each_entry(item, &json->value.head, list) {
+                if (item->list.prev == &json->value.head) {
+                    if (item->type == JSON_OBJECT || item->type == JSON_ARRAY)
+                        _PRINT_ADDI_FORMAT(print_ptr, new_depth);
+                }
+                if (_json_print(print_ptr, item, new_depth) < 0) {
+                    return -1;
+                }
+                if (item->list.next != &json->value.head) {
+                    _PRINT_PTR_STR2CAT(',', ' ');
                 }
             }
-        }
-        _PRINT_PTR_STRNCAT(print_ptr, "]", 1);
-        break;
-    case JSON_OBJECT:
-        new_depth = depth + 1;
-        _PRINT_PTR_STRNCAT(print_ptr, "{", 1);
-        json_list_for_each_entry(item, &json->value.head, list) {
-            if (_json_print(print_ptr, item, new_depth, true) < 0) {
-                return -1;
-            }
-            if (item->list.next != &json->value.head) {
-                _PRINT_PTR_STRNCAT(print_ptr, ",", 1);
-            } else {
-                if (print_ptr->format_flag) {
-                    if (depth == 0) {
-                        _PRINT_PTR_STRNCAT(print_ptr, "\n", 1);
+            if (json->value.head.prev != &json->value.head) {
+                item = (json_object *)json->value.head.prev;
+                if (item->type == JSON_OBJECT || item->type == JSON_ARRAY) {
+                    if (depth) {
+                        _PRINT_ADDI_FORMAT(print_ptr, depth);
+                    } else {
+                        _PRINT_PTR_STR1CAT('\n');
                     }
                 }
             }
+        } else {
+            json_list_for_each_entry(item, &json->value.head, list) {
+                if (_json_print(print_ptr, item, new_depth) < 0) {
+                    return -1;
+                }
+                if (item->list.next != &json->value.head) {
+                    _PRINT_PTR_STR1CAT(',');
+                }
+            }
         }
-        if (json->value.head.next != &json->value.head)
-            _PRINT_ADDI_FORMAT(print_ptr, depth);
-        _PRINT_PTR_STRNCAT(print_ptr, "}", 1);
+        _PRINT_PTR_STR1CAT(']');
+        break;
+
+    case JSON_OBJECT:
+        new_depth = depth + 1;
+        _PRINT_PTR_STR1CAT('{');
+        if (print_ptr->format_flag) {
+            json_list_for_each_entry(item, &json->value.head, list) {
+                _PRINT_ADDI_FORMAT(print_ptr, new_depth);
+                _JSON_PRINT_STRING(print_ptr, item->key);
+                _PRINT_PTR_STR2CAT(':', '\t');
+
+                if (_json_print(print_ptr, item, new_depth) < 0) {
+                    return -1;
+                }
+                if (item->list.next != &json->value.head) {
+                    _PRINT_PTR_STR1CAT(',');
+                } else {
+                    if (depth == 0) {
+                        _PRINT_PTR_STR1CAT('\n');
+                    }
+                }
+            }
+            if (depth > 0 && json->value.head.next != &json->value.head) {
+                _PRINT_ADDI_FORMAT(print_ptr, depth);
+            }
+        } else {
+            json_list_for_each_entry(item, &json->value.head, list) {
+                _JSON_PRINT_STRING(print_ptr, item->key);
+                _PRINT_PTR_STR1CAT(':');
+
+                if (_json_print(print_ptr, item, new_depth) < 0) {
+                    return -1;
+                }
+                if (item->list.next != &json->value.head) {
+                    _PRINT_PTR_STR1CAT(',');
+                }
+            }
+        }
+        _PRINT_PTR_STR1CAT('}');
         break;
     default:
         break;
@@ -1371,7 +1416,7 @@ static int _print_val_release(json_print_t *print_ptr, bool free_all_flag)
 #define _clear_close_fd(fd)     do { if (fd >= 0) close(fd); fd = -1; } while(0)
     int ret = 0;
     if (print_ptr->fd >= 0) {
-        if (print_ptr->used > 0) {
+        if (!free_all_flag && print_ptr->used > 0) {
             if (print_ptr->used != (size_t)write(print_ptr->fd, print_ptr->ptr, print_ptr->used)) {
                 JsonErr("write failed!\n");
                 ret = -1;
@@ -1442,7 +1487,7 @@ char *json_print_common(json_object *json, json_print_choice_t *choice)
     if (_print_val_init(&print_val, choice) < 0)
         return NULL;
 
-    if (_json_print(&print_val, json, 0, false) < 0) {
+    if (_json_print(&print_val, json, 0) < 0) {
         JsonErr("print failed!\n");
         goto err;
     }
@@ -1480,8 +1525,6 @@ int json_sax_print_value(json_sax_print_hd handle, json_type_t type, const char 
 {
     json_sax_print_t *print_handle = handle;
     json_print_t *print_ptr = &print_handle->print_val;
-    char nbuf[NUMBER_MAX_STR_SIZE] = {0};
-    int nlen = 0;
     int cur_pos = print_handle->count - 1;
 
     if (print_handle->error_flag) {
@@ -1493,12 +1536,14 @@ int json_sax_print_value(json_sax_print_hd handle, json_type_t type, const char 
             // add ","
             if (print_handle->array[cur_pos].num > 0) {
                 if (print_ptr->format_flag && print_handle->array[cur_pos].type == JSON_ARRAY) {
-                    _PRINT_PTR_STRNCAT(print_ptr, ", ", 2);
+                    _PRINT_PTR_STR2CAT(',' ,' ');
                 } else {
-                    _PRINT_PTR_STRNCAT(print_ptr, ",", 1);
+                    _PRINT_PTR_STR1CAT(',');
                 }
             } else {
-                if ((type == JSON_OBJECT || type == JSON_ARRAY) && print_handle->array[cur_pos].type == JSON_ARRAY) {
+                if (print_ptr->format_flag
+                    && (type == JSON_OBJECT || type == JSON_ARRAY)
+                    && print_handle->array[cur_pos].type == JSON_ARRAY) {
                     _PRINT_ADDI_FORMAT(print_ptr, print_handle->count);
                 }
             }
@@ -1513,12 +1558,14 @@ int json_sax_print_value(json_sax_print_hd handle, json_type_t type, const char 
                     JsonErr("key is null!\n");
                     goto err;
                 }
-                _PRINT_ADDI_FORMAT(print_ptr, print_handle->count);
-                _JSON_PRINT_STRING(print_ptr, key);
                 if (print_ptr->format_flag) {
-                    _PRINT_PTR_STRNCAT(print_ptr, ":\t", 2);
+                    if (print_handle->count > 0)
+                        _PRINT_ADDI_FORMAT(print_ptr, print_handle->count);
+                    _JSON_PRINT_STRING(print_ptr, key);
+                    _PRINT_PTR_STR2CAT(':', '\t');
                 } else {
-                    _PRINT_PTR_STRNCAT(print_ptr, ":", 1);
+                    _JSON_PRINT_STRING(print_ptr, key);
+                    _PRINT_PTR_STR1CAT(':');
                 }
             }
         }
@@ -1527,37 +1574,32 @@ int json_sax_print_value(json_sax_print_hd handle, json_type_t type, const char 
     // add value
     switch (type) {
     case JSON_NULL:
-        _PRINT_PTR_STRNCAT(print_ptr, "null", 4);
+        _PRINT_PTR_STR4CAT('n', 'u', 'l', 'l');
         break;
     case JSON_BOOL:
         if ((*(bool*)value)) {
-            _PRINT_PTR_STRNCAT(print_ptr, "true", 4);
+            _PRINT_PTR_STR4CAT('t', 'r', 'u', 'e');
         } else {
-            _PRINT_PTR_STRNCAT(print_ptr, "false", 5);
+            _PRINT_PTR_STR5CAT('f', 'a', 'l', 's', 'e');
         }
         break;
 
     case JSON_INT:
-        nlen = int_to_string(*(int*)value, nbuf);
-        _PRINT_PTR_STRNCAT(print_ptr, nbuf, nlen);
+        _PRINT_PTR_NUMBER(int_to_string, *(int*)value);
         break;
     case JSON_HEX:
-        nlen = hex_to_string(*(unsigned int*)value, nbuf);
-        _PRINT_PTR_STRNCAT(print_ptr, nbuf, nlen);
+        _PRINT_PTR_NUMBER(hex_to_string, *(unsigned int*)value);
         break;
 #if JSON_LONG_LONG_SUPPORT
     case JSON_LINT:
-        nlen = lint_to_string(*(long long int*)value, nbuf);
-        _PRINT_PTR_STRNCAT(print_ptr, nbuf, nlen);
+        _PRINT_PTR_NUMBER(lint_to_string, *(long long int*)value);
         break;
     case JSON_LHEX:
-        nlen = lhex_to_string(*(unsigned long long int*)value, nbuf);
-        _PRINT_PTR_STRNCAT(print_ptr, nbuf, nlen);
+        _PRINT_PTR_NUMBER(lhex_to_string, *(unsigned long long int*)value);
         break;
 #endif
     case JSON_DOUBLE:
-        nlen = double_to_string(*(double*)value, nbuf);
-        _PRINT_PTR_STRNCAT(print_ptr, nbuf, nlen);
+        _PRINT_PTR_NUMBER(double_to_string, *(double*)value);
         break;
     case JSON_STRING:
         _JSON_PRINT_STRING(print_ptr, ((char*)value));
@@ -1576,7 +1618,7 @@ int json_sax_print_value(json_sax_print_hd handle, json_type_t type, const char 
             }
             if (print_handle->count > 0)
                 ++print_handle->array[cur_pos].num;
-            _PRINT_PTR_STRNCAT(print_ptr, "[", 1);
+            _PRINT_PTR_STR1CAT('[');
             print_handle->array[print_handle->count].type = JSON_ARRAY;
             print_handle->array[print_handle->count].num = 0;
             ++print_handle->count;
@@ -1592,10 +1634,10 @@ int json_sax_print_value(json_sax_print_hd handle, json_type_t type, const char 
                 if (print_handle->count > 1) {
                     _PRINT_ADDI_FORMAT(print_ptr, cur_pos);
                 } else {
-                    _PRINT_PTR_STRNCAT(print_ptr, "\n", 1);
+                    _PRINT_PTR_STR1CAT('\n');
                 }
             }
-            _PRINT_PTR_STRNCAT(print_ptr, "]", 1);
+            _PRINT_PTR_STR1CAT(']');
             --print_handle->count;
             print_handle->last_type = type;
             return 0;
@@ -1619,7 +1661,7 @@ int json_sax_print_value(json_sax_print_hd handle, json_type_t type, const char 
             }
             if (print_handle->count > 0)
                 ++print_handle->array[cur_pos].num;
-            _PRINT_PTR_STRNCAT(print_ptr, "{", 1);
+            _PRINT_PTR_STR1CAT('{');
             print_handle->array[print_handle->count].type = JSON_OBJECT;
             print_handle->array[print_handle->count].num = 0;
             ++print_handle->count;
@@ -1636,9 +1678,9 @@ int json_sax_print_value(json_sax_print_hd handle, json_type_t type, const char 
                 }
             } else {
                 if (print_ptr->format_flag)
-                    _PRINT_PTR_STRNCAT(print_ptr, "\n", 1);
+                    _PRINT_PTR_STR1CAT('\n');
             }
-            _PRINT_PTR_STRNCAT(print_ptr, "}", 1);
+            _PRINT_PTR_STR1CAT('}');
             --print_handle->count;
             print_handle->last_type = type;
             return 0;
