@@ -8,7 +8,6 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <math.h>
 #include <unistd.h>
 #include <fcntl.h>
 #include <limits.h>
@@ -2012,13 +2011,8 @@ static int _parse_num(char **sstr, json_number_t *vnum)
 static json_type_t _json_parse_number(char **sstr, json_number_t *vnum)
 {
     json_type_t ret = JSON_NULL;
-    json_type_t tret = JSON_NULL;
-    json_number_t tnum;
-    double nbase = 0, nindex = 0;
+    const char *num = *sstr;
 
-#if JSON_STRICT_PARSE_MODE
-    char *num = *sstr;
-#endif
 #if JSON_STRICT_PARSE_MODE == 2
     if (*num == '0' && (*(num+1) == 'x' || *(num+1) == 'X' || _dec_char_check(*(num+1)))) {
         JsonErr("leading zero can't be parsed in strict mode!\n");
@@ -2040,33 +2034,7 @@ static json_type_t _json_parse_number(char **sstr, json_number_t *vnum)
     case JSON_DOUBLE:
         switch (**sstr) {
         case 'e': case 'E':
-            *sstr += 1;
-#if JSON_STRICT_PARSE_MODE
-            num = *sstr;
-            if (!_dec_char_check(*num) && !((*num == '-' || *num == '+') && _dec_char_check(*(num+1)))) {
-                JsonErr("invalid index of e in strict mode!\n");
-                return JSON_NULL;
-            }
-#endif
-            switch (ret) {
-            case JSON_INT:     nbase = vnum->vint;  break;
-#if JSON_LONG_LONG_SUPPORT
-            case JSON_LINT:    nbase = vnum->vlint; break;
-#endif
-            case JSON_DOUBLE:  nbase = vnum->vdbl;  break;
-            default: break;
-            }
-
-            tret = _parse_num(sstr, &tnum);
-            switch (tret) {
-            case JSON_INT:    nindex = tnum.vint;   break;
-#if JSON_LONG_LONG_SUPPORT
-            case JSON_LINT:   nindex = tnum.vlint;  break;
-#endif
-            case JSON_DOUBLE: nindex = tnum.vdbl;   break;
-            default: return JSON_NULL;
-            }
-            vnum->vdbl = nbase * pow (10.0, nindex);
+            vnum->vdbl = strtod(num, sstr);
             return JSON_DOUBLE;
         default:
             return ret;

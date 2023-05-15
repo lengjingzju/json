@@ -15,7 +15,7 @@
 ### 编译方法
 
 ```sh
-gcc -o json json.c json_test.c -lm -O2 -ffunction-sections -fdata-sections -W -Wall
+gcc -o json json.c json_test.c -O2 -ffunction-sections -fdata-sections -W -Wall
 ```
 
 ### 运行方法

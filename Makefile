@@ -8,7 +8,7 @@ PACKAGE_NAME    = ljson
 
 major_ver       = 1
 minor_ver       = 0
-patch_ver       = 5
+patch_ver       = 6
 staticlib       = lib$(PACKAGE_NAME).a
 sharedlib       = lib$(PACKAGE_NAME).so $(major_ver) $(minor_ver) $(patch_ver)
 testedbin       = ljson_test
@@ -20,9 +20,9 @@ all:
 
 INC_MAKES      := app
 include inc.makes
-$(eval $(call add-liba-build,$(staticlib),json.c,-lm))
-$(eval $(call add-libso-build,$(sharedlib),json.c,-lm))
-$(eval $(call add-bin-build,$(testedbin),json_test.c,-static -L $(OBJ_PREFIX) -lljson -lm))
+$(eval $(call add-liba-build,$(staticlib),json.c))
+$(eval $(call add-libso-build,$(sharedlib),json.c))
+$(eval $(call add-bin-build,$(testedbin),json_test.c,-static -L $(OBJ_PREFIX) -lljson))
 
 all: $(BIN_TARGETS) $(LIB_TARGETS)
 

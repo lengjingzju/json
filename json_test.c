@@ -1,15 +1,15 @@
-#include <string.h>
 #include <stdio.h>
-#include <math.h>
 #include <stdlib.h>
-#include <float.h>
-#include <limits.h>
-#include <ctype.h>
-#include <sys/stat.h>
+#include <string.h>
 #include <unistd.h>
-#include <sys/time.h>
 #include <time.h>
 #include "json.h"
+
+/*
+ * Compile Method:
+ * gcc -o json json.c json_test.c -O0 -g -W -Wall
+ * gcc -o json json.c json_test.c -O2 -ffunction-sections -fdata-sections -W -Wall
+ */
 
 #define _fmalloc       malloc
 #define _ffree         free
@@ -240,8 +240,6 @@ json_sax_ret_t _sax_parser_cb(json_sax_parser_t *parser)
 }
 #endif
 
-// gcc -o json json.c json_test.c -lm -O0 -g -W -Wall
-// gcc -o json json.c json_test.c -lm -O2 -ffunction-sections -fdata-sections -W -Wall
 int main(int argc, char *argv[])
 {
     int choice = 0;
