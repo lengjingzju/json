@@ -2,13 +2,10 @@
 
 ## 功能特点
 
-* 比cJSON更快，更省内存
-* 支持边读文件边解析成json节点树
-* 支持json节点树边打印边输出到文件
-* 接口和cJSON一样友好，代码逻辑比cJSON更清晰，代码大小基本无增大
-* json解析和打印接口是弹性的，可以设置参数，提高特定类型的json的解析效率
-* 除提供类似cJSON的经典接口外，另外提供一套使用内存池的接口
-* 同时提供`DOM`风格的和`SAX`风格的APIs
+* 更快：某些测试case，比cJSON解析快340%，比cJSON打印快1590%，性能和RapidJSON基本无差距
+* 更省：内存占用比cJSON少50%不成问题，少90%也有可能(取决于数据、平台、配置)
+* 更强：支持DOM和SAX风格的API，提供普通模式和内存池模式JSON的接口，支持字符串和文件作为输入输出，可扩展支持其它流，例如socket
+* 更友好：C语言实现，不依赖任何库，不含平台相关代码，只有一个头文件和库文件，和cJSON对应一致的接口，代码逻辑比任何JSON库都更清晰
 
 ## 性能测试
 
@@ -38,15 +35,19 @@ gcc -o json json.c json_test.c -O2 -ffunction-sections -fdata-sections -W -Wall
 
 ### 测试结果
 
-> 测试平台: Nationalchip STB | CPU: CSKY | DDR3: 128MB, 533MHz | OS: ECOS
-> 注: 老版本测试结果，新的版本比这更快
+注：主要是测试速度，耗时为毫秒，值越小越好
 
-![ECOS测试结果](./json_test.png)
+> 测试平台: Ambarella CV25M Board | CPU: ARM CortexA53 | OS: Linux-5.15
 
-> 测试平台: Ubuntu 18.04
-> 测试源: [canada.json](https://github.com/miloyip/nativejson-benchmark/blob/master/data/canada.json)
+![AARCH64-Linux测试结果](test_result/test_for_aarch64.png)
 
-![Ubuntu测试结果](./json_test2.png)
+> 测试平台: PC | CPU: Intel i7-10700 | OS: Ubuntu 18.04 (VirtualBox)
+
+![x86_64-Linux测试结果](test_result/test_for_x86_64.png)
+
+> 测试平台: Nationalchip STB | CPU: CSKY | DDR3: 128MB, 533MHz | OS: ECOS (注: 老版本测试结果，新版本比这更快更省)
+
+![ECOS测试结果](test_result/test_for_csky.png)
 
 ## json对象结构
 
