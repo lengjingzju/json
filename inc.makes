@@ -410,6 +410,26 @@ LDFLAGS        += -Wl,--gc-sections
 endif
 #LDFLAGS       += -static
 
+# For more description, refer to https://gcc.gnu.org/onlinedocs/gcc-12.3.0/gcc/Instrumentation-Options.html
+ifeq ($(ENV_FSANITIZE_OPTION), 1)
+# Enable AddressSanitizer, a fast memory error detector to detect out-of-bounds and use-after-free bugs.
+FSANITIZE_FLAG ?= -fsanitize=address
+else ifeq ($(ENV_FSANITIZE_OPTION), 2)
+# Enable ThreadSanitizer, a fast data race detector.
+# Memory access instructions are instrumented to detect data race bugs.
+FSANITIZE_FLAG ?= -fsanitize=thread
+else ifeq ($(ENV_FSANITIZE_OPTION), 3)
+# Enable LeakSanitizer, a memory leak detector. This option only matters for linking of executables,
+# and the executable is linked against a library that overrides malloc and other allocator functions.
+FSANITIZE_FLAG ?= -fsanitize=leak
+else ifeq ($(ENV_FSANITIZE_OPTION), 4)
+# Enable UndefinedBehaviorSanitizer, a fast undefined behavior detector.
+# Various computations are instrumented to detect undefined behavior at runtime.
+FSANITIZE_FLAG ?= -fsanitize=undefined
+endif
+CPFLAGS        += $(FSANITIZE_FLAG)
+LDFLAGS        += $(FSANITIZE_FLAG)
+
 define translate_obj
 $(patsubst %,$(OBJ_PREFIX)/%.o,$(basename $(1)))
 endef
@@ -443,6 +463,7 @@ $$(patsubst %.$(1),$$(OBJ_PREFIX)/%.o,$$(filter %.$(1),$$(SRCS))): $$(OBJ_PREFIX
 	@mkdir -p $$(dir $$@)
 ifeq ($(filter $(1),$(ASM_SUFFIX)), )
 	@$(2) -c $(if $(filter $(1),$(CXX_SUFFIX)),$$(CXXFLAGS),$$(CFLAGS)) $$(CPFLAGS) $$(CFLAGS_$$(patsubst %.$(1),%.o,$$<)) -MM -MT $$@ -MF $$(patsubst %.o,%.d,$$@) $$<
+	@cat $$(patsubst %.o,%.d,$$@) | sed -e 's/#.*//' -e 's/^[^:]*:\s*//' -e 's/\s*\\$$$$//' -e 's/[ \t\v][ \t\v]*/\n/g' | sed -e '/^$$$$/ d' -e 's/$$$$/:/g' >> $$(patsubst %.o,%.d,$$@)
 endif
 	@$(COLORECHO) "\033[032m$(2)\033[0m	$$<" $(LOGOUTPUT)
 ifneq ($(2),$(AS))

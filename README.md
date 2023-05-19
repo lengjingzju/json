@@ -364,6 +364,7 @@ static inline int pjson_add_string_to_object(json_object *object, const char *ke
 
 ```c
 typedef struct {
+    size_t str_len;                     // 打印到字符串时返回生成的字符串长度(strlen)
     size_t plus_size;                   // 打印生成的字符串的realloc的增量大小 / write buffer的缓冲区大小
     size_t item_size;                   // 每个json对象生成字符串的预估的平均长度
     int item_total;                     // json对象节点的总数
@@ -374,8 +375,8 @@ typedef struct {
 void json_free_print_ptr(void *ptr);
 char *json_print_common(json_object *json, json_print_choice_t *choice);
 
-static inline char *json_print_format(json_object *json);
-static inline char *json_print_unformat(json_object *json);
+static inline char *json_print_format(json_object *json, size_t *length);
+static inline char *json_print_unformat(json_object *json, size_t *length);
 static inline char *json_fprint_format(json_object *json, const char *path);
 static inline char *json_fprint_unformat(json_object *json, const char *path);
 ```
@@ -440,7 +441,7 @@ typedef void* json_sax_print_hd;
 
 int json_sax_print_value(json_sax_print_hd handle, json_type_t type, const char *key, const void *value);
 json_sax_print_hd json_sax_print_start(json_print_choice_t *choice);
-char *json_sax_print_finish(json_sax_print_hd handle);
+char *json_sax_print_finish(json_sax_print_hd handle, size_t *length);
 
 static inline int json_sax_print_null(json_sax_print_hd handle, const char *key);
 static inline int json_sax_print_bool(json_sax_print_hd handle, const char *key, bool value);
@@ -457,8 +458,8 @@ static inline int json_sax_print_object(json_sax_print_hd handle, const char *ke
 
 static inline json_sax_print_hd json_sax_print_format_start(int item_total);
 static inline json_sax_print_hd json_sax_print_unformat_start(int item_total);
-static inline json_sax_print_hd json_sax_fprint_format_start(const char *path);
-static inline json_sax_print_hd json_sax_fprint_unformat_start(const char *path);
+static inline json_sax_print_hd json_sax_fprint_format_start(int item_total, const char *path);
+static inline json_sax_print_hd json_sax_fprint_unformat_start(int item_total, const char *path);
 ```
 
 * json_sax_print_hd: 实际是json_sax_print_t指针

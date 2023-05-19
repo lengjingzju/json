@@ -123,13 +123,14 @@ int test_json_sax_print(void)
     json_sax_print_array(handle, "Hobby", JSON_SAX_FINISH);
     json_sax_print_object(handle, NULL, JSON_SAX_FINISH);
 
-    print_str = json_sax_print_finish(handle);
+    print_str = json_sax_print_finish(handle, NULL);
     printf("%s\n", print_str);
     json_free_print_ptr(print_str);
 
     return 0;
 }
 
+static bool s_sax_for_file = false;
 json_sax_ret_t _sax_parser_cb(json_sax_parser_t *parser)
 {
 #define KEY_BUF_LEN 64
@@ -137,6 +138,8 @@ json_sax_ret_t _sax_parser_cb(json_sax_parser_t *parser)
     static json_sax_print_hd handle = NULL;
     char *key = NULL;
     char *str = NULL;
+    char *print_str = NULL;
+    size_t print_size = 0;
     int key_alloc_flag = 0;
     int str_alloc_flag = 0;
     char key_buf[KEY_BUF_LEN] = {0};
@@ -160,11 +163,18 @@ json_sax_ret_t _sax_parser_cb(json_sax_parser_t *parser)
         switch (parser->array[parser->count-1].type) {
         case JSON_ARRAY:
         case JSON_OBJECT:
-            if (parser->value.vcmd == JSON_SAX_START)
-                handle = json_sax_fprint_format_start(s_dst_json_path);
+            if (parser->value.vcmd == JSON_SAX_START) {
+                if (s_sax_for_file)
+                    handle = json_sax_fprint_format_start(0, s_dst_json_path);
+                else
+                    handle = json_sax_print_format_start(0);
+            }
             break;
         default:
-            handle = json_sax_fprint_format_start(s_dst_json_path);
+            if (s_sax_for_file)
+                handle = json_sax_fprint_format_start(0, s_dst_json_path);
+            else
+                handle = json_sax_print_format_start(0);
             break;
         }
     }
@@ -225,11 +235,30 @@ json_sax_ret_t _sax_parser_cb(json_sax_parser_t *parser)
         switch (parser->array[parser->count-1].type) {
         case JSON_ARRAY:
         case JSON_OBJECT:
-            if (parser->value.vcmd == JSON_SAX_FINISH)
-                json_sax_print_finish(handle);
+            if (parser->value.vcmd == JSON_SAX_FINISH) {
+                if (s_sax_for_file) {
+                    json_sax_print_finish(handle, NULL);
+                } else {
+                    print_str = json_sax_print_finish(handle, &print_size);
+                    if (print_str) {
+                        copy_data_to_file(print_str, print_size, s_dst_json_path);
+                        json_free_print_ptr(print_str);
+                        print_str = NULL;
+                    }
+                }
+            }
             break;
         default:
-            json_sax_print_finish(handle);
+            if (s_sax_for_file) {
+                json_sax_print_finish(handle, NULL);
+            } else {
+                print_str = json_sax_print_finish(handle, &print_size);
+                if (print_str) {
+                    copy_data_to_file(print_str, print_size, s_dst_json_path);
+                    json_free_print_ptr(print_str);
+                    print_str = NULL;
+                }
+            }
             break;
         }
     }
@@ -246,7 +275,7 @@ int main(int argc, char *argv[])
     char *file = NULL;
     char *orig_data = NULL;
     char *print_str = NULL;
-    size_t orig_size = 0;
+    size_t orig_size = 0, print_size = 0;
     json_mem_t mem;
     json_object *json = NULL;
     unsigned int ms1 = 0, ms2 = 0, ms3 = 0, ms4 = 0;
@@ -304,7 +333,6 @@ int main(int argc, char *argv[])
         return -1;
     }
 
-    snprintf(s_dst_json_path, sizeof(s_dst_json_path), "%s-%d.format.json", file, choice);
     switch(choice)
     {
     case 1:
@@ -327,6 +355,7 @@ int main(int argc, char *argv[])
         break;
 #if JSON_SAX_APIS_SUPPORT
     case 6:
+        snprintf(s_dst_json_path, sizeof(s_dst_json_path), "%s-%d.format.json", file, choice);
         if (json_sax_parse_str(orig_data, _sax_parser_cb) < 0) {
             printf("json_sax_parse_str failed!\n");
             read_file_data_free(&orig_data, &orig_size);
@@ -335,6 +364,8 @@ int main(int argc, char *argv[])
         ms2 = _system_ms_get();
         goto end;
     case 7:
+        s_sax_for_file = true;
+        snprintf(s_dst_json_path, sizeof(s_dst_json_path), "%s-%d.format.json", file, choice);
         if (json_sax_parse_file(file, _sax_parser_cb) < 0) {
             printf("json_sax_parse_file failed!\n");
             return -1;
@@ -359,13 +390,13 @@ int main(int argc, char *argv[])
     switch(choice)
     {
     case 1:
-        print_str = json_print_format(json);
+        print_str = json_print_format(json, &print_size);
         break;
     case 2:
-        print_str = json_print_format(json);
+        print_str = json_print_format(json, &print_size);
         break;
     case 3:
-        print_str = json_print_format(json);
+        print_str = json_print_format(json, &print_size);
         break;
     case 4:
         json_fprint_format(json, s_dst_json_path);
@@ -377,24 +408,23 @@ int main(int argc, char *argv[])
         break;
     }
     if (print_str) {
-        copy_data_to_file(print_str, strlen(print_str), s_dst_json_path);
+        copy_data_to_file(print_str, print_size, s_dst_json_path);
         json_free_print_ptr(print_str);
         print_str = NULL;
     }
-
 
     ms3 = _system_ms_get();
     snprintf(s_dst_json_path, sizeof(s_dst_json_path), "%s-%d.unformat.json", file, choice);
     switch(choice)
     {
     case 1:
-        print_str = json_print_unformat(json);
+        print_str = json_print_unformat(json, &print_size);
         break;
     case 2:
-        print_str = json_print_unformat(json);
+        print_str = json_print_unformat(json, &print_size);
         break;
     case 3:
-        print_str = json_print_unformat(json);
+        print_str = json_print_unformat(json, &print_size);
         break;
     case 4:
         json_fprint_unformat(json, s_dst_json_path);
@@ -406,7 +436,7 @@ int main(int argc, char *argv[])
         break;
     }
     if (print_str) {
-        copy_data_to_file(print_str, strlen(print_str), s_dst_json_path);
+        copy_data_to_file(print_str, print_size, s_dst_json_path);
         json_free_print_ptr(print_str);
         print_str = NULL;
     }

@@ -8,8 +8,9 @@
 #ifndef __JSON_H__
 #define __JSON_H__
 #include <stdbool.h>
+#include <stdlib.h>
 
-#define JSON_VERSION                    0x010006
+#define JSON_VERSION                    0x010007
 #define JSON_SAX_APIS_SUPPORT           1
 #define JSON_LONG_LONG_SUPPORT          1
 
@@ -483,6 +484,7 @@ static inline int pjson_add_string_to_object(json_object *object, const char *ke
 /******** json dom print/parse apis ********/
 
 typedef struct {
+    size_t str_len; /* return string length if it is printed to string. */
     size_t plus_size;
     size_t item_size;
     int item_total;
@@ -504,20 +506,28 @@ char *json_print_common(json_object *json, json_print_choice_t *choice);
 void json_free_print_ptr(void *ptr);
 json_object *json_parse_common(json_parse_choice_t *choice);
 
-static inline char *json_print_format(json_object *json)
+static inline char *json_print_format(json_object *json, size_t *length)
 {
     json_print_choice_t choice = {0};
+    char *str = NULL;
 
     choice.format_flag = true;
-    return json_print_common(json, &choice);
+    str = json_print_common(json, &choice);
+    if (length)
+        *length = choice.str_len;
+    return str;
 }
 
-static inline char *json_print_unformat(json_object *json)
+static inline char *json_print_unformat(json_object *json, size_t *length)
 {
     json_print_choice_t choice = {0};
+    char *str = NULL;
 
     choice.format_flag = false;
-    return json_print_common(json, &choice);
+    str = json_print_common(json, &choice);
+    if (length)
+        *length = choice.str_len;
+    return str;
 }
 
 static inline char *json_fprint_format(json_object *json, const char *path)
@@ -630,7 +640,7 @@ typedef struct {
 typedef void* json_sax_print_hd;
 int json_sax_print_value(json_sax_print_hd handle, json_type_t type, const char *key, const void *value);
 json_sax_print_hd json_sax_print_start(json_print_choice_t *choice);
-char *json_sax_print_finish(json_sax_print_hd handle);
+char *json_sax_print_finish(json_sax_print_hd handle, size_t *length);
 int json_sax_parse_common(json_sax_parse_choice_t *choice);
 
 static inline int json_sax_print_null(json_sax_print_hd handle, const char *key)
@@ -703,20 +713,22 @@ static inline json_sax_print_hd json_sax_print_unformat_start(int item_total)
     return json_sax_print_start(&choice);
 }
 
-static inline json_sax_print_hd json_sax_fprint_format_start(const char *path)
+static inline json_sax_print_hd json_sax_fprint_format_start(int item_total, const char *path)
 {
     json_print_choice_t choice = {0};
 
     choice.format_flag = true;
+    choice.item_total = item_total;
     choice.path = path;
     return json_sax_print_start(&choice);
 }
 
-static inline json_sax_print_hd json_sax_fprint_unformat_start(const char *path)
+static inline json_sax_print_hd json_sax_fprint_unformat_start(int item_total, const char *path)
 {
     json_print_choice_t choice = {0};
 
     choice.format_flag = false;
+    choice.item_total = item_total;
     choice.path = path;
     return json_sax_print_start(&choice);
 }
