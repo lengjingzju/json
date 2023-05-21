@@ -45,7 +45,8 @@
 #define JsonPareseErr(s)      do {} while(0)
 #endif
 
-/* fix warning */
+/**************** gcc builtin ****************/
+
 #if defined(__GNUC__)
 #define UNUSED_ATTR                     __attribute__((unused))
 #define likely(cond)                    __builtin_expect(!!(cond), 1)

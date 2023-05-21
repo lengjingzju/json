@@ -7,8 +7,8 @@
 PACKAGE_NAME    = ljson
 
 major_ver       = 1
-minor_ver       = 0
-patch_ver       = 7
+minor_ver       = 1
+patch_ver       = 0
 staticlib       = lib$(PACKAGE_NAME).a
 sharedlib       = lib$(PACKAGE_NAME).so $(major_ver) $(minor_ver) $(patch_ver)
 testedbin       = ljson
@@ -17,6 +17,7 @@ INSTALL_HEADERS = json.h
 
 .PHONY: all clean install
 all:
+	@echo "Build $(PACKAGE_NAME) Done!"
 
 INC_MAKES      := app
 include inc.makes
@@ -33,3 +34,4 @@ clean: clean_objs
 	@echo "Clean $(PACKAGE_NAME) Done."
 
 install: install_hdrs install_libs install_bins
+	@echo "Install $(PACKAGE_NAME) to $(INS_PREFIX) Done!"

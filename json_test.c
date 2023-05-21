@@ -7,8 +7,8 @@
 
 /*
  * Compile Method:
- * gcc -o json json.c json_test.c -O0 -g -W -Wall
- * gcc -o json json.c json_test.c -O2 -ffunction-sections -fdata-sections -W -Wall
+ * gcc -o ljson json.c json_test.c -O0 -g -W -Wall
+ * gcc -o ljson json.c json_test.c -O2 -ffunction-sections -fdata-sections -W -Wall
  */
 
 #define _fmalloc       malloc
@@ -336,14 +336,14 @@ int main(int argc, char *argv[])
     switch(choice)
     {
     case 1:
-        json = json_parse_str(orig_data);
+        json = json_parse_str(orig_data, orig_size);
         break;
     case 2:
-        json = json_fast_parse_str(orig_data, &mem, orig_size);
+        json = json_fast_parse_str(orig_data, orig_size, &mem);
         fast_flag = 1;
         break;
     case 3:
-        json = json_reuse_parse_str(orig_data, &mem, orig_size);
+        json = json_reuse_parse_str(orig_data, orig_size, &mem);
         fast_flag = 1;
         break;
     case 4:
@@ -356,7 +356,7 @@ int main(int argc, char *argv[])
 #if JSON_SAX_APIS_SUPPORT
     case 6:
         snprintf(s_dst_json_path, sizeof(s_dst_json_path), "%s-%d.format.json", file, choice);
-        if (json_sax_parse_str(orig_data, _sax_parser_cb) < 0) {
+        if (json_sax_parse_str(orig_data, orig_size, _sax_parser_cb) < 0) {
             printf("json_sax_parse_str failed!\n");
             read_file_data_free(&orig_data, &orig_size);
             return -1;
