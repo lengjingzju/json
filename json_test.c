@@ -109,7 +109,7 @@ int test_json_sax_print(void)
 {
     json_sax_print_hd handle = NULL;
     char *print_str = NULL;
-    json_sax_str_t jkey = {0}, jstr = {0};
+    json_string_t jkey = {0}, jstr = {0};
 
     handle = json_sax_print_format_start(10);
     json_sax_print_object(handle, NULL, JSON_SAX_START);
@@ -145,7 +145,7 @@ json_sax_ret_t _sax_parser_cb(json_sax_parser_t *parser)
     static json_sax_print_hd handle = NULL;
     char *print_str = NULL;
     size_t print_size = 0;
-    json_sax_depth_t *depth = &parser->array[parser->count-1];
+    json_string_t *jkey = &parser->array[parser->count-1];
 
     if (parser->count == 1) {
         switch (parser->array[parser->count-1].type) {
@@ -169,36 +169,36 @@ json_sax_ret_t _sax_parser_cb(json_sax_parser_t *parser)
 
     switch (parser->array[parser->count-1].type) {
     case JSON_NULL:
-        json_sax_print_null(handle, &depth->key);
+        json_sax_print_null(handle, jkey);
         break;
     case JSON_BOOL:
-        json_sax_print_bool(handle, &depth->key, parser->value.vnum.vbool);
+        json_sax_print_bool(handle, jkey, parser->value.vnum.vbool);
         break;
     case JSON_INT:
-        json_sax_print_int(handle, &depth->key, parser->value.vnum.vint);
+        json_sax_print_int(handle, jkey, parser->value.vnum.vint);
         break;
     case JSON_HEX:
-        json_sax_print_hex(handle, &depth->key, parser->value.vnum.vhex);
+        json_sax_print_hex(handle, jkey, parser->value.vnum.vhex);
         break;
 #if JSON_LONG_LONG_SUPPORT
     case JSON_LINT:
-        json_sax_print_lint(handle, &depth->key, parser->value.vnum.vlint);
+        json_sax_print_lint(handle, jkey, parser->value.vnum.vlint);
         break;
     case JSON_LHEX:
-        json_sax_print_lhex(handle, &depth->key, parser->value.vnum.vlhex);
+        json_sax_print_lhex(handle, jkey, parser->value.vnum.vlhex);
         break;
 #endif
     case JSON_DOUBLE:
-        json_sax_print_double(handle, &depth->key, parser->value.vnum.vdbl);
+        json_sax_print_double(handle, jkey, parser->value.vnum.vdbl);
         break;
     case JSON_STRING:
-        json_sax_print_string(handle, &depth->key, &parser->value.vstr);
+        json_sax_print_string(handle, jkey, &parser->value.vstr);
         break;
     case JSON_ARRAY:
-        json_sax_print_array(handle, &depth->key, parser->value.vcmd);
+        json_sax_print_array(handle, jkey, parser->value.vcmd);
         break;
     case JSON_OBJECT:
-        json_sax_print_object(handle, &depth->key, parser->value.vcmd);
+        json_sax_print_object(handle, jkey, parser->value.vcmd);
         break;
     default:
         break;
