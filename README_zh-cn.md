@@ -7,7 +7,7 @@ LJSON 支持 JSON 的解析、打印、编辑，提供 DOM 和 SAX 接口，I/O 
 
 ## 功能特点
 
-* 更快：打印和解析速度比 cJSON 和 RapidJSON 都要快，速度最高可比 CJSON 快16倍，比 Rapid JSON 快1倍，见测试结果
+* 更快：打印和解析速度比 cJSON 和 RapidJSON 都要快，速度最高可比 CJSON 快19倍，比 Rapid JSON 快1倍，见测试结果
 * 更省：提供多种省内存的手段，例如内存池、文件边读边解析、边打印边写文件、SAX方式的接口，可做到内存占用是个常数
 * 更强：支持DOM和SAX风格的API，提供普通模式和内存池模式JSON的接口，支持字符串和文件作为输入输出(可扩展支持其它流)，扩展支持长长整形和十六进制数字
 * 更友好：C语言实现，不依赖任何库，不含平台相关代码，只有一个头文件和库文件，和cJSON对应一致的接口，代码逻辑比任何JSON库都更清晰
@@ -125,6 +125,11 @@ typedef struct {
 ## 经典编辑模式接口
 
 ```c
+void json_memory_free(void *ptr);
+```
+* json_item_total_get: 释放经典编辑模式申请的内存或打印到字符串返回的指针
+
+```c
 int json_item_total_get(json_object *json);
 ```
 
@@ -167,8 +172,16 @@ static inline json_object *json_create_string_array(char **values, int count);
 * 要点：创建的节点使用完后需要使用`json_del_object`删除，但是如果把该节点加入了array或object，该节点无需再删除
 
 ```c
-int json_set_key(json_object *json, const char *key);
-int json_set_string_value(json_object *json, const char *str);
+int json_string_strdup(const char *src, char **pdst);
+static inline int json_set_key(json_object *json, const char *key);
+static inline int json_set_string_value(json_object *json, const char *str);
+```
+
+* json_string_strdup: 修改LJSON中的字符串
+* json_set_key: 修改节点的key(JSON_OBJECT类型下的子节点才有key)
+* json_set_string_value: 修改string类型节点的value
+
+```c
 int json_get_number_value(json_object *json, json_type_t type, void *value);
 int json_set_number_value(json_object *json, json_type_t type, void *value);
 
@@ -191,8 +204,6 @@ static inline int json_set_lhex_value(json_object *json, unsigned long long int 
 static inline int json_set_double_value(json_object *json, double value);
 ```
 
-* json_set_key: 修改节点的key(JSON_OBJECT类型下的子节点才有key)
-* json_set_string_value: 修改string类型节点的value
 * json_get_number_value: 获取number类型节点的value，返回值: 正值(原有类型枚举值)表示成功有强制转换，0表示成功且类型对应，-1表示失败不是number类型
 * json_set_number_value: 修改number类型节点的value，返回值说明同上
 
@@ -265,6 +276,24 @@ static inline int json_add_string_to_object(json_object *object, const char *key
 
 * json_add_new_item_to_object: 新建指定类型的节点，并将该节点加入object
 
+```c
+/*
+ * The below APIs are also available to pool json:
+ * json_item_total_get
+ * json_get_number_value / ...
+ * json_set_number_value / ...
+ * json_get_array_size
+ * json_get_array_item
+ * json_get_object_item
+ * json_detach_item_from_array
+ * json_detach_item_from_object
+ * json_add_item_to_array
+ */
+```
+
+* `编辑(一般模式)`的一些API(内部没有调用malloc/free)也可以用于内存池
+* 注意: pool模式时，json_detach_item_from_array/object返回的json节点不能使用`json_del_object`删除
+
 ## 内存池结构
 
 ```c
@@ -305,14 +334,6 @@ void pjson_memory_init(json_mem_t *mem);
 * 注：绝对不要调用存在malloc, free之类的api，例如`json_new_object`和`json_del_object`等
 
 ```c
-int pjson_set_key(json_object *json, const char *key, json_mem_t *mem);
-int pjson_set_string_value(json_object *json, const char *str, json_mem_t *mem);
-```
-
-* pjson_set_key: 修改json节点的key，该key在内存池中分配
-* pjson_set_string_value: 修改 JSON_STRING 类型json节点的值，该值在内存池中分配
-
-```c
 json_object *pjson_new_object(json_type_t type, json_mem_t *mem);
 json_object *pjson_create_item(json_type_t type, void *value, json_mem_t *mem);
 json_object *pjson_create_item_array(json_type_t item_type, void *values, int count, json_mem_t *mem);
@@ -346,6 +367,16 @@ static inline json_object *pjson_create_string_array(char **values, int count, j
 * pjson_create_item_array: 在内存池中创建(子节点指定类型)的array节点
 
 ```c
+int pjson_string_strdup(const char *src, char **pdst, json_mem_mgr_t *mgr);
+static inline int pjson_set_key(json_object *json, const char *key, json_mem_t *mem);
+static inline int pjson_set_string_value(json_object *json, const char *str, json_mem_t *mem);
+```
+
+* pjson_string_strdup: 修改JSON中的字符串，该字符串在内存池中分配
+* pjson_set_key: 修改json节点的key，该key在内存池中分配
+* pjson_set_string_value: 修改 JSON_STRING 类型json节点的值，该值在内存池中分配
+
+```c
 int pjson_add_item_to_object(json_object *object, const char *key, json_object *item, json_mem_t *mem);
 int pjson_add_new_item_to_object(json_object *object, json_type_t type, const char *key, void *value, json_mem_t *mem);
 
@@ -364,24 +395,6 @@ static inline int pjson_add_string_to_object(json_object *object, const char *ke
 * pjson_add_item_to_object: 在内存池中的object加入子节点item
 * pjson_add_new_item_to_object: 在内存池中创建指定类型的子节点，并加入到object
 
-```c
-/*
- * The below APIs are also available to pool json:
- * json_item_total_get
- * json_get_number_value / ...
- * json_set_number_value / ...
- * json_get_array_size
- * json_get_array_item
- * json_get_object_item
- * json_detach_item_from_array
- * json_detach_item_from_object
- * json_add_item_to_array
- */
-```
-
-* `编辑(一般模式)`的一些api(内部没有调用malloc/free)也可以用于内存池
-* 注意: json_detach_item_from_array/object返回的json节点不能使用`json_del_object`删除
-
 ## DOM打印/DOM解析
 
 ```c
@@ -393,8 +406,15 @@ typedef struct {
     bool format_flag;                   // 字符串是否进行格式化
     const char *path;                   // 文件保存路径
 } json_print_choice_t;
+```
 
-void json_free_print_ptr(void *ptr);
+* plus_size: 经典模式下打印字符串realloc的增量，或write buffer的缓冲区大小，最小值/默认值为 JSON_PRINT_SIZE_PLUS_DEF
+* item_size: 每个json对象生成字符串的预估的平均长度，最小值/默认值为 JSON_UNFORMAT_ITEM_SIZE_DEF 和 JSON_FORMAT_ITEM_SIZE_DEF
+* item_total: json对象节点的总数如果此值未设置，将自动计算总数；否则取默认值JSON_ITEM_NUM_PLUS_DEF
+* format_flag: 格式化打印选项，`false: 压缩打印；true: 格式化打印`
+* path: 如果path不为空，将直接边打印边输出到文件；否则是打印到一个大的完整字符串
+
+```c
 char *json_print_common(json_object *json, json_print_choice_t *choice);
 
 static inline char *json_print_format(json_object *json, size_t *length);
@@ -403,17 +423,10 @@ static inline char *json_fprint_format(json_object *json, const char *path);
 static inline char *json_fprint_unformat(json_object *json, const char *path);
 ```
 
-* plus_size: 经典模式下打印字符串realloc的增量，或write buffer的缓冲区大小，最小值/默认值为 JSON_PRINT_SIZE_PLUS_DEF
-* item_size: 每个json对象生成字符串的预估的平均长度，最小值/默认值为 JSON_UNFORMAT_ITEM_SIZE_DEF 和 JSON_FORMAT_ITEM_SIZE_DEF
-* item_total: json对象节点的总数如果此值未设置，将自动计算总数；否则取默认值JSON_ITEM_NUM_PLUS_DEF
-* format_flag: 格式化打印选项，`false: 压缩打印；true: 格式化打印`
-* path: 如果path不为空，将直接边打印边输出到文件；否则是打印到一个大的完整字符串
-<br>
-
 * json_print_common: 打印通用接口
-* json_print_format: 格式化打印成字符串的简写接口，`需要` `json_free_print_ptr`释放返回的字符串
+* json_print_format: 格式化打印成字符串的简写接口，`需要` `json_memory_free`释放返回的字符串
 * json_print_unformat: 类似json_print_format，只是非格式化打印
-* json_fprint_format: 格式化直接边打印边输出到文件的简写接口，成功返回"ok"字符串，`不需要` `json_free_print_ptr`释放返回的字符串
+* json_fprint_format: 格式化直接边打印边输出到文件的简写接口，成功返回"ok"字符串，`不需要` `json_memory_free`释放返回的字符串
 * json_fprint_unformat: 类似json_fprint_format，只是非格式化打印
 
 ```c
@@ -426,13 +439,6 @@ typedef struct {
     const char *path;                   // 要解析的json文件的路径
     char *str;                          // 要解析的json字符串的指针
 } json_parse_choice_t;
-
-json_object *json_parse_common(json_parse_choice_t *choice);
-static inline json_object *json_parse_str(char *str, size_t str_len);
-static inline json_object *json_fast_parse_str(char *str, size_t str_len, json_mem_t *mem);
-static inline json_object *json_reuse_parse_str(char *str, size_t str_len, json_mem_t *mem);
-static inline json_object *json_parse_file(const char *path);
-static inline json_object *json_fast_parse_file(const char *path, json_mem_t *mem);
 ```
 
 * mem_size: 内存池每个内存块的大小，最小值为 (str_len / JSON_STR_MULTIPLE_NUM) 的值
@@ -440,7 +446,15 @@ static inline json_object *json_fast_parse_file(const char *path, json_mem_t *me
 * str_len: 要解析的字符串长度 strlen(str)，使用内存池时该参数有效，如果为0，json_parse_common会自己计算一次
 * path: 要解析的json文件，str 和 path 有且只有一个有值
 * str: 要解析的json字符串，str 和 path 有且只有一个有值
-<br>
+
+```c
+json_object *json_parse_common(json_parse_choice_t *choice);
+static inline json_object *json_parse_str(char *str, size_t str_len);
+static inline json_object *json_fast_parse_str(char *str, size_t str_len, json_mem_t *mem);
+static inline json_object *json_reuse_parse_str(char *str, size_t str_len, json_mem_t *mem);
+static inline json_object *json_parse_file(const char *path);
+static inline json_object *json_fast_parse_file(const char *path, json_mem_t *mem);
+```
 
 * json_parse_common: 解析通用接口
 * json_parse_str: 类似cJSON的经典字符串解析的简写接口，用完后需要`json_del_object`释放返回的管理结构
@@ -454,6 +468,13 @@ static inline json_object *json_fast_parse_file(const char *path, json_mem_t *me
 使用 SAX APIs 编译时需要设置 json.h 中的 `JSON_SAX_APIS_SUPPORT` 值为 1
 
 ```c
+typedef struct {
+    char escaped;
+    char alloced;
+    size_t len;
+    char *str;
+} json_sax_str_t; // 字符串的值
+
 typedef enum {
     JSON_SAX_START = 0,
     JSON_SAX_FINISH
@@ -461,45 +482,54 @@ typedef enum {
 
 typedef void* json_sax_print_hd;
 
-int json_sax_print_value(json_sax_print_hd handle, json_type_t type, const char *key, const void *value);
+void json_saxstr_update(json_sax_str_t *sstr);
+```
+
+* json_sax_str_t: 如果alloced是1，表示该字符串是malloc的以'\0'结尾；否则表示该字符串是截取大字符串的一段，长度为len，需要你自己复制分离
+* json_sax_cmd_t: JSON_ARRAY / JSON_OBJECT 的开始和结束
+* json_sax_print_hd: 实际是json_sax_print_t指针
+* json_saxstr_update: 更新 json_sax_str_t 中的escaped和len，如果传入的len大于0， 此函数什么都不做
+
+```c
 json_sax_print_hd json_sax_print_start(json_print_choice_t *choice);
-char *json_sax_print_finish(json_sax_print_hd handle, size_t *length);
-
-static inline int json_sax_print_null(json_sax_print_hd handle, const char *key);
-static inline int json_sax_print_bool(json_sax_print_hd handle, const char *key, bool value);
-static inline int json_sax_print_int(json_sax_print_hd handle, const char *key, int value);
-static inline int json_sax_print_hex(json_sax_print_hd handle, const char *key, unsigned int value);
-#if JSON_LONG_LONG_SUPPORT
-static inline int json_sax_print_lint(json_sax_print_hd handle, const char *key, long long int value);
-static inline int json_sax_print_lhex(json_sax_print_hd handle, const char *key, unsigned long long int value);
-#endif
-static inline int json_sax_print_double(json_sax_print_hd handle, const char *key, double value);
-static inline int json_sax_print_string(json_sax_print_hd handle, const char *key, const char *value);
-static inline int json_sax_print_array(json_sax_print_hd handle, const char *key, json_sax_cmd_t value);
-static inline int json_sax_print_object(json_sax_print_hd handle, const char *key, json_sax_cmd_t value);
-
 static inline json_sax_print_hd json_sax_print_format_start(int item_total);
 static inline json_sax_print_hd json_sax_print_unformat_start(int item_total);
 static inline json_sax_print_hd json_sax_fprint_format_start(int item_total, const char *path);
 static inline json_sax_print_hd json_sax_fprint_unformat_start(int item_total, const char *path);
 ```
 
-* json_sax_print_hd: 实际是json_sax_print_t指针
-* json_sax_print_value: sax 条目通用打印接口，如果要打印节点的父节点是object，key必须有值；其它情况下key填不填值均可
-  * array 和 object 要打印两次，一次值是 `JSON_SAX_START` 表示开始，一次值是 `JSON_SAX_FINISH` 表示完成
 * json_sax_print_start: sax打印时必须先调用此函数，进行资源初始化并获取句柄 json_sax_print_hd
   * 如果打印到字符串，最好给一个item_total值，用于计算生成字符串的增量
-* json_sax_print_finish: sax打印完成必须调用此函数，释放中间资源并返回字符串
-  * 打印成字符串时，该函数返回打印的字符串， `需要` `json_free_print_ptr`释放返回的字符串
-  * 直接边打印边输出到文件时，成功返回"ok"字符串，`不需要` `json_free_print_ptr`释放返回的字符串
 
 ```c
-typedef struct {
-    int alloc;
-    size_t len;
-    char *str;
-} json_sax_str_t;                // 字符串的值
+int json_sax_print_value(json_sax_print_hd handle, json_type_t type, const char *key, const void *value);
+static inline int json_sax_print_null(json_sax_print_hd handle, json_sax_str_t *key);
+static inline int json_sax_print_bool(json_sax_print_hd handle, json_sax_str_t *key, bool value);
+static inline int json_sax_print_int(json_sax_print_hd handle, json_sax_str_t *key, int value);
+static inline int json_sax_print_hex(json_sax_print_hd handle, json_sax_str_t *key, unsigned int value);
+#if JSON_LONG_LONG_SUPPORT
+static inline int json_sax_print_lint(json_sax_print_hd handle, json_sax_str_t *key, long long int value);
+static inline int json_sax_print_lhex(json_sax_print_hd handle, json_sax_str_t *key, unsigned long long int value);
+#endif
+static inline int json_sax_print_double(json_sax_print_hd handle, json_sax_str_t *key, double value);
+static inline int json_sax_print_string(json_sax_print_hd handle, json_sax_str_t *key, json_sax_str_t *value);
+static inline int json_sax_print_array(json_sax_print_hd handle, json_sax_str_t *key, json_sax_cmd_t value);
+static inline int json_sax_print_object(json_sax_print_hd handle, json_sax_str_t *key, json_sax_cmd_t value);
+```
 
+* json_sax_print_value: sax 条目通用打印接口，如果要打印节点的父节点是object，key必须有值；其它情况下key填不填值均可
+  * array 和 object 要打印两次，一次值是 `JSON_SAX_START` 表示开始，一次值是 `JSON_SAX_FINISH` 表示完成
+  * 传入key时可以先不用`json_saxstr_update` 计算长度
+
+```c
+char *json_sax_print_finish(json_sax_print_hd handle, size_t *length);
+```
+
+* json_sax_print_finish: sax打印完成必须调用此函数，释放中间资源并返回字符串
+  * 打印成字符串时，该函数返回打印的字符串， `需要` `json_memory_free`释放返回的字符串
+  * 直接边打印边输出到文件时，成功返回"ok"字符串，`不需要` `json_memory_free`释放返回的字符串
+
+```c
 typedef union {
     json_number_t vnum;
     json_sax_str_t vstr;
@@ -531,19 +561,22 @@ typedef struct {
     size_t read_size;
     json_sax_cb_t cb;
 } json_sax_parse_choice_t;
-
-int json_sax_parse_common(json_sax_parse_choice_t *choice);
-static inline int json_sax_parse_str(char *str, size_t str_len, json_sax_cb_t cb);
-static inline int json_sax_parse_file(const char *path, json_sax_cb_t cb);
 ```
 
-* json_sax_str_t: 如果alloc是1，表示该字符串是malloc的以'\0'结尾；否则表示该字符串是截取大字符串的一段，长度为len，需要你自己复制分离
 * json_sax_value_t: 解析到的json节点的值
+* json_sax_depth_t: 记录key和type
+* json_sax_ret_t: JSON_SAX_PARSE_CONTINUE 表示SAX解析器继续解析，JSON_SAX_PARSE_STOP 表示中断解析
 * json_sax_cb_t: 调用者自己填写的回调函数，必须有值，返回 `JSON_SAX_PARSE_STOP` 表示中断解析并返回
 * json_sax_parser_t: 传给回调函数的值
   * array 是 array/object `类型+key` 的层次结构，total表示当前分配了多少层次，count表示当前用了多少层次，即当前层为 `array[count-1]`
   * value 是当前层的值
 * json_sax_parse_choice_t: 参考 `json_parse_choice_t` 说明
+
+```c
+int json_sax_parse_common(json_sax_parse_choice_t *choice);
+static inline int json_sax_parse_str(char *str, size_t str_len, json_sax_cb_t cb);
+static inline int json_sax_parse_file(const char *path, json_sax_cb_t cb);
+```
 
 * json_sax_parse_common: sax解析通用接口，因为不需要保存json树结构，所以不需要使用内存池
 * json_sax_parse_str: 从字符串解析的快捷接口

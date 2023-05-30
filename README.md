@@ -7,7 +7,7 @@ LJSON supports JSON parsing, printing and editing, provides DOM and SAX APIs, an
 
 ## Features
 
-* Faster: Print and parse faster than both cJSON and RapidJSON, up to 16 times faster than CJSON and 1 time faster than Rapid JSON, refer to below test results
+* Faster: Print and parse faster than both cJSON and RapidJSON, up to 19 times faster than CJSON and 1 time faster than Rapid JSON, refer to below test results
 * Lighter: Provide a variety of methods to save memory, such as pool memory, file parsing while reading, file writing while printing, and SAX APIs. It can make memory usage a constant
 * Stronger: Support DOM and SAX-style APIs, provide APIs for JSON in classic mode and memory pool mode, support string and file as input and output, is extended to support long long integer and hexadecimal number
 * More friendly: C language implementation, does not depend on any other library, does not contain platform-related code, only one header file and source file, and the interface corresponding to cJSON. the code logic is clearer than any other JSON libraries

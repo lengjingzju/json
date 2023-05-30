@@ -109,23 +109,32 @@ int test_json_sax_print(void)
 {
     json_sax_print_hd handle = NULL;
     char *print_str = NULL;
+    json_sax_str_t jkey = {0}, jstr = {0};
 
-    handle = json_sax_print_format_start(100);
-
+    handle = json_sax_print_format_start(10);
     json_sax_print_object(handle, NULL, JSON_SAX_START);
-    json_sax_print_string(handle, "Name", "LengJing");
-    json_sax_print_int(handle, "Age", 30);
-    json_sax_print_string(handle, "Phone", "18368887550");
-    json_sax_print_array(handle, "Hobby", JSON_SAX_START);
-    json_sax_print_string(handle, NULL, "Reading");
-    json_sax_print_string(handle, NULL, "Walking");
-    json_sax_print_string(handle, NULL, "Thinking");
-    json_sax_print_array(handle, "Hobby", JSON_SAX_FINISH);
+    jkey.str = "Name", jkey.len = 4;
+    jstr.str = "LengJing", jstr.len = 8;
+    json_sax_print_string(handle, &jkey, &jstr);
+    jkey.str = "Age", jkey.len = 3;
+    json_sax_print_int(handle, &jkey, 30);
+    jkey.str = "Phone", jkey.len = 5;
+    jstr.str = "18368887550", jstr.len = 11;
+    json_sax_print_string(handle, &jkey, &jstr);
+    jkey.str = "Hobby", jkey.len = 5;
+    json_sax_print_array(handle, &jkey, JSON_SAX_START);
+    jstr.str = "Reading", jstr.len = 7;
+    json_sax_print_string(handle, NULL, &jstr);
+    jstr.str = "Walking", jstr.len = 7;
+    json_sax_print_string(handle, NULL, &jstr);
+    jstr.str = "Thinking", jstr.len = 8;
+    json_sax_print_string(handle, NULL, &jstr);
+    json_sax_print_array(handle, NULL, JSON_SAX_FINISH);
     json_sax_print_object(handle, NULL, JSON_SAX_FINISH);
 
     print_str = json_sax_print_finish(handle, NULL);
     printf("%s\n", print_str);
-    json_free_print_ptr(print_str);
+    json_memory_free(print_str);
 
     return 0;
 }
@@ -133,31 +142,10 @@ int test_json_sax_print(void)
 static bool s_sax_for_file = false;
 json_sax_ret_t _sax_parser_cb(json_sax_parser_t *parser)
 {
-#define KEY_BUF_LEN 64
-#define STR_BUF_LEN 128
     static json_sax_print_hd handle = NULL;
-    char *key = NULL;
-    char *str = NULL;
     char *print_str = NULL;
     size_t print_size = 0;
-    int key_alloc_flag = 0;
-    int str_alloc_flag = 0;
-    char key_buf[KEY_BUF_LEN] = {0};
-    char str_buf[STR_BUF_LEN] = {0};
     json_sax_depth_t *depth = &parser->array[parser->count-1];
-
-    if (depth->key.alloc == 0 && depth->key.str != NULL) {
-        if (depth->key.len < KEY_BUF_LEN) {
-            key = key_buf;
-        } else {
-            key = malloc(depth->key.len + 1);
-            key_alloc_flag = 1;
-        }
-        memcpy(key, depth->key.str, depth->key.len);
-        key[depth->key.len] = 0;
-    } else {
-        key = depth->key.str;
-    }
 
     if (parser->count == 1) {
         switch (parser->array[parser->count-1].type) {
@@ -181,51 +169,36 @@ json_sax_ret_t _sax_parser_cb(json_sax_parser_t *parser)
 
     switch (parser->array[parser->count-1].type) {
     case JSON_NULL:
-        json_sax_print_null(handle, key);
+        json_sax_print_null(handle, &depth->key);
         break;
     case JSON_BOOL:
-        json_sax_print_bool(handle, key, parser->value.vnum.vbool);
+        json_sax_print_bool(handle, &depth->key, parser->value.vnum.vbool);
         break;
     case JSON_INT:
-        json_sax_print_int(handle, key, parser->value.vnum.vint);
+        json_sax_print_int(handle, &depth->key, parser->value.vnum.vint);
         break;
     case JSON_HEX:
-        json_sax_print_hex(handle, key, parser->value.vnum.vhex);
+        json_sax_print_hex(handle, &depth->key, parser->value.vnum.vhex);
         break;
 #if JSON_LONG_LONG_SUPPORT
     case JSON_LINT:
-        json_sax_print_lint(handle, key, parser->value.vnum.vlint);
+        json_sax_print_lint(handle, &depth->key, parser->value.vnum.vlint);
         break;
     case JSON_LHEX:
-        json_sax_print_lhex(handle, key, parser->value.vnum.vlhex);
+        json_sax_print_lhex(handle, &depth->key, parser->value.vnum.vlhex);
         break;
 #endif
     case JSON_DOUBLE:
-        json_sax_print_double(handle, key, parser->value.vnum.vdbl);
+        json_sax_print_double(handle, &depth->key, parser->value.vnum.vdbl);
         break;
     case JSON_STRING:
-        if (parser->value.vstr.alloc == 0 && parser->value.vstr.str != NULL) {
-            if (parser->value.vstr.len < STR_BUF_LEN) {
-                str = str_buf;
-            } else {
-                str = malloc(parser->value.vstr.len + 1);
-                str_alloc_flag = 1;
-            }
-            memcpy(str, parser->value.vstr.str, parser->value.vstr.len);
-            str[parser->value.vstr.len] = 0;
-            json_sax_print_string(handle, key, str);
-            if (str_alloc_flag)
-                free(str);
-        } else {
-            json_sax_print_string(handle, key, parser->value.vstr.str);
-        }
+        json_sax_print_string(handle, &depth->key, &parser->value.vstr);
         break;
-
     case JSON_ARRAY:
-        json_sax_print_array(handle, key, parser->value.vcmd);
+        json_sax_print_array(handle, &depth->key, parser->value.vcmd);
         break;
     case JSON_OBJECT:
-        json_sax_print_object(handle, key, parser->value.vcmd);
+        json_sax_print_object(handle, &depth->key, parser->value.vcmd);
         break;
     default:
         break;
@@ -242,7 +215,7 @@ json_sax_ret_t _sax_parser_cb(json_sax_parser_t *parser)
                     print_str = json_sax_print_finish(handle, &print_size);
                     if (print_str) {
                         copy_data_to_file(print_str, print_size, s_dst_json_path);
-                        json_free_print_ptr(print_str);
+                        json_memory_free(print_str);
                         print_str = NULL;
                     }
                 }
@@ -255,7 +228,7 @@ json_sax_ret_t _sax_parser_cb(json_sax_parser_t *parser)
                 print_str = json_sax_print_finish(handle, &print_size);
                 if (print_str) {
                     copy_data_to_file(print_str, print_size, s_dst_json_path);
-                    json_free_print_ptr(print_str);
+                    json_memory_free(print_str);
                     print_str = NULL;
                 }
             }
@@ -263,8 +236,6 @@ json_sax_ret_t _sax_parser_cb(json_sax_parser_t *parser)
         }
     }
 
-    if (key_alloc_flag)
-        free(key);
     return JSON_SAX_PARSE_CONTINUE;
 }
 #endif
@@ -409,7 +380,7 @@ int main(int argc, char *argv[])
     }
     if (print_str) {
         copy_data_to_file(print_str, print_size, s_dst_json_path);
-        json_free_print_ptr(print_str);
+        json_memory_free(print_str);
         print_str = NULL;
     }
 
@@ -437,7 +408,7 @@ int main(int argc, char *argv[])
     }
     if (print_str) {
         copy_data_to_file(print_str, print_size, s_dst_json_path);
-        json_free_print_ptr(print_str);
+        json_memory_free(print_str);
         print_str = NULL;
     }
     ms4 = _system_ms_get();

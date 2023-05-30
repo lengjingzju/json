@@ -10,7 +10,7 @@
 #include <stdbool.h>
 #include <stdlib.h>
 
-#define JSON_VERSION                    0x010100
+#define JSON_VERSION                    0x010200
 #define JSON_SAX_APIS_SUPPORT           1
 #define JSON_LONG_LONG_SUPPORT          1
 
@@ -90,6 +90,15 @@ typedef struct {
 } json_object;
 
 /**************** json classic editor ****************/
+
+/*
+ * json_memory_free - Free the ptr alloced by LJSON
+ * @ptr: IN, the alloced ptr
+ * @description: the alloced ptr may be:
+ *   1. the returned string by json_print_common or json_sax_print_finish when printing to string
+ *   2. the LJSON style string alloced by LJSON classic(not pool) APIS
+ */
+void json_memory_free(void *ptr);
 
 /*
  * json_item_total_get - Get the total number of json tree (recursive)
@@ -219,12 +228,23 @@ static inline json_object *json_create_string_array(char **values, int count)
 }
 
 /*
+ * json_string_strdup - Strdup the string src to dst
+ * @src: IN, the source string
+ * @dst: OUT, the destination string
+ * @return: -1 on failure, 0 on success
+ */
+int json_string_strdup(const char *src, char **pdst);
+
+/*
  * json_set_key - Set the key of json object
  * @json: IN, the json object to be set
  * @key: IN, the key string
  * @return: -1 on failure, 0 on success
  */
-int json_set_key(json_object *json, const char *key);
+static inline int json_set_key(json_object *json, const char *key)
+{
+    return json_string_strdup(key, &json->key);
+}
 
 /*
  * json_set_string_value - Set the string of JSON_STRING object
@@ -232,7 +252,13 @@ int json_set_key(json_object *json, const char *key);
  * @str: IN, the string value
  * @return: -1 on failure, 0 on success
  */
-int json_set_string_value(json_object *json, const char *str);
+static inline int json_set_string_value(json_object *json, const char *str)
+{
+    if (json->type == JSON_STRING) {
+        return json_string_strdup(str, &json->value.vstr);
+    }
+    return -1;
+}
 
 /*
  * json_get_number_value - Get the value of numerical object
@@ -699,13 +725,24 @@ static inline json_object *pjson_create_string_array(char **values, int count, j
 }
 
 /*
+ * pjson_string_strdup - Strdup the string src to dst
+ * @src: IN, the source string
+ * @dst: OUT, the destination string
+ * @return: -1 on failure, 0 on success
+ */
+int pjson_string_strdup(const char *src, char **pdst, json_mem_mgr_t *mgr);
+
+/*
  * pjson_set_key - Set the key of pool json object
  * @json: IN, the json object to be set
  * @key: IN, the key string
  * @mem: IN, the block memory manager
  * @return: -1 on failure, 0 on success
  */
-int pjson_set_key(json_object *json, const char *key, json_mem_t *mem);
+static inline int pjson_set_key(json_object *json, const char *key, json_mem_t *mem)
+{
+    return pjson_string_strdup(key, &json->key, &mem->key_mgr);
+}
 
 /*
  * pjson_set_string_value - Set the string of pool JSON_STRING object
@@ -714,7 +751,13 @@ int pjson_set_key(json_object *json, const char *key, json_mem_t *mem);
  * @mem: IN, the block memory manager
  * @return: -1 on failure, 0 on success
  */
-int pjson_set_string_value(json_object *json, const char *str, json_mem_t *mem);
+static inline int pjson_set_string_value(json_object *json, const char *str, json_mem_t *mem)
+{
+    if (json->type == JSON_STRING) {
+        return pjson_string_strdup(str, &json->value.vstr, &mem->str_mgr);
+    }
+    return -1;
+}
 
 /*
  * pjson_add_item_to_object - Add the specified object to the pool JSON_OBJECT object
@@ -805,18 +848,12 @@ typedef struct {
 } json_print_choice_t;
 
 /*
- * json_free_print_ptr - Free the print string
- * @ptr: IN, the returned string by json_print_common
- */
-void json_free_print_ptr(void *ptr);
-
-/*
  * json_print_common - The common DOM printer
  * @json: IN, the json object to be printed
  * @choice: INOUT, the print choice
  * @return: NULL on failure, a pointer on success
  * @description: When printing to file, the pointer is `"ok"` on success, don't free it,
- *   when printing to string, the pointer is the printed string, use `json_free_print_ptr` to free it.
+ *   when printing to string, the pointer is the printed string, use `json_memory_free` to free it.
  */
 char *json_print_common(json_object *json, json_print_choice_t *choice);
 
@@ -957,7 +994,7 @@ static inline json_object *json_fast_parse_str(char *str, size_t str_len, json_m
  * @str_len: IN, the length of str
  * @mem: IN, the block memory manager
  * @return: NULL on failure, a pointer on success
- * @description: Use `pjson_memory_alloc` to allocate memory, it is faster,
+ * @description: Use `pjson_memory_alloc` to allocate memory for json object, it is faster,
  *  and it uses the parsed `str` directly as the value of JSON_STRING object and key,
  *  this means that it modifies the original string and saves memory.
  */
@@ -1004,6 +1041,22 @@ static inline json_object *json_fast_parse_file(const char *path, json_mem_t *me
 #if JSON_SAX_APIS_SUPPORT
 
 /*
+ * json_sax_str_t - the string value for key or JSON_STRING object
+ * @escaped: whether the string is escaped
+ * @alloced: whether the string is allocd
+ * @len: the length of string
+ * @str: the value of string
+ * @description: LJSON can decide to directly reuse the original string to save memory allocation time,
+ *   in this case, `alloc` is 0, users is suggested to use `memcpy(dst, str, len)` to copy the string.
+ */
+typedef struct {
+    char escaped;
+    char alloced;
+    size_t len;
+    char *str;
+} json_sax_str_t;
+
+/*
  * json_sax_cmd_t - the beginning and end of JSON_ARRAY or JSON_OBJECT object
  * @description: We know that parentheses have two sides, `JSON_SAX_START` indicates
  * left side and `JSON_SAX_FINISH` indicates right side.
@@ -1018,6 +1071,13 @@ typedef enum {
  * @description: It is a pointer of `json_sax_print_t`.
  */
 typedef void* json_sax_print_hd;
+
+/*
+ * json_saxstr_update - Update the parameters for SAX string
+ * @sstr: INOUT, the SAX string
+ * @return: None
+ */
+void json_saxstr_update(json_sax_str_t *sstr);
 
 /*
  * json_sax_print_start - Start the SAX printer
@@ -1098,56 +1158,56 @@ static inline json_sax_print_hd json_sax_fprint_unformat_start(int item_total, c
  *   The JSON_ARRAY and JSON_OBJECT are printed twice, once the value is `JSON_SAX_START` to start,
  *   and once the value is `JSON_SAX_FINISH` to complete.
  */
-int json_sax_print_value(json_sax_print_hd handle, json_type_t type, const char *key, const void *value);
+int json_sax_print_value(json_sax_print_hd handle, json_type_t type, json_sax_str_t *key, const void *value);
 
-static inline int json_sax_print_null(json_sax_print_hd handle, const char *key)
+static inline int json_sax_print_null(json_sax_print_hd handle, json_sax_str_t *key)
 {
     return json_sax_print_value(handle, JSON_NULL, key, NULL);
 }
 
-static inline int json_sax_print_bool(json_sax_print_hd handle, const char *key, bool value)
+static inline int json_sax_print_bool(json_sax_print_hd handle, json_sax_str_t *key, bool value)
 {
     return json_sax_print_value(handle, JSON_BOOL, key, &value);
 }
 
-static inline int json_sax_print_int(json_sax_print_hd handle, const char *key, int value)
+static inline int json_sax_print_int(json_sax_print_hd handle, json_sax_str_t *key, int value)
 {
     return json_sax_print_value(handle, JSON_INT, key, &value);
 }
 
-static inline int json_sax_print_hex(json_sax_print_hd handle, const char *key, unsigned int value)
+static inline int json_sax_print_hex(json_sax_print_hd handle, json_sax_str_t *key, unsigned int value)
 {
     return json_sax_print_value(handle, JSON_HEX, key, &value);
 }
 
 #if JSON_LONG_LONG_SUPPORT
-static inline int json_sax_print_lint(json_sax_print_hd handle, const char *key, long long int value)
+static inline int json_sax_print_lint(json_sax_print_hd handle, json_sax_str_t *key, long long int value)
 {
     return json_sax_print_value(handle, JSON_LINT, key, &value);
 }
 
-static inline int json_sax_print_lhex(json_sax_print_hd handle, const char *key, unsigned long long int value)
+static inline int json_sax_print_lhex(json_sax_print_hd handle, json_sax_str_t *key, unsigned long long int value)
 {
     return json_sax_print_value(handle, JSON_LHEX, key, &value);
 }
 #endif
 
-static inline int json_sax_print_double(json_sax_print_hd handle, const char *key, double value)
+static inline int json_sax_print_double(json_sax_print_hd handle, json_sax_str_t *key, double value)
 {
     return json_sax_print_value(handle, JSON_DOUBLE, key, &value);
 }
 
-static inline int json_sax_print_string(json_sax_print_hd handle, const char *key, const char *value)
+static inline int json_sax_print_string(json_sax_print_hd handle, json_sax_str_t *key, json_sax_str_t *value)
 {
     return json_sax_print_value(handle, JSON_STRING, key, value);
 }
 
-static inline int json_sax_print_array(json_sax_print_hd handle, const char *key, json_sax_cmd_t value)
+static inline int json_sax_print_array(json_sax_print_hd handle, json_sax_str_t *key, json_sax_cmd_t value)
 {
     return json_sax_print_value(handle, JSON_ARRAY, key, &value);
 }
 
-static inline int json_sax_print_object(json_sax_print_hd handle, const char *key, json_sax_cmd_t value)
+static inline int json_sax_print_object(json_sax_print_hd handle, json_sax_str_t *key, json_sax_cmd_t value)
 {
     return json_sax_print_value(handle, JSON_OBJECT, key, &value);
 }
@@ -1158,25 +1218,11 @@ static inline int json_sax_print_object(json_sax_print_hd handle, const char *ke
  * @length: OUT, the length of returned printed string
  * @return: NULL on failure, a pointer on success
  * @description: When printing to file, the pointer is `"ok"` on success, don't free it,
- *   when printing to string, the pointer is the printed string, use `json_free_print_ptr` to free it.
+ *   when printing to string, the pointer is the printed string, use `json_memory_free` to free it.
  */
 char *json_sax_print_finish(json_sax_print_hd handle, size_t *length);
 
 /**************** json SAX parser ****************/
-
-/*
- * json_sax_str_t - the string value for key or JSON_STRING object
- * @alloc: whether the string is allocd
- * @len: the length of string
- * @str: the value of string
- * @description: LJSON can decide to directly reuse the original string to save memory allocation time,
- *   in this case, `alloc` is 0, users is suggested to use `memcpy(dst, str, len)` to copy the string.
- */
-typedef struct {
-    int alloc;
-    size_t len;
-    char *str;
-} json_sax_str_t;
 
 /*
  * json_sax_value_t - the json object value
