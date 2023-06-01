@@ -1202,7 +1202,7 @@ static int _json_print_string(json_print_t *print_ptr, json_string_t *jstr)
     bak = str;                          \
 } while(0)
 
-    char c = '\0', ch = '\0';
+    char ch = '\0';
     size_t len = 0, size = 0, alloced = 0;
     const char *str = NULL, *bak = NULL;
 
@@ -1228,7 +1228,7 @@ static int _json_print_string(json_print_t *print_ptr, json_string_t *jstr)
 
     bak = str;
     while (1) {
-        switch ((c = *str++)) {
+        switch ((*str++)) {
         case '\"': ch = '\"'; break;
         case '\\': ch = '\\'; break;
         case '\b': ch = 'b' ; break;
@@ -1244,7 +1244,7 @@ static int _json_print_string(json_print_t *print_ptr, json_string_t *jstr)
         default:
 #if JSON_PRINT_UTF16_SUPPORT
             {
-                unsigned char uc = (unsigned char)c;
+                unsigned char uc = (unsigned char)(*(str-1));
                 if (uc < ' ') {
                     _JSON_PRINT_SEGMENT();
                     *print_ptr->cur++ = '\\';
@@ -1947,18 +1947,18 @@ static int _parse_num(char **sstr, json_number_t *vnum)
         }
     } else {
         switch (*num) {
-        case '-': num++; sign = -1; break;
-        case '+': num++; break;
+        case '-': ++num; sign = -1; break;
+        case '+': ++num; break;
         default: break;
         }
 
         while (*num == '0')
-            num++;
+            ++num;
         while (_dec_char_check(*num))
             m = (m << 3) + (m << 1) + (*num++ - '0');
 
         if (*num == '.') {
-            num++;
+            ++num;
             while (_dec_char_check(*num)) {
                 n = (n << 3) + (n << 1) + (*num++ - '0');
                 k = (k << 3) + (k << 1);
@@ -2101,7 +2101,7 @@ static int utf16_literal_to_utf8(const unsigned char *start_str, const unsigned 
     }  else {                                               /* invalid unicode */
         goto fail;
     }
-    for (i = len - 1; i > 0; i--) {                         /* encode as utf8 */
+    for (i = len - 1; i > 0; --i) {                         /* encode as utf8 */
         ptr[i] = (unsigned char)((uc | 0x80) & 0xBF);       /* 10xxxxxx */
         uc >>= 6;
     }
@@ -2126,7 +2126,7 @@ static inline void _skip_blank(json_parse_t *parse_ptr)
     while (_get_parse_ptr(parse_ptr, cnt, 64, (char **)&str)) {
         while (*str <= ' ') {
             if (likely(*str)) {
-                str++;
+                ++str;
                 ++cnt;
             } else {
                 goto next;
@@ -2208,10 +2208,10 @@ static int _parse_strlen(json_parse_t *parse_ptr, bool *escaped)
             return total;
         case '\\':
             if (likely(rsize != (str - bak))) {
-                str++;
+                ++str;
                 *escaped = true;
             } else {
-                str--;
+                --str;
                 total += str - bak;
                 if (unlikely((rsize = _get_parse_ptr(parse_ptr, total, PARSE_READ_SIZE, &str)) < 2)) {
                     JsonErr("last char is slash!\n");
@@ -2221,7 +2221,7 @@ static int _parse_strlen(json_parse_t *parse_ptr, bool *escaped)
             }
             break;
         case '\0':
-            str--;
+            --str;
             total += str - bak;
             if (unlikely((rsize = _get_parse_ptr(parse_ptr, total, PARSE_READ_SIZE, &str)) < 1)) {
                 JsonErr("No more string!\n");
@@ -2256,7 +2256,7 @@ static int _json_parse_string(json_parse_t *parse_ptr, json_string_t *jstr, json
     }
     len = total - 2;
     _get_parse_ptr(parse_ptr, 0, total, &str);
-    str++;
+    ++str;
 
     if (unlikely((ptr = _parse_alloc(parse_ptr, len + 1, mgr)) == NULL)) {
         JsonErr("malloc failed!\n");
@@ -2465,7 +2465,7 @@ err:
     if (parse_ptr->mem == &s_invalid_json_mem) {
         if (out_item)
             json_free(out_item);
-        if (new_jkey.alloced)
+        if (new_jkey.str)
             json_free(new_jkey.str);
     }
     return -1;
@@ -2477,7 +2477,7 @@ static inline void _skip_blank_rapid(json_parse_t *parse_ptr)
     int cnt = 0;
 
     while (*str <= ' ' && *str) {
-        str++;
+        ++str;
         ++cnt;
     }
     _UPDATE_PARSE_OFFSET(cnt);
@@ -2485,9 +2485,9 @@ static inline void _skip_blank_rapid(json_parse_t *parse_ptr)
 
 static int _json_parse_string_reuse(json_parse_t *parse_ptr, json_string_t *jstr, json_mem_mgr_t *mgr UNUSED_ATTR)
 {
-    char *str = NULL, *end = NULL, *bak = NULL, *ptr= NULL;
-    int len = 0, seq_len = 0;
-    char c = '\0';
+    char *str = NULL, *end = NULL, *last = NULL, *bak = NULL, *ptr= NULL;
+    int len = 0, seq_len = 0, size = 0;
+    char ch = '\0';
 
     memset(jstr, 0, sizeof(json_string_t));
     _UPDATE_PARSE_OFFSET(1);
@@ -2497,8 +2497,8 @@ static int _json_parse_string_reuse(json_parse_t *parse_ptr, json_string_t *jstr
     ptr = str;
     jstr->str = str;
 
-    while (str != end) {
-        switch ((c = *str++)) {
+    while (1) {
+        switch ((*str++)) {
         case '\"':
             len = str - bak;
             _UPDATE_PARSE_OFFSET(len);
@@ -2506,8 +2506,11 @@ static int _json_parse_string_reuse(json_parse_t *parse_ptr, json_string_t *jstr
             ptr[len] = '\0';
             jstr->len = len;
             return len;
+        case '\0':
+            goto err;
         case '\\':
-            str--;
+            --str;
+            last = str;
             ptr += str - bak;
             goto next;
 #if JSON_STRICT_PARSE_MODE == 2
@@ -2521,45 +2524,57 @@ static int _json_parse_string_reuse(json_parse_t *parse_ptr, json_string_t *jstr
     }
 
 next:
-    while (str != end) {
-        switch ((c = *str++)) {
+    while (1) {
+        switch ((*str++)) {
         case '\"':
+            size = str - last;
+            memmove(ptr, last, size);
+            ptr += size;
+            *ptr = '\0';
+
             len = str - bak;
             _UPDATE_PARSE_OFFSET(len);
-            *ptr = 0;
             jstr->escaped = 1;
             jstr->len = ptr - bak;
             return jstr->len;
-
+        case '\0':
+            goto err;
         case '\\':
-            switch (*str++) {
-            case 'b':  *ptr++ = '\b'; break;
-            case 'f':  *ptr++ = '\f'; break;
-            case 'n':  *ptr++ = '\n'; break;
-            case 'r':  *ptr++ = '\r'; break;
-            case 't':  *ptr++ = '\t'; break;
-            case 'v':  *ptr++ = '\v'; break;
-            case '\"': *ptr++ = '\"'; break;
-            case '\\': *ptr++ = '\\'; break;
-            case '/':  *ptr++ = '/' ; break;
+            switch ((*str++)) {
+            case 'b':  ch = '\b'; break;
+            case 'f':  ch = '\f'; break;
+            case 'n':  ch = '\n'; break;
+            case 'r':  ch = '\r'; break;
+            case 't':  ch = '\t'; break;
+            case 'v':  ch = '\v'; break;
+            case '\"': ch = '\"'; break;
+            case '\\': ch = '\\'; break;
+            case '/' : ch = '/' ; break;
             case 'u':
                 str -= 2;
-                if ((seq_len = utf16_literal_to_utf8((unsigned char*)str,
-                    (unsigned char*)end, (unsigned char**)&ptr)) == 0) {
+                size = str - last;
+                memmove(ptr, last, size);
+                ptr += size;
+                if (unlikely((seq_len = utf16_literal_to_utf8((unsigned char*)str,
+                    (unsigned char*)end, (unsigned char**)&ptr)) == 0)) {
                     JsonErr("invalid utf16 code(\\u%c)!\n", str[2]);
                     goto err;
                 }
                 str += seq_len;
-                break;
+                last = str;
+                continue;
             default :
-                --str;
-                JsonErr("invalid escape character(\\%c)!\n", *str);
+                JsonErr("invalid escape character(\\%c)!\n", str[1]);
                 goto err;
             }
-            break;
 
+            size = str - last - 2;
+            memmove(ptr, last, size);
+            ptr += size;
+            *ptr++ = ch;
+            last = str;
+            break;
         default:
-            *ptr++ = c;
             break;
         }
     }
@@ -2572,23 +2587,23 @@ err:
 
 static int _json_parse_string_rapid(json_parse_t *parse_ptr, json_string_t *jstr, json_mem_mgr_t *mgr)
 {
-    char *str = NULL, *end = NULL, *bak = NULL, *ptr= NULL;
+    char *str = NULL, *bak = NULL, *ptr= NULL;
     int len = 0, total = 0;
-    char c = '\0';
     bool escaped = false;
 
     memset(jstr, 0, sizeof(json_string_t));
     _UPDATE_PARSE_OFFSET(1);
-    end = parse_ptr->str + parse_ptr->size;
     str = parse_ptr->str + parse_ptr->offset;
     bak = str;
 
-    while (str < end) {
-        switch ((c = *str++)) {
+    while (1) {
+        switch ((*str++)) {
         case '\"':
             goto next;
+        case '\0':
+            goto err;
         case '\\':
-            str++;
+            ++str;
             escaped = true;
             break;
 #if JSON_STRICT_PARSE_MODE == 2
@@ -2600,7 +2615,6 @@ static int _json_parse_string_rapid(json_parse_t *parse_ptr, json_string_t *jstr
             break;
         }
     }
-    goto err;
 
 next:
     total = str - bak;
@@ -2810,7 +2824,7 @@ err:
     if (parse_ptr->mem == &s_invalid_json_mem) {
         if (out_item)
             json_free(out_item);
-        if (new_jkey.alloced)
+        if (new_jkey.str)
             json_free(new_jkey.str);
     }
     return -1;
@@ -2929,7 +2943,7 @@ static inline int _json_sax_parse_string(json_parse_t *parse_ptr, json_string_t 
     }
     len = total - 2;
     _get_parse_ptr(parse_ptr, 0, total, &str);
-    str++;
+    ++str;
 
     if (likely(!escaped)) {
         if (!(parse_ptr->fd >= 0 && key_flag)) {
@@ -2993,6 +3007,7 @@ static int _json_sax_parse_value(json_parse_t *parse_ptr, json_string_t *jkey)
                     json_free(parse_ptr->parser.array[i].str);
                 }
             }
+            json_free(parse_ptr->parser.array);
             parse_ptr->parser.array = NULL;
             if (jkey->alloced) {
                 json_free(jkey->str);
