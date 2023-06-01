@@ -1803,7 +1803,7 @@ typedef struct _json_parse_t {
 
     /* The two func ptrs are only for DOM parser */
     int (*parse_string)(struct _json_parse_t *parse_ptr, json_string_t *jstr, json_mem_mgr_t *mgr);
-    int (*parse_value)(struct _json_parse_t *parse_ptr, json_object **item, json_object *parent, json_string_t *jkey);
+    int (*parse_value)(struct _json_parse_t *parse_ptr, json_object **root);
 
 #if JSON_SAX_APIS_SUPPORT
     json_sax_parser_t parser;
@@ -2286,31 +2286,78 @@ err:
     return -1;
 }
 
-static int _json_parse_value(json_parse_t *parse_ptr, json_object **item, json_object *parent, json_string_t *jkey)
+static int _json_parse_value(json_parse_t *parse_ptr, json_object **root)
 {
-    json_object *out_item = NULL;
-    json_object *new_item = NULL;
-    json_string_t new_jkey = {0};
+    json_string_t jkey = {0};
     char *str = NULL, *bak = NULL;
+    json_object *item = NULL, *parent = NULL;
+    json_object **item_array = NULL;
+    int item_depth = -1, item_total = 0;
 
-    if (unlikely((out_item = _parse_alloc(parse_ptr, sizeof(json_object), &parse_ptr->mem->obj_mgr)) == NULL)) {
+    goto next3;
+
+next1:
+    if (unlikely(item_depth >= item_total - 1)) {
+        item_total += 16;
+        if (unlikely((item_array = json_realloc(item_array, sizeof(json_object *) * item_total)) == NULL)) {
+            JsonErr("malloc failed!\n");
+            goto err;
+        }
+    }
+    item_array[++item_depth] = item;
+    parent = item;
+    *root = *item_array;
+    if (parent->type_member == JSON_ARRAY)
+        goto next3;
+
+next2:
+    _skip_blank(parse_ptr);
+    _get_parse_ptr(parse_ptr, 0, 2, &str);
+    if (unlikely(str[0] != '\"')) {
+        JsonPareseErr("key is not started with quote!");
+        goto err;
+    }
+
+    if (unlikely(str[1] == '\"')) {
+#if !JSON_STRICT_PARSE_MODE
+        JsonPareseErr("key is space!");
+        goto err;
+#else
+        _UPDATE_PARSE_OFFSET(2);
+#endif
+    } else {
+        if (unlikely(parse_ptr->parse_string(parse_ptr, &jkey, &parse_ptr->mem->key_mgr) < 0)) {
+            goto err;
+        }
+    }
+
+    _skip_blank(parse_ptr);
+    _get_parse_ptr(parse_ptr, 0, 1, &str);
+    if (unlikely(*str != ':')) {
+        JsonPareseErr("key is not before ':'");
+        goto err;
+    }
+    _UPDATE_PARSE_OFFSET(1);
+
+next3:
+    if (unlikely((item = _parse_alloc(parse_ptr, sizeof(json_object), &parse_ptr->mem->obj_mgr)) == NULL)) {
         JsonErr("malloc failed!\n");
         goto err;
     }
-    memcpy(&out_item->jkey, jkey, sizeof(json_string_t));
-    memset(jkey, 0, sizeof(json_string_t));
+    memcpy(&item->jkey, &jkey, sizeof(json_string_t));
+    memset(&jkey, 0, sizeof(json_string_t));
 
     _skip_blank(parse_ptr);
-    _get_parse_ptr(parse_ptr, 0, 8, &str);
+    _get_parse_ptr(parse_ptr, 0, 128, &str);
 
     switch (*str) {
     case '\"':
-        out_item->type_member = JSON_STRING;
+        item->type_member = JSON_STRING;
         if (unlikely(str[1] == '\"')) {
-            memset(&out_item->value.vstr, 0, sizeof(json_string_t));
+            memset(&item->value.vstr, 0, sizeof(json_string_t));
             _UPDATE_PARSE_OFFSET(2);
         } else {
-            if (unlikely(parse_ptr->parse_string(parse_ptr, &out_item->value.vstr, &parse_ptr->mem->str_mgr) < 0)) {
+            if (unlikely(parse_ptr->parse_string(parse_ptr, &item->value.vstr, &parse_ptr->mem->str_mgr) < 0)) {
                 goto err;
             }
         }
@@ -2319,9 +2366,8 @@ static int _json_parse_value(json_parse_t *parse_ptr, json_object **item, json_o
     case '-': case '+':
     case '0': case '1': case '2': case '3': case '4':
     case '5': case '6': case '7': case '8': case '9':
-        _get_parse_ptr(parse_ptr, 0, 128, &str);
         bak = str;
-        if (unlikely((out_item->type_member = _json_parse_number(&str, &out_item->value.vnum)) == JSON_NULL)) {
+        if (unlikely((item->type_member = _json_parse_number(&str, &item->value.vnum)) == JSON_NULL)) {
             JsonPareseErr("Not number!");
             goto err;
         }
@@ -2329,91 +2375,32 @@ static int _json_parse_value(json_parse_t *parse_ptr, json_object **item, json_o
         break;
 
     case '{':
-        out_item->type_member = JSON_OBJECT;
-        INIT_JSON_LIST_HEAD(&out_item->value.head);
+        item->type_member = JSON_OBJECT;
+        INIT_JSON_LIST_HEAD(&item->value.head);
         _UPDATE_PARSE_OFFSET(1);
 
         _skip_blank(parse_ptr);
         _get_parse_ptr(parse_ptr, 0, 1, &str);
         if (likely(*str != '}')) {
-            while (1) {
-                _skip_blank(parse_ptr);
-                _get_parse_ptr(parse_ptr, 0, 2, &str);
-                if (unlikely(str[0] != '\"')) {
-                    JsonPareseErr("key is not started with quote!");
-                    goto err;
-                }
-
-                if (unlikely(str[1] == '\"')) {
-#if !JSON_STRICT_PARSE_MODE
-                    JsonPareseErr("key is space!");
-                    goto err;
-#else
-                    _UPDATE_PARSE_OFFSET(2);
-#endif
-                } else {
-                    if (unlikely(parse_ptr->parse_string(parse_ptr, &new_jkey, &parse_ptr->mem->key_mgr) < 0)) {
-                        goto err;
-                    }
-                }
-
-                _skip_blank(parse_ptr);
-                _get_parse_ptr(parse_ptr, 0, 1, &str);
-                if (unlikely(*str != ':')) {
-                    JsonPareseErr("key is not before ':'");
-                    goto err;
-                }
-                _UPDATE_PARSE_OFFSET(1);
-
-                if (unlikely(parse_ptr->parse_value(parse_ptr, &new_item, out_item, &new_jkey) < 0)) {
-                    goto err;
-                }
-
-                _skip_blank(parse_ptr);
-                _get_parse_ptr(parse_ptr, 0, 1, &str);
-                switch (*str) {
-                case ',':
-                    _UPDATE_PARSE_OFFSET(1);
-                    break;
-                case '}':
-                    _UPDATE_PARSE_OFFSET(1);
-                    goto end;
-                default:
-                    JsonPareseErr("invalid object!");
-                    goto err;
-                }
-            }
+            if (parent)
+                json_list_add_tail(&item->list, &parent->value.head);
+            goto next1;
         } else {
             _UPDATE_PARSE_OFFSET(1);
         }
         break;
 
     case '[':
-        out_item->type_member = JSON_ARRAY;
-        INIT_JSON_LIST_HEAD(&out_item->value.head);
+        item->type_member = JSON_ARRAY;
+        INIT_JSON_LIST_HEAD(&item->value.head);
         _UPDATE_PARSE_OFFSET(1);
 
         _skip_blank(parse_ptr);
         _get_parse_ptr(parse_ptr, 0, 1, &str);
         if (likely(*str != ']')) {
-            while (1) {
-                if (unlikely(parse_ptr->parse_value(parse_ptr, &new_item, out_item, &new_jkey) < 0)) {
-                    goto err;
-                }
-                _skip_blank(parse_ptr);
-                _get_parse_ptr(parse_ptr, 0, 1, &str);
-                switch (*str) {
-                case ',':
-                    _UPDATE_PARSE_OFFSET(1);
-                    break;
-                case ']':
-                    _UPDATE_PARSE_OFFSET(1);
-                    goto end;
-                default:
-                    JsonPareseErr("invalid array!");
-                    goto err;
-                }
-            }
+            if (parent)
+                json_list_add_tail(&item->list, &parent->value.head);
+            goto next1;
         } else {
             _UPDATE_PARSE_OFFSET(1);
         }
@@ -2421,8 +2408,8 @@ static int _json_parse_value(json_parse_t *parse_ptr, json_object **item, json_o
 
     case 'f':
         if (strncmp(str, "false", 5) == 0) {
-            out_item->type_member = JSON_BOOL;
-            out_item->value.vnum.vbool = false;
+            item->type_member = JSON_BOOL;
+            item->value.vnum.vbool = false;
             _UPDATE_PARSE_OFFSET(5);
         } else {
             JsonPareseErr("invalid next ptr!");
@@ -2431,8 +2418,8 @@ static int _json_parse_value(json_parse_t *parse_ptr, json_object **item, json_o
         break;
     case 't':
         if (strncmp(str, "true", 4) == 0) {
-            out_item->type_member = JSON_BOOL;
-            out_item->value.vnum.vbool = true;
+            item->type_member = JSON_BOOL;
+            item->value.vnum.vbool = true;
             _UPDATE_PARSE_OFFSET(4);
         } else {
             JsonPareseErr("invalid next ptr!");
@@ -2442,7 +2429,7 @@ static int _json_parse_value(json_parse_t *parse_ptr, json_object **item, json_o
 
     case 'n':
         if (strncmp(str, "null", 4) == 0) {
-            out_item->type_member = JSON_NULL;
+            item->type_member = JSON_NULL;
             _UPDATE_PARSE_OFFSET(4);
         } else {
             JsonPareseErr("invalid next ptr!");
@@ -2454,19 +2441,75 @@ static int _json_parse_value(json_parse_t *parse_ptr, json_object **item, json_o
         goto err;
     }
 
-end:
     if (parent) {
-        json_list_add_tail(&out_item->list, &parent->value.head);
+        json_list_add_tail(&item->list, &parent->value.head);
+        item = NULL;
     }
 
-    *item = out_item;
+next4:
+    if (likely(item_depth >= 0)) {
+        _skip_blank(parse_ptr);
+        _get_parse_ptr(parse_ptr, 0, 1, &str);
+        if (parent->type_member == JSON_OBJECT) {
+            switch (*str) {
+            case ',':
+                _UPDATE_PARSE_OFFSET(1);
+                goto next2;
+            case '}':
+                _UPDATE_PARSE_OFFSET(1);
+                if (likely(item_depth > 0)) {
+                    parent = item_array[--item_depth];
+                    goto next4;
+                }
+                break;
+            default:
+                JsonPareseErr("invalid object!");
+                goto err;
+            }
+        } else {
+            switch (*str) {
+            case ',':
+                _UPDATE_PARSE_OFFSET(1);
+                goto next3;
+            case ']':
+                _UPDATE_PARSE_OFFSET(1);
+                if (likely(item_depth > 0)) {
+                    parent = item_array[--item_depth];
+                    goto next4;
+                }
+                break;
+            default:
+                JsonPareseErr("invalid array!");
+                goto err;
+            }
+        }
+    }
+
+    if (item_array) {
+        *root = *item_array;
+        json_free(item_array);
+    } else {
+        *root = item;
+    }
+
     return 0;
+
 err:
+    if (item_array) {
+        *root = *item_array;
+        json_free(item_array);
+    } else {
+        if (!(*root)) {
+            *root = item;
+            item = NULL;
+        }
+    }
+
     if (parse_ptr->mem == &s_invalid_json_mem) {
-        if (out_item)
-            json_free(out_item);
-        if (new_jkey.str)
-            json_free(new_jkey.str);
+        if (item)
+            json_free(item);
+        if (jkey.str)
+            json_free(jkey.str);
     }
     return -1;
 }
@@ -2646,31 +2689,78 @@ err:
     return -1;
 }
 
-static int _json_parse_value_rapid(json_parse_t *parse_ptr, json_object **item, json_object *parent, json_string_t *jkey)
+static int _json_parse_value_rapid(json_parse_t *parse_ptr, json_object **root)
 {
-    json_object *out_item = NULL;
-    json_object *new_item = NULL;
-    json_string_t new_jkey = {0};
+    json_string_t jkey = {0};
     char *str = NULL, *bak = NULL;
+    json_object *item = NULL, *parent = NULL;
+    json_object **item_array = NULL;
+    int item_depth = -1, item_total = 0;
 
-    if (unlikely((out_item = _parse_alloc(parse_ptr, sizeof(json_object), &parse_ptr->mem->obj_mgr)) == NULL)) {
+    goto next3;
+
+next1:
+    if (unlikely(item_depth >= item_total - 1)) {
+        item_total += 16;
+        if (unlikely((item_array = json_realloc(item_array, sizeof(json_object *) * item_total)) == NULL)) {
+            JsonErr("malloc failed!\n");
+            goto err;
+        }
+    }
+    item_array[++item_depth] = item;
+    parent = item;
+    *root = *item_array;
+    if (parent->type_member == JSON_ARRAY)
+        goto next3;
+
+next2:
+    _skip_blank_rapid(parse_ptr);
+    str = parse_ptr->str + parse_ptr->offset;
+    if (unlikely(str[0] != '\"')) {
+        JsonPareseErr("key is not started with quote!");
+        goto err;
+    }
+
+    if (unlikely(str[1] == '\"')) {
+#if !JSON_STRICT_PARSE_MODE
+        JsonPareseErr("key is space!");
+        goto err;
+#else
+        _UPDATE_PARSE_OFFSET(2);
+#endif
+    } else {
+        if (unlikely(parse_ptr->parse_string(parse_ptr, &jkey, &parse_ptr->mem->key_mgr) < 0)) {
+            goto err;
+        }
+    }
+
+    _skip_blank_rapid(parse_ptr);
+    str = parse_ptr->str + parse_ptr->offset;
+    if (unlikely(*str != ':')) {
+        JsonPareseErr("key is not before ':'");
+        goto err;
+    }
+    _UPDATE_PARSE_OFFSET(1);
+
+next3:
+    if (unlikely((item = _parse_alloc(parse_ptr, sizeof(json_object), &parse_ptr->mem->obj_mgr)) == NULL)) {
         JsonErr("malloc failed!\n");
         goto err;
     }
-    memcpy(&out_item->jkey, jkey, sizeof(json_string_t));
-    memset(jkey, 0, sizeof(json_string_t));
+    memcpy(&item->jkey, &jkey, sizeof(json_string_t));
+    memset(&jkey, 0, sizeof(json_string_t));
 
     _skip_blank_rapid(parse_ptr);
     str = parse_ptr->str + parse_ptr->offset;
 
     switch (*str) {
     case '\"':
-        out_item->type_member = JSON_STRING;
+        item->type_member = JSON_STRING;
         if (unlikely(str[1] == '\"')) {
-            memset(&out_item->value.vstr, 0, sizeof(json_string_t));
+            memset(&item->value.vstr, 0, sizeof(json_string_t));
             _UPDATE_PARSE_OFFSET(2);
         } else {
-            if (unlikely(parse_ptr->parse_string(parse_ptr, &out_item->value.vstr, &parse_ptr->mem->str_mgr) < 0)) {
+            if (unlikely(parse_ptr->parse_string(parse_ptr, &item->value.vstr, &parse_ptr->mem->str_mgr) < 0)) {
                 goto err;
             }
         }
@@ -2680,7 +2770,7 @@ static int _json_parse_value_rapid(json_parse_t *parse_ptr, json_object **item, 
     case '0': case '1': case '2': case '3': case '4':
     case '5': case '6': case '7': case '8': case '9':
         bak = str;
-        if (unlikely((out_item->type_member = _json_parse_number(&str, &out_item->value.vnum)) == JSON_NULL)) {
+        if (unlikely((item->type_member = _json_parse_number(&str, &item->value.vnum)) == JSON_NULL)) {
             JsonPareseErr("Not number!");
             goto err;
         }
@@ -2688,91 +2778,32 @@ static int _json_parse_value_rapid(json_parse_t *parse_ptr, json_object **item, 
         break;
 
     case '{':
-        out_item->type_member = JSON_OBJECT;
-        INIT_JSON_LIST_HEAD(&out_item->value.head);
+        item->type_member = JSON_OBJECT;
+        INIT_JSON_LIST_HEAD(&item->value.head);
         _UPDATE_PARSE_OFFSET(1);
 
         _skip_blank_rapid(parse_ptr);
         str = parse_ptr->str + parse_ptr->offset;
         if (likely(*str != '}')) {
-            while (1) {
-                _skip_blank_rapid(parse_ptr);
-                str = parse_ptr->str + parse_ptr->offset;
-                if (unlikely(str[0] != '\"')) {
-                    JsonPareseErr("key is not started with quote!");
-                    goto err;
-                }
-
-                if (unlikely(str[1] == '\"')) {
-#if !JSON_STRICT_PARSE_MODE
-                    JsonPareseErr("key is space!");
-                    goto err;
-#else
-                    _UPDATE_PARSE_OFFSET(2);
-#endif
-                } else {
-                    if (unlikely(parse_ptr->parse_string(parse_ptr, &new_jkey, &parse_ptr->mem->key_mgr) < 0)) {
-                        goto err;
-                    }
-                }
-
-                _skip_blank_rapid(parse_ptr);
-                str = parse_ptr->str + parse_ptr->offset;
-                if (unlikely(*str != ':')) {
-                    JsonPareseErr("key is not before ':'");
-                    goto err;
-                }
-                _UPDATE_PARSE_OFFSET(1);
-
-                if (unlikely(parse_ptr->parse_value(parse_ptr, &new_item, out_item, &new_jkey) < 0)) {
-                    goto err;
-                }
-
-                _skip_blank_rapid(parse_ptr);
-                str = parse_ptr->str + parse_ptr->offset;
-                switch (*str) {
-                case ',':
-                    _UPDATE_PARSE_OFFSET(1);
-                    break;
-                case '}':
-                    _UPDATE_PARSE_OFFSET(1);
-                    goto end;
-                default:
-                    JsonPareseErr("invalid object!");
-                    goto err;
-                }
-            }
+            if (parent)
+                json_list_add_tail(&item->list, &parent->value.head);
+            goto next1;
         } else {
             _UPDATE_PARSE_OFFSET(1);
         }
         break;
 
     case '[':
-        out_item->type_member = JSON_ARRAY;
-        INIT_JSON_LIST_HEAD(&out_item->value.head);
+        item->type_member = JSON_ARRAY;
+        INIT_JSON_LIST_HEAD(&item->value.head);
         _UPDATE_PARSE_OFFSET(1);
 
         _skip_blank_rapid(parse_ptr);
         str = parse_ptr->str + parse_ptr->offset;
         if (likely(*str != ']')) {
-            while (1) {
-                if (unlikely(parse_ptr->parse_value(parse_ptr, &new_item, out_item, &new_jkey) < 0)) {
-                    goto err;
-                }
-                _skip_blank_rapid(parse_ptr);
-                str = parse_ptr->str + parse_ptr->offset;
-                switch (*str) {
-                case ',':
-                    _UPDATE_PARSE_OFFSET(1);
-                    break;
-                case ']':
-                    _UPDATE_PARSE_OFFSET(1);
-                    goto end;
-                default:
-                    JsonPareseErr("invalid array!");
-                    goto err;
-                }
-            }
+            if (parent)
+                json_list_add_tail(&item->list, &parent->value.head);
+            goto next1;
         } else {
             _UPDATE_PARSE_OFFSET(1);
         }
@@ -2780,8 +2811,8 @@ static int _json_parse_value_rapid(json_parse_t *parse_ptr, json_object **item, 
 
     case 'f':
         if (strncmp(str, "false", 5) == 0) {
-            out_item->type_member = JSON_BOOL;
-            out_item->value.vnum.vbool = false;
+            item->type_member = JSON_BOOL;
+            item->value.vnum.vbool = false;
             _UPDATE_PARSE_OFFSET(5);
         } else {
             JsonPareseErr("invalid next ptr!");
@@ -2790,8 +2821,8 @@ static int _json_parse_value_rapid(json_parse_t *parse_ptr, json_object **item, 
         break;
     case 't':
         if (strncmp(str, "true", 4) == 0) {
-            out_item->type_member = JSON_BOOL;
-            out_item->value.vnum.vbool = true;
+            item->type_member = JSON_BOOL;
+            item->value.vnum.vbool = true;
             _UPDATE_PARSE_OFFSET(4);
         } else {
             JsonPareseErr("invalid next ptr!");
@@ -2801,7 +2832,7 @@ static int _json_parse_value_rapid(json_parse_t *parse_ptr, json_object **item, 
 
     case 'n':
         if (strncmp(str, "null", 4) == 0) {
-            out_item->type_member = JSON_NULL;
+            item->type_member = JSON_NULL;
             _UPDATE_PARSE_OFFSET(4);
         } else {
             JsonPareseErr("invalid next ptr!");
@@ -2813,19 +2844,75 @@ static int _json_parse_value_rapid(json_parse_t *parse_ptr, json_object **item, 
         goto err;
     }
 
-end:
     if (parent) {
-        json_list_add_tail(&out_item->list, &parent->value.head);
+        json_list_add_tail(&item->list, &parent->value.head);
+        item = NULL;
     }
 
-    *item = out_item;
+next4:
+    if (likely(item_depth >= 0)) {
+        _skip_blank_rapid(parse_ptr);
+        str = parse_ptr->str + parse_ptr->offset;
+        if (parent->type_member == JSON_OBJECT) {
+            switch (*str) {
+            case ',':
+                _UPDATE_PARSE_OFFSET(1);
+                goto next2;
+            case '}':
+                _UPDATE_PARSE_OFFSET(1);
+                if (likely(item_depth > 0)) {
+                    parent = item_array[--item_depth];
+                    goto next4;
+                }
+                break;
+            default:
+                JsonPareseErr("invalid object!");
+                goto err;
+            }
+        } else {
+            switch (*str) {
+            case ',':
+                _UPDATE_PARSE_OFFSET(1);
+                goto next3;
+            case ']':
+                _UPDATE_PARSE_OFFSET(1);
+                if (likely(item_depth > 0)) {
+                    parent = item_array[--item_depth];
+                    goto next4;
+                }
+                break;
+            default:
+                JsonPareseErr("invalid array!");
+                goto err;
+            }
+        }
+    }
+
+    if (item_array) {
+        *root = *item_array;
+        json_free(item_array);
+    } else {
+        *root = item;
+    }
+
     return 0;
+
 err:
+    if (item_array) {
+        *root = *item_array;
+        json_free(item_array);
+    } else {
+        if (!(*root)) {
+            *root = item;
+            item = NULL;
+        }
+    }
+
     if (parse_ptr->mem == &s_invalid_json_mem) {
-        if (out_item)
-            json_free(out_item);
-        if (new_jkey.str)
-            json_free(new_jkey.str);
+        if (item)
+            json_free(item);
+        if (jkey.str)
+            json_free(jkey.str);
     }
     return -1;
 }
@@ -2834,7 +2921,6 @@ json_object *json_parse_common(json_parse_choice_t *choice)
 {
     json_object *json = NULL;
     json_parse_t parse_val = {0};
-    json_string_t new_jkey = {0};
     size_t mem_size = 0, total_size = 0;
 
     parse_val.read_size = parse_val.read_size ? parse_val.read_size : JSON_PARSE_READ_SIZE_DEF;
@@ -2870,7 +2956,7 @@ json_object *json_parse_common(json_parse_choice_t *choice)
 
     if (choice->mem) {
         pjson_memory_init(choice->mem);
-        mem_size = total_size / JSON_PARSE_NUM_PLUS_DEF;
+        mem_size = total_size / 8;
         if (mem_size < choice->mem_size)
             mem_size = choice->mem_size;
         choice->mem->obj_mgr.mem_size = mem_size;
@@ -2886,7 +2972,7 @@ json_object *json_parse_common(json_parse_choice_t *choice)
     }
 #endif
 
-    if (parse_val.parse_value(&parse_val, &json, NULL, &new_jkey) < 0) {
+    if (parse_val.parse_value(&parse_val, &json) < 0) {
         if (choice->mem) {
             pjson_memory_free(choice->mem);
         } else {

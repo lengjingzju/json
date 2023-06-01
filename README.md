@@ -57,12 +57,12 @@ make O=<output path> CROSS_COMPILE=<tool prefix> && make O=<output path> DESTDIR
 Note: 'O2' optimization level and default option compilation, the test files come from the [nativejson-benchmark](https://github.com/miloyip/nativejson-benchmark) project
 
 > Test Platform: Ambarella CV25M Board | CPU: ARM CortexA53 | OS: Linux-5.15<br>
-> Test Result: LJSON parses 406% faster and prints 1671% faster than cJSON, LJSON parses 100% faster and prints 85% faster than RapidJSON
+> Test Result: LJSON parses 450% faster and prints 1671% faster than cJSON, LJSON parses 123% faster and prints 88% faster than RapidJSON
 
 ![AARCH64-Linux Test Result](test_result/test_for_aarch64.png)
 
 > Test Platform: PC | CPU: Intel i7-10700 | OS: Ubuntu 18.04 (VirtualBox)<br>
-> Test Result: LJSON parses 488% faster and prints 1975% faster than cJSON, LJSON parses 39% faster and prints 100% faster than RapidJSON
+> Test Result: LJSON parses 513% faster and prints 1975% faster than cJSON, LJSON parses 57% faster and prints 100% faster than RapidJSON
 
 ![x86_64-Linux Test Result](test_result/test_for_x86_64.png)
 
