@@ -1270,11 +1270,61 @@ err:
 }
 #define _JSON_PRINT_STRING(ptr, val) do { if (unlikely(_json_print_string(ptr, val) < 0)) goto err; } while(0)
 
-static int _json_print(json_print_t *print_ptr, json_object *json, int depth)
+static int _json_print(json_print_t *print_ptr, json_object *json)
 {
-    json_object *item = NULL;
-    int new_depth = 0;
+    json_object *parent = NULL, *tmp = NULL;
+    json_object **item_array = NULL;
+    int item_depth = -1, item_total = 0;
 
+    goto next3;
+next1:
+    if (unlikely(item_depth >= item_total - 1)) {
+        item_total += 16;
+        if (unlikely((item_array = json_realloc(item_array, sizeof(json_object *) * item_total)) == NULL)) {
+            JsonErr("malloc failed!\n");
+            goto err;
+        }
+    }
+    item_array[++item_depth] = json;
+    parent = json;
+    json = (json_object *)json->value.head.next;
+    if (parent->type_member == JSON_ARRAY) {
+        if (print_ptr->format_flag) {
+            if (json->type_member == JSON_OBJECT || json->type_member == JSON_ARRAY)
+                _PRINT_ADDI_FORMAT(print_ptr, item_depth + 1);
+        }
+        goto next3;
+    }
+
+next2:
+    if (print_ptr->format_flag) {
+        _PRINT_ADDI_FORMAT(print_ptr, item_depth + 1);
+        if (unlikely(!json->jkey.len)) {
+#if !JSON_STRICT_PARSE_MODE
+            JsonErr("key is null!\n");
+            goto err;
+#else
+            _PRINT_PTR_STRNCAT(print_ptr, "\"\":\t", 4);
+#endif
+        } else {
+            _JSON_PRINT_STRING(print_ptr, &json->jkey);
+            _PRINT_PTR_STRNCAT(print_ptr, ":\t", 2);
+        }
+    } else {
+        if (unlikely(!json->jkey.len)) {
+#if !JSON_STRICT_PARSE_MODE
+            JsonErr("key is null!\n");
+            goto err;
+#else
+            _PRINT_PTR_STRNCAT(print_ptr, "\"\":", 3);
+#endif
+        } else {
+            _JSON_PRINT_STRING(print_ptr, &json->jkey);
+            _PRINT_PTR_STRNCAT(print_ptr, ":", 1);
+        }
+    }
+
+next3:
     switch (json->type_member) {
     case JSON_NULL:
         _PRINT_PTR_STRNCAT(print_ptr, "null", 4);
@@ -1310,115 +1360,87 @@ static int _json_print(json_print_t *print_ptr, json_object *json, int depth)
             _JSON_PRINT_STRING(print_ptr, &json->value.vstr);
         }
         break;
-
-    case JSON_ARRAY:
-        new_depth = depth + 1;
-        if (unlikely(json->value.head.prev == &json->value.head)) {
-            _PRINT_PTR_STRNCAT(print_ptr, "[]", 2);
-            break;
-        }
-
-        _PRINT_PTR_STRNCAT(print_ptr, "[", 1);
-        if (print_ptr->format_flag) {
-            item = (json_object *)json->value.head.next;
-            if (item->type_member == JSON_OBJECT || item->type_member == JSON_ARRAY)
-                _PRINT_ADDI_FORMAT(print_ptr, new_depth);
-            json_list_for_each_entry(item, &json->value.head, list) {
-                if (unlikely(_json_print(print_ptr, item, new_depth) < 0)) {
-                    return -1;
-                }
-                if (likely(item->list.next != &json->value.head)) {
-                    _PRINT_PTR_STRNCAT(print_ptr, ", ", 2);
-                }
-            }
-            item = (json_object *)json->value.head.prev;
-            if (item->type_member == JSON_OBJECT || item->type_member == JSON_ARRAY) {
-                if (depth) {
-                    _PRINT_ADDI_FORMAT(print_ptr, depth);
-                } else {
-                    _PRINT_PTR_STRNCAT(print_ptr, "\n", 1);
-                }
-            }
-        } else {
-            json_list_for_each_entry(item, &json->value.head, list) {
-                if (unlikely(_json_print(print_ptr, item, new_depth) < 0)) {
-                    return -1;
-                }
-                if (likely(item->list.next != &json->value.head)) {
-                    _PRINT_PTR_STRNCAT(print_ptr, ",", 1);
-                }
-            }
-        }
-        _PRINT_PTR_STRNCAT(print_ptr, "]", 1);
-        break;
-
     case JSON_OBJECT:
-        new_depth = depth + 1;
         if (unlikely(json->value.head.prev == &json->value.head)) {
             _PRINT_PTR_STRNCAT(print_ptr, "{}", 2);
             break;
         }
-
         _PRINT_PTR_STRNCAT(print_ptr, "{", 1);
-        if (print_ptr->format_flag) {
-            json_list_for_each_entry(item, &json->value.head, list) {
-                _PRINT_ADDI_FORMAT(print_ptr, new_depth);
-                if (unlikely(!item->jkey.len)) {
-#if !JSON_STRICT_PARSE_MODE
-                    JsonErr("key is null!\n");
-                    goto err;
-#else
-                    _PRINT_PTR_STRNCAT(print_ptr, "\"\":\t", 4);
-#endif
-                } else {
-                    _JSON_PRINT_STRING(print_ptr, &item->jkey);
-                    _PRINT_PTR_STRNCAT(print_ptr, ":\t", 2);
-                }
-
-                if (unlikely(_json_print(print_ptr, item, new_depth) < 0)) {
-                    return -1;
-                }
-                if (likely(item->list.next != &json->value.head)) {
-                    _PRINT_PTR_STRNCAT(print_ptr, ",", 1);
-                }
-            }
-            if (depth > 0) {
-                _PRINT_ADDI_FORMAT(print_ptr, depth);
-            } else {
-                _PRINT_PTR_STRNCAT(print_ptr, "\n", 1);
-            }
-        } else {
-            json_list_for_each_entry(item, &json->value.head, list) {
-                if (unlikely(!item->jkey.len)) {
-#if !JSON_STRICT_PARSE_MODE
-                    JsonErr("key is null!\n");
-                    goto err;
-#else
-                    _PRINT_PTR_STRNCAT(print_ptr, "\"\":", 3);
-#endif
-                } else {
-                    _JSON_PRINT_STRING(print_ptr, &item->jkey);
-                    _PRINT_PTR_STRNCAT(print_ptr, ":", 1);
-                }
-
-                if (unlikely(_json_print(print_ptr, item, new_depth) < 0)) {
-                    return -1;
-                }
-                if (likely(item->list.next != &json->value.head)) {
-                    _PRINT_PTR_STRNCAT(print_ptr, ",", 1);
-                }
-            }
+        goto next1;
+    case JSON_ARRAY:
+        if (unlikely(json->value.head.prev == &json->value.head)) {
+            _PRINT_PTR_STRNCAT(print_ptr, "[]", 2);
+            break;
         }
-        _PRINT_PTR_STRNCAT(print_ptr, "}", 1);
-
-        break;
+        _PRINT_PTR_STRNCAT(print_ptr, "[", 1);
+        goto next1;
     default:
         break;
     }
     ++print_ptr->item_count;
 
+next4:
+    if (likely(item_depth >= 0)) {
+        tmp = (json_object*)(json->list.next);
+        if (parent->type_member == JSON_OBJECT) {
+            if (likely(&tmp->list != &parent->value.head)) {
+                _PRINT_PTR_STRNCAT(print_ptr, ",", 1);
+                json = tmp;
+                goto next2;
+            } else {
+                if (print_ptr->format_flag) {
+                    if (item_depth > 0) {
+                        _PRINT_ADDI_FORMAT(print_ptr, item_depth);
+                    } else {
+                        _PRINT_PTR_STRNCAT(print_ptr, "\n", 1);
+                    }
+                }
+                _PRINT_PTR_STRNCAT(print_ptr, "}", 1);
+                ++print_ptr->item_count;
+                if (likely(item_depth > 0)) {
+                    json = parent;
+                    parent = item_array[--item_depth];
+                    goto next4;
+                }
+            }
+        } else {
+            if (likely(&tmp->list != &parent->value.head)) {
+                if (print_ptr->format_flag) {
+                    _PRINT_PTR_STRNCAT(print_ptr, ", ", 2);
+                } else {
+                    _PRINT_PTR_STRNCAT(print_ptr, ",", 1);
+                }
+                json = tmp;
+                goto next3;
+            } else {
+                if (print_ptr->format_flag) {
+                    if (json->type_member == JSON_OBJECT || json->type_member == JSON_ARRAY) {
+                        if (likely(item_depth > 0)) {
+                            _PRINT_ADDI_FORMAT(print_ptr, item_depth);
+                        } else {
+                            _PRINT_PTR_STRNCAT(print_ptr, "\n", 1);
+                        }
+                    }
+                }
+                _PRINT_PTR_STRNCAT(print_ptr, "]", 1);
+                ++print_ptr->item_count;
+                if (likely(item_depth > 0)) {
+                    json = parent;
+                    parent = item_array[--item_depth];
+                    goto next4;
+                }
+            }
+        }
+    }
+
+    if (item_array) {
+        json_free(item_array);
+    }
     return 0;
 err:
+    if (item_array) {
+        json_free(item_array);
+    }
     return -1;
 }
 
@@ -1504,7 +1526,7 @@ char *json_print_common(json_object *json, json_print_choice_t *choice)
     if (_print_val_init(&print_val, choice) < 0)
         return NULL;
 
-    if (_json_print(&print_val, json, 0) < 0) {
+    if (_json_print(&print_val, json) < 0) {
         JsonErr("print failed!\n");
         goto err;
     }
