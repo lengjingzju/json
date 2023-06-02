@@ -541,7 +541,7 @@ typedef enum {
 
 typedef struct {
     int total;
-    int count;
+    int index;
     json_string_t *array;
     json_value_t value;
 } json_sax_parser_t;
@@ -558,7 +558,7 @@ typedef struct {
 * json_sax_ret_t: JSON_SAX_PARSE_CONTINUE 表示SAX解析器继续解析，JSON_SAX_PARSE_STOP 表示中断解析
 * json_sax_cb_t: 调用者自己填写的回调函数，必须有值，返回 `JSON_SAX_PARSE_STOP` 表示中断解析并返回
 * json_sax_parser_t: 传给回调函数的值
-  * array 是 array/object `类型+key` 的层次结构，total表示当前分配了多少层次，count表示当前用了多少层次，即当前层为 `array[count-1]`
+  * array 是 array/object `类型+key` 的层次结构，total表示当前分配了多少层次，index表示当前用了多少层次，即当前层为 `array[index]`
   * value 是当前层的值
 * json_sax_parse_choice_t: 参考 `json_parse_choice_t` 说明
 

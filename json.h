@@ -1235,14 +1235,14 @@ char *json_sax_print_finish(json_sax_print_hd handle, size_t *length);
 /*
  * json_sax_parser_t - the description passed by SAX parser to the callback function
  * @total: the size of depth array
- * @count: the current depth
+ * @index: the current index of JSON type and key
  * @array: the json depth information, which stores json object type and key
  * @value: the json object value
  * @description: LJSON SAX parsing will maintain a depth information used for state machine.
  */
 typedef struct {
     int total;
-    int count;
+    int index;
     json_string_t *array;
     json_value_t value;
 } json_sax_parser_t;

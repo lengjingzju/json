@@ -145,10 +145,10 @@ json_sax_ret_t _sax_parser_cb(json_sax_parser_t *parser)
     static json_sax_print_hd handle = NULL;
     char *print_str = NULL;
     size_t print_size = 0;
-    json_string_t *jkey = &parser->array[parser->count-1];
+    json_string_t *jkey = &parser->array[parser->index];
 
-    if (parser->count == 1) {
-        switch (parser->array[parser->count-1].type) {
+    if (parser->index == 0) {
+        switch (parser->array[parser->index].type) {
         case JSON_ARRAY:
         case JSON_OBJECT:
             if (parser->value.vcmd == JSON_SAX_START) {
@@ -167,7 +167,7 @@ json_sax_ret_t _sax_parser_cb(json_sax_parser_t *parser)
         }
     }
 
-    switch (parser->array[parser->count-1].type) {
+    switch (parser->array[parser->index].type) {
     case JSON_NULL:
         json_sax_print_null(handle, jkey);
         break;
@@ -204,8 +204,8 @@ json_sax_ret_t _sax_parser_cb(json_sax_parser_t *parser)
         break;
     }
 
-    if (parser->count == 1) {
-        switch (parser->array[parser->count-1].type) {
+    if (parser->index == 0) {
+        switch (parser->array[parser->index].type) {
         case JSON_ARRAY:
         case JSON_OBJECT:
             if (parser->value.vcmd == JSON_SAX_FINISH) {
