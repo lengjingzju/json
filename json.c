@@ -2145,8 +2145,17 @@ static int _parse_strcpy(char *ptr, const char *str, int nsize)
     char ch = '\0';
     int size = 0, seq_len = 0;
 
-    while (str < end) {
-        if (unlikely(*str++ == '\\')) {
+    while (1) {
+        switch ((*str++)) {
+        case '\"':
+            size = str - last - 1;
+            memcpy(ptr, last, size);
+            ptr += size;
+            *ptr = '\0';
+            return (ptr - bak);
+        case '\0':
+            return -1;
+        case '\\':
             switch ((*str++)) {
             case 'b':  ch = '\b'; break;
             case 'f':  ch = '\f'; break;
@@ -2180,15 +2189,13 @@ static int _parse_strcpy(char *ptr, const char *str, int nsize)
             ptr += size;
             *ptr++ = ch;
             last = str;
+            break;
+        default:
+            break;
         }
     }
 
-    size = str - last;
-    memcpy(ptr, last, size);
-    ptr += size;
-    *ptr = '\0';
-
-    return (ptr - bak);
+    return -1;
 }
 
 static int _parse_strlen(json_parse_t *parse_ptr, bool *escaped)
@@ -2570,7 +2577,7 @@ next:
     while (1) {
         switch ((*str++)) {
         case '\"':
-            size = str - last;
+            size = str - last - 1;
             memmove(ptr, last, size);
             ptr += size;
             *ptr = '\0';
