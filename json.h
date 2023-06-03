@@ -10,20 +10,29 @@
 #include <stdbool.h>
 #include <stdlib.h>
 
-#define JSON_VERSION                    0x010201
+#define JSON_VERSION                    0x010202
 #define JSON_SAX_APIS_SUPPORT           1
 #define JSON_LONG_LONG_SUPPORT          1
 
 /**************** json object structure ****************/
 
 /*
- * struct json_list_head - the head of bidirectional loop list
- * @next: the next list head
- * @prev: the previous list head
+ * struct json_list - the value of json list
+ * @next: the next list
+ * @description: LJSON uses it to manage json objects and memory blocks.
+ */
+struct json_list {
+    struct json_list *next;
+};
+
+/*
+ * struct json_list_head - the head of json list
+ * @next: the next list
+ * @prev: the last list
  * @description: LJSON uses it to manage json objects and memory blocks.
  */
 struct json_list_head {
-    struct json_list_head *next, *prev;
+    struct json_list *next, *prev;
 };
 
 /*
@@ -109,14 +118,14 @@ typedef union {
 
 /*
  * json_object - the json object
- * @list: the list head, LJSON associates `list` to the `head` of parent json object
+ * @list: the list value, LJSON associates `list` to the `head` of parent json object
  *   or the `list` of brother json objects
  * @jkey: the json object type and key, only the child objects of JSON_OBJECT have key
  * @value: the json object value
  * @description: LJSON uses union to manage the value of different objects to save memory.
  */
 typedef struct {
-    struct json_list_head list;
+    struct json_list list;
     json_string_t jkey;
     json_value_t value;
 } json_object;
@@ -405,17 +414,19 @@ int json_get_array_size(json_object *json);
  * json_get_array_item - Get the specified object in JSON_ARRAY object
  * @json: IN, the JSON_ARRAY object
  * @seq: IN, the sequence number
+ * &prev: OUT, to store the previous JSON object, it can be NULL
  * @return: NULL on failure, a pointer on success
  */
-json_object *json_get_array_item(json_object *json, int seq);
+json_object *json_get_array_item(json_object *json, int seq, json_object **prev);
 
 /*
  * json_get_object_item - Get the specified object in JSON_OBJECT object
  * @json: IN, the JSON_OBJECT object
  * @key: IN, the specified key
+ * &prev: OUT, to store the previous JSON object, it can be NULL
  * @return: NULL on failure, a pointer on success
  */
-json_object *json_get_object_item(json_object *json, const char *key);
+json_object *json_get_object_item(json_object *json, const char *key, json_object **prev);
 
 /*
  * json_detach_item_from_array - Detach the specified object in JSON_ARRAY object
@@ -592,7 +603,7 @@ static inline int json_add_string_to_object(json_object *object, json_string_t *
 
 /*
  * json_mem_node_t - the block memory node
- * @list: the list head, LJSON associates `list` to the `head` of json_mem_mgr_t
+ * @list: the list value, LJSON associates `list` to the `head` of json_mem_mgr_t
  *   or the `list` of brother json_mem_node_t
  * @size: the memory size
  * @ptr: the memory pointer
@@ -600,7 +611,7 @@ static inline int json_add_string_to_object(json_object *object, json_string_t *
  * @description: LJSON can use the block memory to accelerate memory allocation and save memory space.
  */
 typedef struct {
-    struct json_list_head list;
+    struct json_list list;
     size_t size;
     char *ptr;
     char *cur;

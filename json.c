@@ -93,49 +93,55 @@
 
 #define json_list_for_each_entry(pos, head, member)             \
     for (pos = json_list_entry((head)->next, typeof(*pos));     \
-        &pos->member != (head);                                 \
+        &pos->member != (struct json_list *)(head);             \
         pos = json_list_entry(pos->member.next, typeof(*pos)))
 
-#define json_list_for_each_entry_safe(pos, n, head, member)     \
-    for (pos = json_list_entry((head)->next, typeof(*pos)),     \
+#define json_list_for_each_entry_safe(p, pos, n, head, member)  \
+    for (p = json_list_entry((head), typeof(*pos)),             \
+        pos = json_list_entry((head)->next, typeof(*pos)),      \
         n = json_list_entry(pos->member.next, typeof(*pos));    \
-        &pos->member != (head);                                 \
-        pos = n, n = json_list_entry(n->member.next, typeof(*n)))
+        &pos->member != (struct json_list *)(head);             \
+        p = pos, pos = n, n = json_list_entry(n->member.next, typeof(*n)))
 
-static inline void INIT_JSON_LIST_HEAD(struct json_list_head *list)
+
+static inline void INIT_JSON_LIST_HEAD(struct json_list_head *head)
 {
-    list->next = list;
-    list->prev = list;
+    head->next = (struct json_list *)head;
+    head->prev = (struct json_list *)head;
 }
 
-static inline void __json_list_add(struct json_list_head *_new,
-    struct json_list_head *prev, struct json_list_head *next)
+static inline void json_list_add_head(struct json_list *list, struct json_list_head *head)
 {
-    next->prev = _new;
-    _new->next = next;
-    _new->prev = prev;
-    prev->next = _new;
+    if (head->next == (struct json_list *)head) {
+        head->prev = list;
+    }
+    list->next = head->next;
+    head->next = list;
 }
 
-static inline void json_list_add_tail(struct json_list_head *_new, struct json_list_head *head)
+static inline void json_list_add_tail(struct json_list *list, struct json_list_head *head)
 {
-    __json_list_add(_new, head->prev, head);
+    list->next = head->prev->next;
+    head->prev->next = list;
+    head->prev = list;
 }
 
-static inline void json_list_add(struct json_list_head *_new, struct json_list_head *head)
+static inline void json_list_add(struct json_list *list, struct json_list *prev, struct json_list_head *head)
 {
-    __json_list_add(_new, head, head->next);
+    if (prev->next == (struct json_list *)head) {
+        head->prev = list;
+    }
+    list->next = prev->next;
+    prev->next = list;
 }
 
-static inline void json_list_del(struct json_list_head *entry)
+static inline void json_list_del(struct json_list *list, struct json_list *prev, struct json_list_head *head)
 {
-    struct json_list_head *prev = entry->prev;
-    struct json_list_head *next = entry->next;
-
-    next->prev = prev;
-    prev->next = next;
-    entry->next = NULL;
-    entry->prev = NULL;
+    if (list->next == (struct json_list *)head) {
+        head->prev = prev;
+    }
+    prev->next = list->next;
+    list->next = NULL;
 }
 
 /**************** json normal apis ****************/
@@ -171,7 +177,7 @@ int json_item_total_get(json_object *json)
 
 void json_del_object(json_object *json)
 {
-    json_object *pos = NULL, *n = NULL;
+    json_object *p = NULL, *pos = NULL, *n = NULL;
 
     if (!json)
         return;
@@ -186,9 +192,10 @@ void json_del_object(json_object *json)
         break;
     case JSON_ARRAY:
     case JSON_OBJECT:
-        json_list_for_each_entry_safe(pos, n, &json->value.head, list) {
-            json_list_del(&pos->list);
+        json_list_for_each_entry_safe(p, pos, n, &json->value.head, list) {
+            json_list_del(&pos->list, &p->list, &json->value.head);
             json_del_object(pos);
+            pos = p;
         }
         break;
     default:
@@ -442,35 +449,44 @@ int json_get_array_size(json_object *json)
     return count;
 }
 
-json_object *json_get_array_item(json_object *json, int seq)
+json_object *json_get_array_item(json_object *json, int seq, json_object **prev)
 {
     int count = 0;
-    json_object *pos = NULL;
+    json_object *p = NULL, *pos = NULL, *n = NULL;
 
     if (json->type_member == JSON_ARRAY) {
-        json_list_for_each_entry(pos, &json->value.head, list) {
-            if (count++ == seq)
+        json_list_for_each_entry_safe(p, pos, n, &json->value.head, list) {
+            if (count++ == seq) {
+                if (prev)
+                    *prev = p;
                 return pos;
+            }
         }
     }
 
     return NULL;
 }
 
-json_object *json_get_object_item(json_object *json, const char *key)
+json_object *json_get_object_item(json_object *json, const char *key, json_object **prev)
 {
-    json_object *pos = NULL;
+    json_object *p = NULL, *pos = NULL, *n = NULL;
 
     if (json->type_member == JSON_OBJECT) {
         if (key && key[0]) {
-            json_list_for_each_entry(pos, &json->value.head, list) {
-                if (pos->key_member && strcmp(key, pos->key_member) == 0)
+            json_list_for_each_entry_safe(p, pos, n, &json->value.head, list) {
+                if (pos->key_member && strcmp(key, pos->key_member) == 0) {
+                    if (prev)
+                        *prev = p;
                     return pos;
+                }
             }
         } else {
-            json_list_for_each_entry(pos, &json->value.head, list) {
-                if (!pos->jkey.len)
+            json_list_for_each_entry_safe(p, pos, n, &json->value.head, list) {
+                if (!pos->jkey.len) {
+                    if (prev)
+                        *prev = p;
                     return pos;
+                }
             }
         }
     }
@@ -480,22 +496,22 @@ json_object *json_get_object_item(json_object *json, const char *key)
 
 json_object *json_detach_item_from_array(json_object *json, int seq)
 {
-    json_object *item = NULL;
+    json_object *item = NULL, *prev = NULL;
 
-    if ((item = json_get_array_item(json, seq)) == NULL)
+    if ((item = json_get_array_item(json, seq, &prev)) == NULL)
         return NULL;
-    json_list_del(&item->list);
+    json_list_del(&item->list, &prev->list, &json->value.head);
 
     return item;
 }
 
 json_object *json_detach_item_from_object(json_object *json, const char *key)
 {
-    json_object *item = NULL;
+    json_object *item = NULL, *prev = NULL;
 
-    if ((item = json_get_object_item(json, key)) == NULL)
+    if ((item = json_get_object_item(json, key, &prev)) == NULL)
         return NULL;
-    json_list_del(&item->list);
+    json_list_del(&item->list, &prev->list, &json->value.head);
 
     return item;
 }
@@ -524,13 +540,13 @@ int json_del_item_from_object(json_object *json, const char *key)
 
 int json_replace_item_in_array(json_object *array, int seq, json_object *new_item)
 {
-    json_object *item = NULL;
+    json_object *item = NULL, *prev = NULL;
 
     if (array->type_member == JSON_ARRAY) {
-        if ((item = json_get_array_item(array, seq)) != NULL) {
-            json_list_add_tail(&new_item->list, &item->list);
-            json_list_del(&item->list);
+        if ((item = json_get_array_item(array, seq, &prev)) != NULL) {
+            json_list_del(&item->list, &prev->list, &array->value.head);
             json_del_object(item);
+            json_list_add(&new_item->list, &prev->list, &array->value.head);
         } else {
             json_list_add_tail(&new_item->list, &array->value.head);
         }
@@ -543,16 +559,16 @@ int json_replace_item_in_array(json_object *array, int seq, json_object *new_ite
 
 int json_replace_item_in_object(json_object *object, json_string_t *jkey, json_object *new_item)
 {
-    json_object *item = NULL;
+    json_object *item = NULL, *prev = NULL;
 
     if (object->type_member == JSON_OBJECT) {
         if (json_set_key(new_item, jkey) < 0) {
             return -1;
         }
-        if ((item = json_get_object_item(object, jkey->str)) != NULL) {
-            json_list_add_tail(&new_item->list, &item->list);
-            json_list_del(&item->list);
+        if ((item = json_get_object_item(object, jkey->str, &prev)) != NULL) {
+            json_list_del(&item->list, &prev->list, &object->value.head);
             json_del_object(item);
+            json_list_add(&new_item->list, &prev->list, &object->value.head);
         } else {
             json_list_add_tail(&new_item->list, &object->value.head);
         }
@@ -716,11 +732,12 @@ static void _json_mem_init(json_mem_mgr_t *mgr)
 
 static void _json_mem_free(json_mem_mgr_t *mgr)
 {
-    json_mem_node_t *pos = NULL, *n = NULL;
-    json_list_for_each_entry_safe(pos, n, &mgr->head, list) {
-        json_list_del(&pos->list);
+    json_mem_node_t *p = NULL, *pos = NULL, *n = NULL;
+    json_list_for_each_entry_safe(p, pos, n, &mgr->head, list) {
+        json_list_del(&pos->list, &p->list, &mgr->head);
         json_free(pos->ptr);
         json_free(pos);
+        pos = p;
     }
     mgr->cur_node = &s_invalid_json_mem_node;
 }
@@ -740,7 +757,7 @@ static void *_json_mem_new(size_t size, json_mem_mgr_t *mgr)
         return NULL;
     }
     node->cur = node->ptr;
-    json_list_add(&node->list, &mgr->head);
+    json_list_add_head(&node->list, &mgr->head);
 
     return node;
 }
@@ -1361,14 +1378,14 @@ next3:
         }
         break;
     case JSON_OBJECT:
-        if (unlikely(json->value.head.prev == &json->value.head)) {
+        if (unlikely(json->value.head.prev == (struct json_list *)&json->value.head)) {
             _PRINT_PTR_STRNCAT(print_ptr, "{}", 2);
             break;
         }
         _PRINT_PTR_STRNCAT(print_ptr, "{", 1);
         goto next1;
     case JSON_ARRAY:
-        if (unlikely(json->value.head.prev == &json->value.head)) {
+        if (unlikely(json->value.head.prev == (struct json_list *)&json->value.head)) {
             _PRINT_PTR_STRNCAT(print_ptr, "[]", 2);
             break;
         }
@@ -1383,7 +1400,7 @@ next4:
     if (likely(item_depth >= 0)) {
         tmp = (json_object*)(json->list.next);
         if (parent->type_member == JSON_OBJECT) {
-            if (likely(&tmp->list != &parent->value.head)) {
+            if (likely(&tmp->list != (struct json_list *)&parent->value.head)) {
                 _PRINT_PTR_STRNCAT(print_ptr, ",", 1);
                 json = tmp;
                 goto next2;
@@ -1404,7 +1421,7 @@ next4:
                 }
             }
         } else {
-            if (likely(&tmp->list != &parent->value.head)) {
+            if (likely(&tmp->list != (struct json_list *)&parent->value.head)) {
                 if (print_ptr->format_flag) {
                     _PRINT_PTR_STRNCAT(print_ptr, ", ", 2);
                 } else {

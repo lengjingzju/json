@@ -57,12 +57,12 @@ make O=<编译输出目录> CROSS_COMPILE=<交叉编译器前缀> && make O=<编
 注：主要是测试速度，`O2` 优化等级且默认选项编译，测试文件来自 [nativejson-benchmark](https://github.com/miloyip/nativejson-benchmark) 项目
 
 > 测试平台: Ambarella CV25M Board | CPU: ARM CortexA53 | OS: Linux-5.15<br>
-> 测试结果: LJSON 比cJSON 解析最快可达 450%，打印最快可达 1671%，LJSON 比 RapidJSON 解析最快可达 123%，打印最快可达 88%
+> 测试结果: LJSON 比cJSON 解析最快可达 450%，打印最快可达 1700%，LJSON 比 RapidJSON 解析最快可达 128%，打印最快可达 95%
 
 ![AARCH64-Linux测试结果](test_result/test_for_aarch64.png)
 
 > 测试平台: PC | CPU: Intel i7-10700 | OS: Ubuntu 18.04 (VirtualBox)<br>
-> 测试结果: :LJSON 比cJSON 解析最快可达 513%，打印最快可达 1975%，LJSON 比 RapidJSON 解析最快可达 57%，打印最快可达 100%
+> 测试结果: :LJSON 比cJSON 解析最快可达 557%，打印最快可达 2058%，LJSON 比 RapidJSON 解析最快可达 60%，打印最快可达 111%
 
 ![x86_64-Linux测试结果](test_result/test_for_x86_64.png)
 
@@ -76,9 +76,13 @@ make O=<编译输出目录> CROSS_COMPILE=<交叉编译器前缀> && make O=<编
 使用 long long 类型支持，编译时需要设置 json.h 中的 `JSON_LONG_LONG_SUPPORT` 值为 1
 
 ```c
+struct json_list {
+    struct json_list *next;
+};                                      // 单向链表
+
 struct json_list_head {
-    struct json_list_head *next, *prev;
-};                                      // 双向链表
+    struct json_list *next, *prev;
+};                                      // 链表头，分别指向链表的第一个元素和最后一个元素
 
 typedef enum {
     JSON_NULL = 0,
@@ -132,13 +136,13 @@ typedef union {
 } json_value_t;                         // json对象值
 
 typedef struct {
-    struct json_list_head list;         // json链表节点
+    struct json_list list;              // json链表节点
     json_string_t jkey;                 // json对象的type和key
     json_value_t value;                 // json对象的值
 } json_object;                          // json对象
 ```
 
-* 使用双向链表管理json节点树，类似linux内核的list.h
+* 使用单向链表管理json节点树
 
 ## 经典编辑模式接口
 
@@ -229,8 +233,8 @@ static inline int json_set_double_value(json_object *json, double value);
 
 ```c
 int json_get_array_size(json_object *json);
-json_object *json_get_array_item(json_object *json, int seq);
-json_object *json_get_object_item(json_object *json, const char *key);
+json_object *json_get_array_item(json_object *json, int seq, json_object **prev);
+json_object *json_get_object_item(json_object *json, const char *key, json_object **prev);
 ```
 
 * json_get_array_size: 获取array类型节点的大小(有多少个一级子节点)
@@ -319,7 +323,7 @@ static inline int json_add_string_to_object(json_object *object, json_string_t *
 
 ```c
 typedef struct {
-    struct json_list_head list;         // 链表节点
+    struct json_list list;              // 链表节点
     size_t size;                        // 内存大小
     char *ptr;                          // 首部地址
     char *cur;                          // 当前地址
