@@ -1586,7 +1586,7 @@ err:
 }
 #define _JSON_PRINT_STRING(ptr, val) do { if (unlikely(_json_print_string(ptr, val) < 0)) goto err; } while(0)
 
-static int _json_print(json_print_t *print_ptr, json_object *json)
+static int _json_print_value(json_print_t *print_ptr, json_object *json)
 {
     json_object *parent = NULL, *tmp = NULL;
     json_object **item_array = NULL;
@@ -1612,7 +1612,7 @@ next1:
         goto next3;
     }
 
-next2:
+next2a:
     if (print_ptr->format_flag) {
         _PRINT_ADDI_FORMAT(print_ptr, item_depth + 1);
         if (unlikely(!json->jkey.len)) {
@@ -1638,6 +1638,15 @@ next2:
             _JSON_PRINT_STRING(print_ptr, &json->jkey);
             _PRINT_PTR_STRNCAT(print_ptr, ":", 1);
         }
+    }
+    goto next3;
+
+next2b:
+    if (print_ptr->format_flag) {
+        if (json->type_member == JSON_OBJECT || json->type_member == JSON_ARRAY)
+            _PRINT_ADDI_FORMAT(print_ptr, item_depth + 1);
+        else
+            _PRINT_PTR_STRNCAT(print_ptr, " ", 1);
     }
 
 next3:
@@ -1698,12 +1707,15 @@ next3:
 next4:
     if (likely(item_depth >= 0)) {
         tmp = (json_object*)(json->list.next);
-        if (parent->type_member == JSON_OBJECT) {
-            if (likely(&tmp->list != (struct json_list *)&parent->value.head)) {
-                _PRINT_PTR_STRNCAT(print_ptr, ",", 1);
-                json = tmp;
-                goto next2;
-            } else {
+        if (likely(&tmp->list != (struct json_list *)&parent->value.head)) {
+            _PRINT_PTR_STRNCAT(print_ptr, ",", 1);
+            json = tmp;
+            if (parent->type_member == JSON_OBJECT)
+                goto next2a;
+            else
+                goto next2b;
+        } else {
+            if (parent->type_member == JSON_OBJECT) {
                 if (print_ptr->format_flag) {
                     if (item_depth > 0) {
                         _PRINT_ADDI_FORMAT(print_ptr, item_depth);
@@ -1712,22 +1724,6 @@ next4:
                     }
                 }
                 _PRINT_PTR_STRNCAT(print_ptr, "}", 1);
-                ++print_ptr->item_count;
-                if (likely(item_depth > 0)) {
-                    json = parent;
-                    parent = item_array[--item_depth];
-                    goto next4;
-                }
-            }
-        } else {
-            if (likely(&tmp->list != (struct json_list *)&parent->value.head)) {
-                if (print_ptr->format_flag) {
-                    _PRINT_PTR_STRNCAT(print_ptr, ", ", 2);
-                } else {
-                    _PRINT_PTR_STRNCAT(print_ptr, ",", 1);
-                }
-                json = tmp;
-                goto next3;
             } else {
                 if (print_ptr->format_flag) {
                     if (json->type_member == JSON_OBJECT || json->type_member == JSON_ARRAY) {
@@ -1739,12 +1735,13 @@ next4:
                     }
                 }
                 _PRINT_PTR_STRNCAT(print_ptr, "]", 1);
-                ++print_ptr->item_count;
-                if (likely(item_depth > 0)) {
-                    json = parent;
-                    parent = item_array[--item_depth];
-                    goto next4;
-                }
+            }
+
+            ++print_ptr->item_count;
+            if (likely(item_depth > 0)) {
+                json = parent;
+                parent = item_array[--item_depth];
+                goto next4;
             }
         }
     }
@@ -1842,7 +1839,7 @@ char *json_print_common(json_object *json, json_print_choice_t *choice)
     if (_print_val_init(&print_val, choice) < 0)
         return NULL;
 
-    if (_json_print(&print_val, json) < 0) {
+    if (_json_print_value(&print_val, json) < 0) {
         JsonErr("print failed!\n");
         goto err;
     }
@@ -1882,55 +1879,50 @@ int json_sax_print_value(json_sax_print_hd handle, json_type_t type, json_string
         return -1;
     }
 
-    if (print_handle->count > 0) {
-        if (!((type == JSON_ARRAY || type == JSON_OBJECT) && (*(json_sax_cmd_t*)value) == JSON_SAX_FINISH)) {
-            // add ","
-            if (print_handle->array[cur_pos].num > 0) {
-                if (print_ptr->format_flag && print_handle->array[cur_pos].type == JSON_ARRAY) {
-                    _PRINT_PTR_STRNCAT(print_ptr, ", ", 2);
+    if (likely(print_handle->count > 0
+        && !((type == JSON_ARRAY || type == JSON_OBJECT) && (*(json_sax_cmd_t*)value) == JSON_SAX_FINISH))) {
+        // add ","
+        if (print_handle->array[cur_pos].num > 0)
+            _PRINT_PTR_STRNCAT(print_ptr, ",", 1);
+
+        // add key
+        if (print_handle->array[cur_pos].type == JSON_OBJECT) {
+            if (print_ptr->format_flag) {
+                if (unlikely(!jkey || !jkey->str || !jkey->str[0])) {
+#if !JSON_STRICT_PARSE_MODE
+                    JsonErr("key is null!\n");
+                    goto err;
+#else
+                    _PRINT_ADDI_FORMAT(print_ptr, print_handle->count);
+                    _PRINT_PTR_STRNCAT(print_ptr, "\"\":\t", 4);
+#endif
                 } else {
-                    _PRINT_PTR_STRNCAT(print_ptr, ",", 1);
+                    _PRINT_ADDI_FORMAT(print_ptr, print_handle->count);
+                    json_string_info_update(jkey);
+                    _JSON_PRINT_STRING(print_ptr, jkey);
+                    _PRINT_PTR_STRNCAT(print_ptr, ":\t", 2);
                 }
             } else {
-                if (print_ptr->format_flag
-                    && (type == JSON_OBJECT || type == JSON_ARRAY)
-                    && print_handle->array[cur_pos].type == JSON_ARRAY) {
-                    _PRINT_ADDI_FORMAT(print_ptr, print_handle->count);
+                if (unlikely(!jkey || !jkey->str || !jkey->str[0])) {
+#if !JSON_STRICT_PARSE_MODE
+                    JsonErr("key is null!\n");
+                    goto err;
+#else
+                    _PRINT_PTR_STRNCAT(print_ptr, "\"\":", 3);
+#endif
+                } else {
+                    json_string_info_update(jkey);
+                    _JSON_PRINT_STRING(print_ptr, jkey);
+                    _PRINT_PTR_STRNCAT(print_ptr, ":", 1);
                 }
             }
-
-            // add key
-            if (print_handle->array[cur_pos].type == JSON_OBJECT) {
-                if (print_ptr->format_flag) {
-                    if (unlikely(!jkey || !jkey->str || !jkey->str[0])) {
-#if !JSON_STRICT_PARSE_MODE
-                        JsonErr("key is null!\n");
-                        goto err;
-#else
-                        if (print_handle->count > 0)
-                            _PRINT_ADDI_FORMAT(print_ptr, print_handle->count);
-                        _PRINT_PTR_STRNCAT(print_ptr, "\"\":\t", 4);
-#endif
-                    } else {
-                        if (print_handle->count > 0)
-                            _PRINT_ADDI_FORMAT(print_ptr, print_handle->count);
-                        json_string_info_update(jkey);
-                        _JSON_PRINT_STRING(print_ptr, jkey);
-                        _PRINT_PTR_STRNCAT(print_ptr, ":\t", 2);
-                    }
+        } else {
+            if (print_ptr->format_flag) {
+                if (type == JSON_OBJECT || type == JSON_ARRAY) {
+                    _PRINT_ADDI_FORMAT(print_ptr, print_handle->count);
                 } else {
-                    if (unlikely(!jkey || !jkey->str || !jkey->str[0])) {
-#if !JSON_STRICT_PARSE_MODE
-                        JsonErr("key is null!\n");
-                        goto err;
-#else
-                        _PRINT_PTR_STRNCAT(print_ptr, "\"\":", 3);
-#endif
-                    } else {
-                        json_string_info_update(jkey);
-                        _JSON_PRINT_STRING(print_ptr, jkey);
-                        _PRINT_PTR_STRNCAT(print_ptr, ":", 1);
-                    }
+                    if (print_handle->array[cur_pos].num > 0)
+                        _PRINT_PTR_STRNCAT(print_ptr, " ", 1);
                 }
             }
         }
@@ -1977,48 +1969,6 @@ int json_sax_print_value(json_sax_print_hd handle, json_type_t type, json_string
         break;
 
     case JSON_ARRAY:
-        switch ((*(json_sax_cmd_t*)value)) {
-        case JSON_SAX_START:
-            if (print_handle->count == print_handle->total) {
-                print_handle->total += JSON_PRINT_NUM_PLUS_DEF;
-                if (unlikely((print_handle->array = json_realloc(print_handle->array,
-                            print_handle->total * sizeof(json_sax_print_depth_t))) == NULL)) {
-                    JsonErr("malloc failed!\n");
-                    goto err;
-                }
-            }
-            if (print_handle->count > 0)
-                ++print_handle->array[cur_pos].num;
-            _PRINT_PTR_STRNCAT(print_ptr, "[", 1);
-            print_handle->array[print_handle->count].type = JSON_ARRAY;
-            print_handle->array[print_handle->count].num = 0;
-            ++print_handle->count;
-            break;
-
-        case JSON_SAX_FINISH:
-            if (unlikely(print_handle->count == 0 || print_handle->array[cur_pos].type != JSON_ARRAY)) {
-                JsonErr("unexpected array finish!\n");
-                goto err;
-            }
-            if (print_ptr->format_flag && print_handle->array[cur_pos].num > 0
-                && (print_handle->last_type == JSON_OBJECT || print_handle->last_type == JSON_ARRAY)) {
-                if (print_handle->count > 1) {
-                    _PRINT_ADDI_FORMAT(print_ptr, cur_pos);
-                } else {
-                    _PRINT_PTR_STRNCAT(print_ptr, "\n", 1);
-                }
-            }
-            _PRINT_PTR_STRNCAT(print_ptr, "]", 1);
-            --print_handle->count;
-            print_handle->last_type = type;
-            return 0;
-
-        default:
-            goto err;
-        }
-
-        break;
-
     case JSON_OBJECT:
         switch ((*(json_sax_cmd_t*)value)) {
         case JSON_SAX_START:
@@ -2030,28 +1980,42 @@ int json_sax_print_value(json_sax_print_hd handle, json_type_t type, json_string
                     goto err;
                 }
             }
+            if (type == JSON_OBJECT) {
+                _PRINT_PTR_STRNCAT(print_ptr, "{", 1);
+            } else {
+                _PRINT_PTR_STRNCAT(print_ptr, "[", 1);
+            }
             if (print_handle->count > 0)
                 ++print_handle->array[cur_pos].num;
-            _PRINT_PTR_STRNCAT(print_ptr, "{", 1);
-            print_handle->array[print_handle->count].type = JSON_OBJECT;
+            print_handle->array[print_handle->count].type = type;
             print_handle->array[print_handle->count].num = 0;
             ++print_handle->count;
             break;
 
         case JSON_SAX_FINISH:
-            if (unlikely(print_handle->count == 0 || print_handle->array[cur_pos].type != JSON_OBJECT)) {
-                JsonErr("unexpected object finish!\n");
+            if (unlikely(print_handle->count == 0 || print_handle->array[cur_pos].type != type)) {
+                JsonErr("unexpected array or object finish!\n");
                 goto err;
             }
-            if (print_handle->count > 1) {
-                if (print_handle->array[print_handle->count-1].num > 0) {
-                    _PRINT_ADDI_FORMAT(print_ptr, cur_pos);
-                }
-            } else {
-                if (print_ptr->format_flag)
+            if (print_ptr->format_flag) {
+                if (print_handle->count > 1) {
+                    if (print_handle->array[print_handle->count-1].num > 0) {
+                        if (type == JSON_OBJECT) {
+                            _PRINT_ADDI_FORMAT(print_ptr, cur_pos);
+                        } else {
+                            if (print_handle->last_type == JSON_OBJECT || print_handle->last_type == JSON_ARRAY)
+                                _PRINT_ADDI_FORMAT(print_ptr, cur_pos);
+                        }
+                    }
+                } else {
                     _PRINT_PTR_STRNCAT(print_ptr, "\n", 1);
+                }
             }
-            _PRINT_PTR_STRNCAT(print_ptr, "}", 1);
+            if (type == JSON_OBJECT) {
+                _PRINT_PTR_STRNCAT(print_ptr, "}", 1);
+            } else {
+                _PRINT_PTR_STRNCAT(print_ptr, "]", 1);
+            }
             --print_handle->count;
             print_handle->last_type = type;
             return 0;
