@@ -140,6 +140,19 @@ typedef struct {
     json_string_t jkey;                 // json对象的type和key
     json_value_t value;                 // json对象的值
 } json_object;                          // json对象
+
+typedef struct {
+    unsigned int hash;                  // json key的hash，只有JSON_OBJECT的子项才有key
+    json_object *json;                  // json对象的指针
+} json_item_t;
+
+typedef struct {
+    unsigned int conflicted:1;          // key的hash是否有冲突
+    unsigned int reserved:31;
+    unsigned int total;                 // items分配的内存数目
+    unsigned int count;                 // items中子项的个数
+    json_item_t *items;                 // 存储子项的数组
+} json_items_t;                         // 存储JSON_ARRAY或JSON_OBJECT的所有子项
 ```
 
 * 使用单向链表管理json节点树
@@ -195,12 +208,14 @@ static inline json_object *json_create_string_array(json_string_t *values, int c
 
 ```c
 void json_string_info_update(json_string_t *jstr);
+unsigned int json_string_hash_code(json_string_t *jstr);
 int json_string_strdup(json_string_t *src, json_string_t *dst);
 static inline int json_set_key(json_object *json, json_string_t *jkey);
 static inline int json_set_string_value(json_object *json, json_string_t *jstr);
 ```
 
 * json_string_info_update: 更新jstr的len和escaped，如果传入的len大于0，则什么都不做
+* json_string_hash_code: 获取字符串的hash值
 * json_string_strdup: 修改LJSON中的字符串
 * json_set_key: 修改节点的key(JSON_OBJECT类型下的子节点才有key)
 * json_set_string_value: 修改string类型节点的value
@@ -233,13 +248,34 @@ static inline int json_set_double_value(json_object *json, double value);
 
 ```c
 int json_get_array_size(json_object *json);
+int json_get_object_size(json_object *json);
 json_object *json_get_array_item(json_object *json, int seq, json_object **prev);
 json_object *json_get_object_item(json_object *json, const char *key, json_object **prev);
 ```
 
 * json_get_array_size: 获取array类型节点的大小(有多少个一级子节点)
+* json_get_object_size: 获取object类型节点的大小(有多少个一级子节点)
 * json_get_array_item: 获取array类型节点的的第seq个子节点
 * json_get_object_item: 获取object类型节点的指定key的子节点
+
+
+```c
+json_object* json_search_object_item(json_items_t *items, json_string_t *jkey, unsigned int hash);
+void json_free_items(json_items_t *items);
+int json_get_items(json_object *json, json_items_t *items);
+```
+
+* json_search_object_item: 二分法查找items中的指定key的json对象
+* json_free_items: 释放items中分配的内存
+* json_get_items: 获取JSON_ARRAY或JSON_OBJECT中的所有一级子节点，加速访问
+
+```c
+int json_add_item_to_array(json_object *array, json_object *item);
+int json_add_item_to_object(json_object *object, json_object *item);
+```
+
+* 将节点加入到array或object，加入object需要先设置item的key
+* 经典模式如果该节点加入成功，`无需`再调用`json_del_object`删除该节点
 
 ```c
 json_object *json_detach_item_from_array(json_object *json, int seq);
@@ -259,24 +295,16 @@ int json_del_item_from_object(json_object *json, const char *key);
 
 ```c
 int json_replace_item_in_array(json_object *array, int seq, json_object *new_item);
-int json_replace_item_in_object(json_object *object, json_string_t *jkey, json_object *new_item);
+int json_replace_item_in_object(json_object *object, json_object *new_item);
 ```
 
 * 将array或object指定的子节点替换成new_item
 * 如果原来的子节点不存在就直接新增new_item
 
 ```c
-int json_add_item_to_array(json_object *array, json_object *item);
-int json_add_item_to_object(json_object *object, json_string_t *jkey, json_object *item);
-```
-
-* 将节点加入到array或object
-* 如果该节点加入成功，`无需`再调用`json_del_object`删除该节点
-
-```c
 json_object *json_deepcopy(json_object *json);
 int json_copy_item_to_array(json_object *array, json_object *item);
-int json_copy_item_to_object(json_object *object, json_string_t *jkey, json_object *item);
+int json_copy_item_to_object(json_object *object, json_object *item);
 ```
 
 * json_deepcopy: 节点深度复制
@@ -284,20 +312,37 @@ int json_copy_item_to_object(json_object *object, json_string_t *jkey, json_obje
 * 如果该节点加入成功，`还需要`再调用`json_del_object`删除原来传入的节点
 
 ```c
-int json_add_new_item_to_object(json_object *object, json_type_t type, json_string_t *jkey, void* value);
+json_object* json_add_new_item_to_array(json_object *array, json_type_t type, void* value);
+json_object* json_add_new_item_to_object(json_object *object, json_type_t type, json_string_t *jkey, void* value);
 
-static inline int json_add_null_to_object(json_object *object, json_string_t *jkey);
-static inline int json_add_bool_to_object(json_object *object, json_string_t *jkey, bool value);
-static inline int json_add_int_to_object(json_object *object, json_string_t *jkey, int value);
-static inline int json_add_hex_to_object(json_object *object, json_string_t *jkey, unsigned int value);
+static inline json_object* json_add_null_to_array(json_object *array);
+static inline json_object* json_add_bool_to_array(json_object *array, bool value);
+static inline json_object* json_add_int_to_array(json_object *array, int value);
+static inline json_object* json_add_hex_to_array(json_object *array, unsigned int value);
 #if JSON_LONG_LONG_SUPPORT
-static inline int json_add_lint_to_object(json_object *object, json_string_t *jkey, long long int value);
-static inline int json_add_lhex_to_object(json_object *object, json_string_t *jkey, unsigned long long int value);
+static inline json_object* json_add_lint_to_array(json_object *array, long long int value);
+static inline json_object* json_add_lhex_to_array(json_object *array, unsigned long long int value);
 #endif
-static inline int json_add_double_to_object(json_object *object, json_string_t *jkey, double value);
-static inline int json_add_string_to_object(json_object *object, json_string_t *jkey, json_string_t *value);
+static inline json_object* json_add_double_to_array(json_object *array, double value);
+static inline json_object* json_add_string_to_array(json_object *array, json_string_t *value);
+static inline json_object* json_add_array_to_array(json_object *array);
+static inline json_object* json_add_object_to_array(json_object *array);
+
+static inline json_object* json_add_null_to_object(json_object *object, json_string_t *jkey);
+static inline json_object* json_add_bool_to_object(json_object *object, json_string_t *jkey, bool value);
+static inline json_object* json_add_int_to_object(json_object *object, json_string_t *jkey, int value);
+static inline json_object* json_add_hex_to_object(json_object *object, json_string_t *jkey, unsigned int value);
+#if JSON_LONG_LONG_SUPPORT
+static inline json_object* json_add_lint_to_object(json_object *object, json_string_t *jkey, long long int value);
+static inline json_object* json_add_lhex_to_object(json_object *object, json_string_t *jkey, unsigned long long int value);
+#endif
+static inline json_object* json_add_double_to_object(json_object *object, json_string_t *jkey, double value);
+static inline json_object* json_add_string_to_object(json_object *object, json_string_t *jkey, json_string_t *value);
+static inline json_object* json_add_array_to_object(json_object *object, json_string_t *jkey);
+static inline json_object* json_add_object_to_object(json_object *object, json_string_t *jkey);
 ```
 
+* json_add_new_item_to_array: 新建指定类型的节点，并将该节点加入array
 * json_add_new_item_to_object: 新建指定类型的节点，并将该节点加入object
 
 ```c
@@ -308,11 +353,16 @@ static inline int json_add_string_to_object(json_object *object, json_string_t *
  * json_get_number_value / ...
  * json_set_number_value / ...
  * json_get_array_size
+ * json_get_object_size
  * json_get_array_item
  * json_get_object_item
+ * json_search_object_item
+ * json_free_items
+ * json_get_items
+ * json_add_item_to_array
+ * json_add_item_to_object
  * json_detach_item_from_array
  * json_detach_item_from_object
- * json_add_item_to_array
  */
 ```
 
@@ -402,22 +452,54 @@ static inline int pjson_set_string_value(json_object *json, json_string_t *jstr,
 * pjson_set_string_value: 修改 JSON_STRING 类型json节点的值，该值在内存池中分配
 
 ```c
-int pjson_add_item_to_object(json_object *object, json_string_t *jkey, json_object *item, json_mem_t *mem);
-int pjson_add_new_item_to_object(json_object *object, json_type_t type, json_string_t *jkey, void *value, json_mem_t *mem);
-
-static inline int pjson_add_null_to_object(json_object *object, json_string_t *jkey, json_mem_t *mem);
-static inline int pjson_add_bool_to_object(json_object *object, json_string_t *jkey, bool value, json_mem_t *mem);
-static inline int pjson_add_int_to_object(json_object *object, json_string_t *jkey, int value, json_mem_t *mem);
-static inline int pjson_add_hex_to_object(json_object *object, json_string_t *jkey, unsigned int value, json_mem_t *mem);
-#if JSON_LONG_LONG_SUPPORT
-static inline int pjson_add_lint_to_object(json_object *object, json_string_t *jkey, long long int value, json_mem_t *mem);
-static inline int pjson_add_lhex_to_object(json_object *object, json_string_t *jkey, unsigned long long int value, json_mem_t *mem);
-#endif
-static inline int pjson_add_double_to_object(json_object *object, json_string_t *jkey, double value, json_mem_t *mem);
-static inline int pjson_add_string_to_object(json_object *object, json_string_t *jkey, json_string_t *value, json_mem_t *mem);
+int pjson_replace_item_in_array(json_object *array, int seq, json_object *new_item);
+int pjson_replace_item_in_object(json_object *object, json_object *new_item);
 ```
 
-* pjson_add_item_to_object: 在内存池中的object加入子节点item
+* 将array或object指定的子节点替换成new_item
+* 如果原来的子节点不存在就直接新增new_item
+
+```c
+json_object *pjson_deepcopy(json_object *json, json_mem_t *mem);
+int pjson_copy_item_to_array(json_object *array, json_object *item, json_mem_t *mem);
+int pjson_copy_item_to_object(json_object *object, json_object *item, json_mem_t *mem);
+```
+
+* pjson_deepcopy: 节点深度复制
+* pjson_copy_item_to_xxxx: 将节点复制并加入到array或object
+
+```c
+json_object* pjson_add_new_item_to_array(json_object *array, json_type_t type, void *value, json_mem_t *mem);
+json_object* pjson_add_new_item_to_object(json_object *object, json_type_t type, json_string_t *jkey, void *value, json_mem_t *mem);
+
+static inline json_object* pjson_add_null_to_array(json_object *array, json_mem_t *mem);
+static inline json_object* pjson_add_bool_to_array(json_object *array, bool value, json_mem_t *mem);
+static inline json_object* pjson_add_int_to_array(json_object *array, int value, json_mem_t *mem);
+static inline json_object* pjson_add_hex_to_array(json_object *array, unsigned int value, json_mem_t *mem);
+#if JSON_LONG_LONG_SUPPORT
+static inline json_object* pjson_add_lint_to_array(json_object *array, long long int value, json_mem_t *mem);
+static inline json_object* pjson_add_lhex_to_array(json_object *array, unsigned long long int value, json_mem_t *mem);
+#endif
+static inline json_object* pjson_add_double_to_array(json_object *array, double value, json_mem_t *mem);
+static inline json_object* pjson_add_string_to_array(json_object *array, json_string_t *value, json_mem_t *mem);
+static inline json_object* pjson_add_array_to_array(json_object *array, json_mem_t *mem);
+static inline json_object* pjson_add_object_to_array(json_object *array, json_mem_t *mem);
+
+static inline json_object* pjson_add_null_to_object(json_object *object, json_string_t *jkey, json_mem_t *mem);
+static inline json_object* pjson_add_bool_to_object(json_object *object, json_string_t *jkey, bool value, json_mem_t *mem);
+static inline json_object* pjson_add_int_to_object(json_object *object, json_string_t *jkey, int value, json_mem_t *mem);
+static inline json_object* pjson_add_hex_to_object(json_object *object, json_string_t *jkey, unsigned int value, json_mem_t *mem);
+#if JSON_LONG_LONG_SUPPORT
+static inline json_object* pjson_add_lint_to_object(json_object *object, json_string_t *jkey, long long int value, json_mem_t *mem);
+static inline json_object* pjson_add_lhex_to_object(json_object *object, json_string_t *jkey, unsigned long long int value, json_mem_t *mem);
+#endif
+static inline json_object* pjson_add_double_to_object(json_object *object, json_string_t *jkey, double value, json_mem_t *mem);
+static inline json_object* pjson_add_string_to_object(json_object *object, json_string_t *jkey, json_string_t *value, json_mem_t *mem);
+static inline json_object* pjson_add_array_to_object(json_object *object, json_string_t *jkey, json_mem_t *mem);
+static inline json_object* pjson_add_object_to_object(json_object *object, json_string_t *jkey, json_mem_t *mem);
+```
+
+* pjson_add_new_item_to_array: 在内存池中创建指定类型的子节点，并加入到array
 * pjson_add_new_item_to_object: 在内存池中创建指定类型的子节点，并加入到object
 
 ## DOM打印/DOM解析
@@ -435,7 +517,7 @@ typedef struct {
 
 * plus_size: 经典模式下打印字符串realloc的增量，或write buffer的缓冲区大小，最小值/默认值为 JSON_PRINT_SIZE_PLUS_DEF
 * item_size: 每个json对象生成字符串的预估的平均长度，最小值/默认值为 JSON_UNFORMAT_ITEM_SIZE_DEF 和 JSON_FORMAT_ITEM_SIZE_DEF
-* item_total: json对象节点的总数如果此值未设置，将自动计算总数；否则取默认值JSON_ITEM_NUM_PLUS_DEF
+* item_total: json对象节点的总数如果此值未设置，将自动计算总数；否则取默认值JSON_PRINT_NUM_PLUS_DEF
 * format_flag: 格式化打印选项，`false: 压缩打印；true: 格式化打印`
 * path: 如果path不为空，将直接边打印边输出到文件；否则是打印到一个大的完整字符串
 
@@ -466,7 +548,7 @@ typedef struct {
 } json_parse_choice_t;
 ```
 
-* mem_size: 内存池每个内存块的大小，最小值为 (str_len / JSON_STR_MULTIPLE_NUM) 的值
+* mem_size: 内存池每个内存块的大小，最小值为 (str_len / JSON_PARSE_NUM_DIV_DEF) 的值
 * read_size: json读缓冲的初始大小，最小值 JSON_PARSE_READ_SIZE_DEF
 * str_len: 要解析的字符串长度 strlen(str)，使用内存池时该参数有效，如果为0，json_parse_common会自己计算一次
 * path: 要解析的json文件，str 和 path 有且只有一个有值

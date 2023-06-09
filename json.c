@@ -4,7 +4,6 @@
 * Contact: Jing Leng <lengjingzju@163.com> *
 * URL: https://github.com/lengjingzju/json *
 *******************************************/
-
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -53,7 +52,7 @@
 
 /**************** gcc builtin ****************/
 
-#if defined(__GNUC__)
+#if defined(__GNUC__) || defined(__clang__)
 #define UNUSED_ATTR                     __attribute__((unused))
 #define likely(cond)                    __builtin_expect(!!(cond), 1)
 #define unlikely(cond)                  __builtin_expect(!!(cond), 0)
@@ -72,11 +71,12 @@
 #define json_strdup                     strdup
 #define json_free                       free
 
+#define JSON_ITEM_NUM_PLUS_DEF          16
 #define JSON_POOL_MEM_SIZE_DEF          8096
-#define JSON_ITEM_NUM_PLUS_DEF          64
 
 /* print choice size */
 #define JSON_PRINT_UTF16_SUPPORT        0
+#define JSON_PRINT_NUM_PLUS_DEF         64
 #define JSON_PRINT_SIZE_PLUS_DEF        1024
 #define JSON_FORMAT_ITEM_SIZE_DEF       32
 #define JSON_UNFORMAT_ITEM_SIZE_DEF     24
@@ -84,7 +84,7 @@
 /* file parse choice size */
 #define JSON_PARSE_ERROR_STR            "Z"
 #define JSON_PARSE_READ_SIZE_DEF        8096
-#define JSON_PARSE_NUM_PLUS_DEF         8
+#define JSON_PARSE_NUM_DIV_DEF          8
 
 /**************** json list ****************/
 
@@ -102,7 +102,6 @@
         n = json_list_entry(pos->member.next, typeof(*pos));    \
         &pos->member != (struct json_list *)(head);             \
         p = pos, pos = n, n = json_list_entry(n->member.next, typeof(*n)))
-
 
 static inline void INIT_JSON_LIST_HEAD(struct json_list_head *head)
 {
@@ -332,6 +331,19 @@ void json_string_info_update(json_string_t *jstr)
     jstr->len = i;
 }
 
+unsigned int json_string_hash_code(json_string_t *jstr)
+{
+    unsigned int i = 0, hash = 0;
+
+    json_string_info_update(jstr);
+    if (!jstr->len)
+        return 0;
+
+    for (i = 0; i < jstr->len; ++i)
+        hash = (hash << 5) - hash + jstr->str[i];
+    return hash;
+}
+
 int json_string_strdup(json_string_t *src, json_string_t *dst)
 {
     json_string_info_update(src);
@@ -449,6 +461,20 @@ int json_get_array_size(json_object *json)
     return count;
 }
 
+int json_get_object_size(json_object *json)
+{
+    int count = 0;
+    json_object *pos = NULL;
+
+    if (json->type_member == JSON_OBJECT) {
+        json_list_for_each_entry(pos, &json->value.head, list) {
+            ++count;
+        }
+    }
+
+    return count;
+}
+
 json_object *json_get_array_item(json_object *json, int seq, json_object **prev)
 {
     int count = 0;
@@ -492,6 +518,147 @@ json_object *json_get_object_item(json_object *json, const char *key, json_objec
     }
 
     return NULL;
+}
+
+json_object* json_search_object_item(json_items_t *items, json_string_t *jkey, unsigned int hash)
+{
+    int left = 0, right = 0, middle = 0, i = 0, count = 0;
+    json_object *json = NULL;
+    if (!hash)
+        hash = json_string_hash_code(jkey);
+
+    count = items->count;
+    if (!count)
+        return NULL;
+
+    right = count - 1;
+    while (left <= right) {
+        middle = (left + right) >> 1;
+        if (hash == items->items[middle].hash) {
+            if (!items->conflicted)
+                return items->items[middle].json;
+
+            if (jkey->len) {
+                for (i = middle; i < count; ++i) {
+                    if (hash != items->items[i].hash)
+                        break;
+                    json = items->items[i].json;
+                    if (json->key_member && strcmp(jkey->str, json->key_member) == 0)
+                        return json;
+                }
+                for (i = middle - 1; i >= 0; --i) {
+                    if (hash != items->items[i].hash)
+                        break;
+                    json = items->items[i].json;
+                    if (json->key_member && strcmp(jkey->str, json->key_member) == 0)
+                        return json;
+                }
+            } else {
+                for (i = middle; i < count; ++i) {
+                    if (hash != items->items[i].hash)
+                        break;
+                    json = items->items[i].json;
+                    if (!json->jkey.len)
+                        return json;
+                }
+                for (i = middle - 1; i >= 0; --i) {
+                    if (hash != items->items[i].hash)
+                        break;
+                    json = items->items[i].json;
+                    if (!json->jkey.len)
+                        return json;
+                }
+            }
+            return NULL;
+        }
+
+        if (hash > items->items[middle].hash)
+            left = middle + 1;
+        else
+            right = middle - 1;
+    }
+
+    return NULL;
+}
+
+static int _json_hash_cmp(const void *a, const void *b)
+{
+    unsigned int ha = ((const json_item_t *)a)->hash;
+    unsigned int hb = ((const json_item_t *)b)->hash;
+    return (int)(ha - hb);
+}
+
+static inline void json_object_items_sort(json_items_t *items)
+{
+    items->conflicted = 0;
+    if (items->count > 1) {
+        unsigned int i = 0;
+        qsort(items->items, items->count, sizeof(json_item_t), _json_hash_cmp);
+        for (i = 1; i < items->count; ++i) {
+            if (items->items[i-1].hash == items->items[i].hash) {
+                items->conflicted = 1;
+                break;
+            }
+        }
+    }
+}
+
+void json_free_items(json_items_t *items)
+{
+    if (items->items)
+        json_free(items->items);
+    items->items = NULL;
+    items->conflicted = 0;
+    items->total = 0;
+    items->count = 0;
+}
+
+int json_get_items(json_object *json, json_items_t *items)
+{
+    json_object *pos = NULL;
+
+    items->count = 0;
+    if (json->type_member != JSON_ARRAY && json->type_member != JSON_OBJECT)
+        return -1;
+
+    json_list_for_each_entry(pos, &json->value.head, list) {
+        if (items->count == items->total) {
+            items->total += JSON_ITEM_NUM_PLUS_DEF;
+            if ((items->items = json_realloc(items->items, items->total * sizeof(json_item_t))) == NULL) {
+                JsonErr("malloc failed!\n");
+                goto err;
+            }
+        }
+
+        if (json->type_member == JSON_OBJECT)
+            items->items[items->count].hash = json_string_hash_code(&pos->jkey);
+        items->items[items->count++].json = pos;
+    }
+
+    if (json->type_member == JSON_OBJECT)
+        json_object_items_sort(items);
+    return 0;
+err:
+    json_free_items(items);
+    return -1;
+}
+
+int json_add_item_to_array(json_object *array, json_object *item)
+{
+    if (array->type_member == JSON_ARRAY) {
+        json_list_add_tail(&item->list, &array->value.head);
+        return 0;
+    }
+    return -1;
+}
+
+int json_add_item_to_object(json_object *object, json_object *item)
+{
+    if (object->type_member == JSON_OBJECT) {
+        json_list_add_tail(&item->list, &object->value.head);
+        return 0;
+    }
+    return -1;
 }
 
 json_object *json_detach_item_from_array(json_object *json, int seq)
@@ -557,15 +724,12 @@ int json_replace_item_in_array(json_object *array, int seq, json_object *new_ite
     return -1;
 }
 
-int json_replace_item_in_object(json_object *object, json_string_t *jkey, json_object *new_item)
+int json_replace_item_in_object(json_object *object, json_object *new_item)
 {
     json_object *item = NULL, *prev = NULL;
 
     if (object->type_member == JSON_OBJECT) {
-        if (json_set_key(new_item, jkey) < 0) {
-            return -1;
-        }
-        if ((item = json_get_object_item(object, jkey->str, &prev)) != NULL) {
+        if ((item = json_get_object_item(object, new_item->key_member, &prev)) != NULL) {
             json_list_del(&item->list, &prev->list, &object->value.head);
             json_del_object(item);
             json_list_add(&new_item->list, &prev->list, &object->value.head);
@@ -576,27 +740,6 @@ int json_replace_item_in_object(json_object *object, json_string_t *jkey, json_o
         return 0;
     }
 
-    return -1;
-}
-
-int json_add_item_to_array(json_object *array, json_object *item)
-{
-    if (array->type_member == JSON_ARRAY) {
-        json_list_add_tail(&item->list, &array->value.head);
-        return 0;
-    }
-    return -1;
-}
-
-int json_add_item_to_object(json_object *object, json_string_t *jkey, json_object *item)
-{
-    if (object->type_member == JSON_OBJECT) {
-        if (json_set_key(item, jkey) < 0) {
-            return -1;
-        }
-        json_list_add_tail(&item->list, &object->value.head);
-        return 0;
-    }
     return -1;
 }
 
@@ -651,18 +794,14 @@ int json_copy_item_to_array(json_object *array, json_object *item)
             JsonErr("copy failed!\n");
             return -1;
         }
-        if (json_add_item_to_array(array, node) < 0) {
-            JsonErr("add failed!\n");
-            json_del_object(node);
-            return -1;
-        }
+        json_list_add_tail(&node->list, &array->value.head);
         return 0;
     }
 
     return -1;
 }
 
-int json_copy_item_to_object(json_object *object, json_string_t *jkey, json_object *item)
+int json_copy_item_to_object(json_object *object, json_object *item)
 {
     json_object *node = NULL;
 
@@ -671,18 +810,47 @@ int json_copy_item_to_object(json_object *object, json_string_t *jkey, json_obje
             JsonErr("copy failed!\n");
             return -1;
         }
-        if (json_add_item_to_object(object, jkey, node) < 0) {
-            JsonErr("add failed!\n");
-            json_del_object(node);
-            return -1;
-        }
+        json_list_add_tail(&node->list, &object->value.head);
         return 0;
     }
 
     return -1;
 }
 
-int json_add_new_item_to_object(json_object *object, json_type_t type, json_string_t *jkey, void *value)
+json_object* json_add_new_item_to_array(json_object *array, json_type_t type, void *value)
+{
+    json_object *item = NULL;
+
+    if (array->type_member == JSON_ARRAY) {
+        switch (type) {
+        case JSON_NULL:
+        case JSON_BOOL:
+        case JSON_INT:
+        case JSON_HEX:
+#if JSON_LONG_LONG_SUPPORT
+        case JSON_LINT:
+        case JSON_LHEX:
+#endif
+        case JSON_DOUBLE:
+        case JSON_STRING:
+        case JSON_ARRAY:
+        case JSON_OBJECT:
+            if ((item = json_create_item(type, value)) == NULL) {
+                JsonErr("create item failed!\n");
+                return NULL;
+            }
+            json_list_add_tail(&item->list, &array->value.head);
+            return item;
+        default:
+            JsonErr("not support json type.\n");
+            return NULL;
+        }
+    }
+
+    return NULL;
+}
+
+json_object* json_add_new_item_to_object(json_object *object, json_type_t type, json_string_t *jkey, void *value)
 {
     json_object *item = NULL;
 
@@ -698,24 +866,26 @@ int json_add_new_item_to_object(json_object *object, json_type_t type, json_stri
 #endif
         case JSON_DOUBLE:
         case JSON_STRING:
+        case JSON_ARRAY:
+        case JSON_OBJECT:
             if ((item = json_create_item(type, value)) == NULL) {
                 JsonErr("create item failed!\n");
-                return -1;
+                return NULL;
             }
             if (json_set_key(item, jkey) < 0) {
                 JsonErr("add key failed!\n");
                 json_del_object(item);
-                return -1;
+                return NULL;
             }
             json_list_add_tail(&item->list, &object->value.head);
-            return 0;
+            return item;
         default:
             JsonErr("not support json type.\n");
-            return -1;
+            return NULL;
         }
     }
 
-    return -1;
+    return NULL;
 }
 
 /**************** json pool memory apis ****************/
@@ -912,21 +1082,148 @@ int pjson_string_strdup(json_string_t *src, json_string_t *dst, json_mem_mgr_t *
     return 0;
 }
 
-int pjson_add_item_to_object(json_object *object, json_string_t *jkey, json_object *item, json_mem_t *mem)
+int pjson_replace_item_in_array(json_object *array, int seq, json_object *new_item)
 {
-    if (object->type_member == JSON_OBJECT) {
-        if (pjson_set_key(item, jkey, mem) < 0) {
-            JsonErr("add key failed!\n");
-            return -1;
+    json_object *item = NULL, *prev = NULL;
+
+    if (array->type_member == JSON_ARRAY) {
+        if ((item = json_get_array_item(array, seq, &prev)) != NULL) {
+            json_list_del(&item->list, &prev->list, &array->value.head);
+            json_list_add(&new_item->list, &prev->list, &array->value.head);
+        } else {
+            json_list_add_tail(&new_item->list, &array->value.head);
         }
-        json_list_add_tail(&item->list, &object->value.head);
+
         return 0;
     }
 
     return -1;
 }
 
-int pjson_add_new_item_to_object(json_object *object, json_type_t type, json_string_t *jkey, void *value, json_mem_t *mem)
+int pjson_replace_item_in_object(json_object *object, json_object *new_item)
+{
+    json_object *item = NULL, *prev = NULL;
+
+    if (object->type_member == JSON_OBJECT) {
+        if ((item = json_get_object_item(object, new_item->key_member, &prev)) != NULL) {
+            json_list_del(&item->list, &prev->list, &object->value.head);
+            json_list_add(&new_item->list, &prev->list, &object->value.head);
+        } else {
+            json_list_add_tail(&new_item->list, &object->value.head);
+        }
+
+        return 0;
+    }
+
+    return -1;
+}
+
+json_object *pjson_deepcopy(json_object *json, json_mem_t *mem)
+{
+    json_object *new_json = NULL;
+    json_object *item = NULL, *node = NULL;
+
+    switch (json->type_member) {
+    case JSON_NULL:   new_json = pjson_create_null(mem);                          break;
+    case JSON_BOOL:   new_json = pjson_create_bool(json->value.vnum.vbool, mem);  break;
+    case JSON_INT:    new_json = pjson_create_int(json->value.vnum.vint, mem);    break;
+    case JSON_HEX:    new_json = pjson_create_hex(json->value.vnum.vhex, mem);    break;
+#if JSON_LONG_LONG_SUPPORT
+    case JSON_LINT:   new_json = pjson_create_lint(json->value.vnum.vlint, mem);  break;
+    case JSON_LHEX:   new_json = pjson_create_lhex(json->value.vnum.vlhex, mem);  break;
+#endif
+    case JSON_DOUBLE: new_json = pjson_create_double(json->value.vnum.vdbl, mem); break;
+    case JSON_STRING: new_json = pjson_create_string(&json->value.vstr, mem);     break;
+    case JSON_ARRAY:  new_json = pjson_create_array(mem);                         break;
+    case JSON_OBJECT: new_json = pjson_create_object(mem);                        break;
+    default:                                                                      break;
+    }
+
+    if (new_json) {
+        if (pjson_string_strdup(&json->jkey, &new_json->jkey, &mem->key_mgr) < 0) {
+            JsonErr("add key failed!\n");
+            return NULL;
+        }
+        if (json->type_member == JSON_ARRAY || json->type_member == JSON_OBJECT) {
+            json_list_for_each_entry(item, &json->value.head, list) {
+                if ((node = pjson_deepcopy(item, mem)) == NULL) {
+                    JsonErr("copy failed!\n");
+                    return NULL;
+                }
+                json_list_add_tail(&node->list, &new_json->value.head);
+            }
+        }
+    }
+
+    return new_json;
+}
+
+int pjson_copy_item_to_array(json_object *array, json_object *item, json_mem_t *mem)
+{
+    json_object *node = NULL;
+
+    if (array->type_member == JSON_ARRAY) {
+        if ((node = pjson_deepcopy(item, mem)) == NULL) {
+            JsonErr("copy failed!\n");
+            return -1;
+        }
+        json_list_add_tail(&node->list, &array->value.head);
+        return 0;
+    }
+
+    return -1;
+}
+
+int pjson_copy_item_to_object(json_object *object, json_object *item, json_mem_t *mem)
+{
+    json_object *node = NULL;
+
+    if (object->type_member == JSON_OBJECT) {
+        if ((node = pjson_deepcopy(item, mem)) == NULL) {
+            JsonErr("copy failed!\n");
+            return -1;
+        }
+        json_list_add_tail(&node->list, &object->value.head);
+        return 0;
+    }
+
+    return -1;
+}
+
+json_object* pjson_add_new_item_to_array(json_object *array, json_type_t type, void *value, json_mem_t *mem)
+{
+    json_object *item = NULL;
+
+    if (array->type_member == JSON_ARRAY) {
+        switch (type) {
+        case JSON_NULL:
+        case JSON_BOOL:
+        case JSON_INT:
+        case JSON_HEX:
+#if JSON_LONG_LONG_SUPPORT
+        case JSON_LINT:
+        case JSON_LHEX:
+#endif
+        case JSON_DOUBLE:
+        case JSON_STRING:
+        case JSON_ARRAY:
+        case JSON_OBJECT:
+            if ((item = pjson_create_item(type, value, mem)) == NULL) {
+                JsonErr("create item failed!\n");
+                return NULL;
+            }
+            json_list_add_tail(&item->list, &array->value.head);
+            return item;
+        default:
+            JsonErr("not support json type.\n");
+            return NULL;
+        }
+    }
+
+    return NULL;
+}
+
+json_object* pjson_add_new_item_to_object(json_object *object, json_type_t type, json_string_t *jkey, void *value, json_mem_t *mem)
 {
     json_object *item = NULL;
 
@@ -942,23 +1239,25 @@ int pjson_add_new_item_to_object(json_object *object, json_type_t type, json_str
 #endif
         case JSON_DOUBLE:
         case JSON_STRING:
+        case JSON_ARRAY:
+        case JSON_OBJECT:
             if ((item = pjson_create_item(type, value, mem)) == NULL) {
                 JsonErr("create item failed!\n");
-                return -1;
+                return NULL;
             }
             if (pjson_set_key(item, jkey, mem) < 0) {
                 JsonErr("add key failed!\n");
-                return -1;
+                return NULL;
             }
             json_list_add_tail(&item->list, &object->value.head);
-            return 0;
+            return item;
         default:
             JsonErr("not support json type.\n");
-            return -1;
+            return NULL;
         }
     }
 
-    return -1;
+    return NULL;
 }
 
 /**************** json print apis ****************/
@@ -1154,7 +1453,7 @@ static int _print_str_ptr_realloc(json_print_t *print_ptr, size_t slen)
     size_t len = used + slen + 1;
 
     while (print_ptr->item_total < print_ptr->item_count)
-        print_ptr->item_total += JSON_ITEM_NUM_PLUS_DEF;
+        print_ptr->item_total += JSON_PRINT_NUM_PLUS_DEF;
     if (print_ptr->item_total - print_ptr->item_count > print_ptr->item_count) {
         print_ptr->size += print_ptr->size;
     } else {
@@ -1296,7 +1595,7 @@ static int _json_print(json_print_t *print_ptr, json_object *json)
     goto next3;
 next1:
     if (unlikely(item_depth >= item_total - 1)) {
-        item_total += 16;
+        item_total += JSON_ITEM_NUM_PLUS_DEF;
         if (unlikely((item_array = json_realloc(item_array, sizeof(json_object *) * item_total)) == NULL)) {
             JsonErr("malloc failed!\n");
             goto err;
@@ -1681,7 +1980,7 @@ int json_sax_print_value(json_sax_print_hd handle, json_type_t type, json_string
         switch ((*(json_sax_cmd_t*)value)) {
         case JSON_SAX_START:
             if (print_handle->count == print_handle->total) {
-                print_handle->total += JSON_ITEM_NUM_PLUS_DEF;
+                print_handle->total += JSON_PRINT_NUM_PLUS_DEF;
                 if (unlikely((print_handle->array = json_realloc(print_handle->array,
                             print_handle->total * sizeof(json_sax_print_depth_t))) == NULL)) {
                     JsonErr("malloc failed!\n");
@@ -1724,7 +2023,7 @@ int json_sax_print_value(json_sax_print_hd handle, json_type_t type, json_string
         switch ((*(json_sax_cmd_t*)value)) {
         case JSON_SAX_START:
             if (unlikely(print_handle->count == print_handle->total)) {
-                print_handle->total += JSON_ITEM_NUM_PLUS_DEF;
+                print_handle->total += JSON_PRINT_NUM_PLUS_DEF;
                 if (unlikely((print_handle->array = json_realloc(print_handle->array,
                             print_handle->total * sizeof(json_sax_print_depth_t))) == NULL)) {
                     JsonErr("malloc failed!\n");
@@ -1786,13 +2085,13 @@ json_sax_print_hd json_sax_print_start(json_print_choice_t *choice)
         return NULL;
     }
     if (choice->item_total == 0)
-        choice->item_total = JSON_ITEM_NUM_PLUS_DEF;
+        choice->item_total = JSON_PRINT_NUM_PLUS_DEF;
     if (_print_val_init(&print_handle->print_val, choice) < 0) {
         json_free(print_handle);
         return NULL;
     }
 
-    print_handle->total = JSON_ITEM_NUM_PLUS_DEF;
+    print_handle->total = JSON_PRINT_NUM_PLUS_DEF;
     if ((print_handle->array = json_malloc(print_handle->total * sizeof(json_sax_print_depth_t))) == NULL) {
         _print_val_release(&print_handle->print_val, true, NULL);
         json_free(print_handle);
@@ -2344,7 +2643,7 @@ static int _json_parse_value(json_parse_t *parse_ptr, json_object **root)
 
 next1:
     if (unlikely(item_depth >= item_total - 1)) {
-        item_total += 16;
+        item_total += JSON_ITEM_NUM_PLUS_DEF;
         if (unlikely((item_array = json_realloc(item_array, sizeof(json_object *) * item_total)) == NULL)) {
             JsonErr("malloc failed!\n");
             goto err;
@@ -2747,7 +3046,7 @@ static int _json_parse_value_rapid(json_parse_t *parse_ptr, json_object **root)
 
 next1:
     if (unlikely(item_depth >= item_total - 1)) {
-        item_total += 16;
+        item_total += JSON_ITEM_NUM_PLUS_DEF;
         if (unlikely((item_array = json_realloc(item_array, sizeof(json_object *) * item_total)) == NULL)) {
             JsonErr("malloc failed!\n");
             goto err;
@@ -3002,7 +3301,7 @@ json_object *json_parse_common(json_parse_choice_t *choice)
 
     if (choice->mem) {
         pjson_memory_init(choice->mem);
-        mem_size = total_size / 8;
+        mem_size = total_size / JSON_PARSE_NUM_DIV_DEF;
         if (mem_size < choice->mem_size)
             mem_size = choice->mem_size;
         choice->mem->obj_mgr.mem_size = mem_size;
@@ -3119,7 +3418,7 @@ static int _json_sax_parse_value(json_parse_t *parse_ptr)
     int i = 0;
 
     memset(value, 0, sizeof(*value));
-    parse_ptr->parser.total += 16;
+    parse_ptr->parser.total += JSON_ITEM_NUM_PLUS_DEF;
     if (unlikely((parse_ptr->parser.array = json_malloc(sizeof(json_string_t) * parse_ptr->parser.total)) == NULL)) {
         JsonErr("malloc failed!\n");
         return -1;
@@ -3129,7 +3428,7 @@ static int _json_sax_parse_value(json_parse_t *parse_ptr)
 
 next1:
     if (unlikely(parse_ptr->parser.index >= parse_ptr->parser.total - 1)) {
-        parse_ptr->parser.total += 16;
+        parse_ptr->parser.total += JSON_ITEM_NUM_PLUS_DEF;
         if (unlikely((tarray = json_malloc(sizeof(json_string_t) * parse_ptr->parser.total)) == NULL)) {
             JsonErr("malloc failed!\n");
             goto err;
