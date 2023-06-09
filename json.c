@@ -543,14 +543,14 @@ json_object* json_search_object_item(json_items_t *items, json_string_t *jkey, u
                     if (hash != items->items[i].hash)
                         break;
                     json = items->items[i].json;
-                    if (json->key_member && strcmp(jkey->str, json->key_member) == 0)
+                    if (jkey->len == json->jkey.len && memcmp(jkey->str, json->key_member, jkey->len) == 0)
                         return json;
                 }
                 for (i = middle - 1; i >= 0; --i) {
                     if (hash != items->items[i].hash)
                         break;
                     json = items->items[i].json;
-                    if (json->key_member && strcmp(jkey->str, json->key_member) == 0)
+                    if (jkey->len == json->jkey.len && memcmp(jkey->str, json->key_member, jkey->len) == 0)
                         return json;
                 }
             } else {
@@ -1345,12 +1345,11 @@ static int fname(ftype n, char *c)          \
     s[i] = '\0';                            \
                                             \
     h = i >> 1;                             \
-    while (j < h)                           \
-    {                                       \
-        t = i - j - 1;                      \
-        k = s[t];                           \
-        s[t] = s[j];                        \
-        s[j++] = k;                         \
+    while (j < h) {                         \
+        k = i - j - 1;                      \
+        t = s[k];                           \
+        s[k] = s[j];                        \
+        s[j++] = t;                         \
     }                                       \
                                             \
     return i + a;                           \
@@ -1484,17 +1483,11 @@ static int _print_str_ptr_realloc(json_print_t *print_ptr, size_t slen)
     print_ptr->cur += fname(num, print_ptr->cur);   \
 } while(0)
 
-static inline int _print_ptr_strncat(json_print_t *print_ptr, const char *str, size_t slen)
-{
-    _PRINT_PTR_REALLOC((slen + 1));
-    memcpy(print_ptr->cur, str, slen);
-    print_ptr->cur += slen;
-
-    return 0;
-err:
-    return -1;
-}
-#define _PRINT_PTR_STRNCAT(ptr, str, slen) do { if (unlikely(_print_ptr_strncat(ptr, str, slen) < 0)) goto err; } while(0)
+#define _PRINT_PTR_STRNCAT(str, slen)      do {     \
+    _PRINT_PTR_REALLOC((slen + 1));                 \
+    memcpy(print_ptr->cur, str, slen);              \
+    print_ptr->cur += slen;                         \
+} while(0)
 
 static inline int _print_addi_format(json_print_t *print_ptr, size_t depth)
 {
@@ -1620,11 +1613,11 @@ next2a:
             JsonErr("key is null!\n");
             goto err;
 #else
-            _PRINT_PTR_STRNCAT(print_ptr, "\"\":\t", 4);
+            _PRINT_PTR_STRNCAT("\"\":\t", 4);
 #endif
         } else {
             _JSON_PRINT_STRING(print_ptr, &json->jkey);
-            _PRINT_PTR_STRNCAT(print_ptr, ":\t", 2);
+            _PRINT_PTR_STRNCAT(":\t", 2);
         }
     } else {
         if (unlikely(!json->jkey.len)) {
@@ -1632,33 +1625,33 @@ next2a:
             JsonErr("key is null!\n");
             goto err;
 #else
-            _PRINT_PTR_STRNCAT(print_ptr, "\"\":", 3);
+            _PRINT_PTR_STRNCAT("\"\":", 3);
 #endif
         } else {
             _JSON_PRINT_STRING(print_ptr, &json->jkey);
-            _PRINT_PTR_STRNCAT(print_ptr, ":", 1);
+            _PRINT_PTR_STRNCAT(":", 1);
         }
     }
     goto next3;
 
 next2b:
     if (print_ptr->format_flag) {
-        if (json->type_member == JSON_OBJECT || json->type_member == JSON_ARRAY)
+        if (json->type_member == JSON_ARRAY)
             _PRINT_ADDI_FORMAT(print_ptr, item_depth + 1);
         else
-            _PRINT_PTR_STRNCAT(print_ptr, " ", 1);
+            _PRINT_PTR_STRNCAT(" ", 1);
     }
 
 next3:
     switch (json->type_member) {
     case JSON_NULL:
-        _PRINT_PTR_STRNCAT(print_ptr, "null", 4);
+        _PRINT_PTR_STRNCAT("null", 4);
         break;
     case JSON_BOOL:
         if (json->value.vnum.vbool) {
-            _PRINT_PTR_STRNCAT(print_ptr, "true", 4);
+            _PRINT_PTR_STRNCAT("true", 4);
         } else {
-            _PRINT_PTR_STRNCAT(print_ptr, "false", 5);
+            _PRINT_PTR_STRNCAT("false", 5);
         }
         break;
     case JSON_INT:
@@ -1680,24 +1673,24 @@ next3:
         break;
     case JSON_STRING:
         if (unlikely(!json->value.vstr.len)) {
-            _PRINT_PTR_STRNCAT(print_ptr, "\"\"", 2);
+            _PRINT_PTR_STRNCAT("\"\"", 2);
         } else {
             _JSON_PRINT_STRING(print_ptr, &json->value.vstr);
         }
         break;
     case JSON_OBJECT:
         if (unlikely(json->value.head.prev == (struct json_list *)&json->value.head)) {
-            _PRINT_PTR_STRNCAT(print_ptr, "{}", 2);
+            _PRINT_PTR_STRNCAT("{}", 2);
             break;
         }
-        _PRINT_PTR_STRNCAT(print_ptr, "{", 1);
+        _PRINT_PTR_STRNCAT("{", 1);
         goto next1;
     case JSON_ARRAY:
         if (unlikely(json->value.head.prev == (struct json_list *)&json->value.head)) {
-            _PRINT_PTR_STRNCAT(print_ptr, "[]", 2);
+            _PRINT_PTR_STRNCAT("[]", 2);
             break;
         }
-        _PRINT_PTR_STRNCAT(print_ptr, "[", 1);
+        _PRINT_PTR_STRNCAT("[", 1);
         goto next1;
     default:
         break;
@@ -1708,7 +1701,7 @@ next4:
     if (likely(item_depth >= 0)) {
         tmp = (json_object*)(json->list.next);
         if (likely(&tmp->list != (struct json_list *)&parent->value.head)) {
-            _PRINT_PTR_STRNCAT(print_ptr, ",", 1);
+            _PRINT_PTR_STRNCAT(",", 1);
             json = tmp;
             if (parent->type_member == JSON_OBJECT)
                 goto next2a;
@@ -1720,21 +1713,21 @@ next4:
                     if (item_depth > 0) {
                         _PRINT_ADDI_FORMAT(print_ptr, item_depth);
                     } else {
-                        _PRINT_PTR_STRNCAT(print_ptr, "\n", 1);
+                        _PRINT_PTR_STRNCAT("\n", 1);
                     }
                 }
-                _PRINT_PTR_STRNCAT(print_ptr, "}", 1);
+                _PRINT_PTR_STRNCAT("}", 1);
             } else {
                 if (print_ptr->format_flag) {
                     if (json->type_member == JSON_OBJECT || json->type_member == JSON_ARRAY) {
                         if (likely(item_depth > 0)) {
                             _PRINT_ADDI_FORMAT(print_ptr, item_depth);
                         } else {
-                            _PRINT_PTR_STRNCAT(print_ptr, "\n", 1);
+                            _PRINT_PTR_STRNCAT("\n", 1);
                         }
                     }
                 }
-                _PRINT_PTR_STRNCAT(print_ptr, "]", 1);
+                _PRINT_PTR_STRNCAT("]", 1);
             }
 
             ++print_ptr->item_count;
@@ -1883,7 +1876,7 @@ int json_sax_print_value(json_sax_print_hd handle, json_type_t type, json_string
         && !((type == JSON_ARRAY || type == JSON_OBJECT) && (*(json_sax_cmd_t*)value) == JSON_SAX_FINISH))) {
         // add ","
         if (print_handle->array[cur_pos].num > 0)
-            _PRINT_PTR_STRNCAT(print_ptr, ",", 1);
+            _PRINT_PTR_STRNCAT(",", 1);
 
         // add key
         if (print_handle->array[cur_pos].type == JSON_OBJECT) {
@@ -1894,13 +1887,13 @@ int json_sax_print_value(json_sax_print_hd handle, json_type_t type, json_string
                     goto err;
 #else
                     _PRINT_ADDI_FORMAT(print_ptr, print_handle->count);
-                    _PRINT_PTR_STRNCAT(print_ptr, "\"\":\t", 4);
+                    _PRINT_PTR_STRNCAT("\"\":\t", 4);
 #endif
                 } else {
                     _PRINT_ADDI_FORMAT(print_ptr, print_handle->count);
                     json_string_info_update(jkey);
                     _JSON_PRINT_STRING(print_ptr, jkey);
-                    _PRINT_PTR_STRNCAT(print_ptr, ":\t", 2);
+                    _PRINT_PTR_STRNCAT(":\t", 2);
                 }
             } else {
                 if (unlikely(!jkey || !jkey->str || !jkey->str[0])) {
@@ -1908,21 +1901,25 @@ int json_sax_print_value(json_sax_print_hd handle, json_type_t type, json_string
                     JsonErr("key is null!\n");
                     goto err;
 #else
-                    _PRINT_PTR_STRNCAT(print_ptr, "\"\":", 3);
+                    _PRINT_PTR_STRNCAT("\"\":", 3);
 #endif
                 } else {
                     json_string_info_update(jkey);
                     _JSON_PRINT_STRING(print_ptr, jkey);
-                    _PRINT_PTR_STRNCAT(print_ptr, ":", 1);
+                    _PRINT_PTR_STRNCAT(":", 1);
                 }
             }
         } else {
             if (print_ptr->format_flag) {
-                if (type == JSON_OBJECT || type == JSON_ARRAY) {
+                if (type == JSON_ARRAY) {
                     _PRINT_ADDI_FORMAT(print_ptr, print_handle->count);
                 } else {
-                    if (print_handle->array[cur_pos].num > 0)
-                        _PRINT_PTR_STRNCAT(print_ptr, " ", 1);
+                    if (print_handle->array[cur_pos].num > 0) {
+                        _PRINT_PTR_STRNCAT(" ", 1);
+                    } else {
+                        if (type == JSON_OBJECT)
+                            _PRINT_ADDI_FORMAT(print_ptr, print_handle->count);
+                    }
                 }
             }
         }
@@ -1931,13 +1928,13 @@ int json_sax_print_value(json_sax_print_hd handle, json_type_t type, json_string
     // add value
     switch (type) {
     case JSON_NULL:
-        _PRINT_PTR_STRNCAT(print_ptr, "null", 4);
+        _PRINT_PTR_STRNCAT("null", 4);
         break;
     case JSON_BOOL:
         if ((*(bool*)value)) {
-            _PRINT_PTR_STRNCAT(print_ptr, "true", 4);
+            _PRINT_PTR_STRNCAT("true", 4);
         } else {
-            _PRINT_PTR_STRNCAT(print_ptr, "false", 5);
+            _PRINT_PTR_STRNCAT("false", 5);
         }
         break;
 
@@ -1961,7 +1958,7 @@ int json_sax_print_value(json_sax_print_hd handle, json_type_t type, json_string
     case JSON_STRING:
         jstr = (json_string_t*)value;
         if (unlikely(!jstr || !jstr->str || !jstr->str[0])) {
-            _PRINT_PTR_STRNCAT(print_ptr, "\"\"", 2);
+            _PRINT_PTR_STRNCAT("\"\"", 2);
         } else {
             json_string_info_update(jstr);
             _JSON_PRINT_STRING(print_ptr, jstr);
@@ -1981,9 +1978,9 @@ int json_sax_print_value(json_sax_print_hd handle, json_type_t type, json_string
                 }
             }
             if (type == JSON_OBJECT) {
-                _PRINT_PTR_STRNCAT(print_ptr, "{", 1);
+                _PRINT_PTR_STRNCAT("{", 1);
             } else {
-                _PRINT_PTR_STRNCAT(print_ptr, "[", 1);
+                _PRINT_PTR_STRNCAT("[", 1);
             }
             if (print_handle->count > 0)
                 ++print_handle->array[cur_pos].num;
@@ -2008,13 +2005,13 @@ int json_sax_print_value(json_sax_print_hd handle, json_type_t type, json_string
                         }
                     }
                 } else {
-                    _PRINT_PTR_STRNCAT(print_ptr, "\n", 1);
+                    _PRINT_PTR_STRNCAT("\n", 1);
                 }
             }
             if (type == JSON_OBJECT) {
-                _PRINT_PTR_STRNCAT(print_ptr, "}", 1);
+                _PRINT_PTR_STRNCAT("}", 1);
             } else {
-                _PRINT_PTR_STRNCAT(print_ptr, "]", 1);
+                _PRINT_PTR_STRNCAT("]", 1);
             }
             --print_handle->count;
             print_handle->last_type = type;
@@ -2716,7 +2713,7 @@ next3:
         break;
 
     case 'f':
-        if (strncmp(str, "false", 5) == 0) {
+        if (likely(parse_ptr->size - parse_ptr->offset >= 5 && memcmp("false", str, 5) == 0)) {
             item->type_member = JSON_BOOL;
             item->value.vnum.vbool = false;
             _UPDATE_PARSE_OFFSET(5);
@@ -2726,7 +2723,7 @@ next3:
         }
         break;
     case 't':
-        if (strncmp(str, "true", 4) == 0) {
+        if (likely(parse_ptr->size - parse_ptr->offset >= 4 && memcmp("true", str, 4) == 0)) {
             item->type_member = JSON_BOOL;
             item->value.vnum.vbool = true;
             _UPDATE_PARSE_OFFSET(4);
@@ -2737,7 +2734,7 @@ next3:
         break;
 
     case 'n':
-        if (strncmp(str, "null", 4) == 0) {
+        if (likely(parse_ptr->size - parse_ptr->offset >= 4 && memcmp("null", str, 4) == 0)) {
             item->type_member = JSON_NULL;
             _UPDATE_PARSE_OFFSET(4);
         } else {
@@ -3119,7 +3116,7 @@ next3:
         break;
 
     case 'f':
-        if (strncmp(str, "false", 5) == 0) {
+        if (likely(parse_ptr->size - parse_ptr->offset >= 5 && memcmp("false", str, 5) == 0)) {
             item->type_member = JSON_BOOL;
             item->value.vnum.vbool = false;
             _UPDATE_PARSE_OFFSET(5);
@@ -3129,7 +3126,7 @@ next3:
         }
         break;
     case 't':
-        if (strncmp(str, "true", 4) == 0) {
+        if (likely(parse_ptr->size - parse_ptr->offset >= 4 && memcmp("true", str, 4) == 0)) {
             item->type_member = JSON_BOOL;
             item->value.vnum.vbool = true;
             _UPDATE_PARSE_OFFSET(4);
@@ -3140,7 +3137,7 @@ next3:
         break;
 
     case 'n':
-        if (strncmp(str, "null", 4) == 0) {
+        if (likely(parse_ptr->size - parse_ptr->offset >= 4 && memcmp("null", str, 4) == 0)) {
             item->type_member = JSON_NULL;
             _UPDATE_PARSE_OFFSET(4);
         } else {
@@ -3509,7 +3506,7 @@ next3:
         break;
 
     case 'f':
-        if (strncmp(str, "false", 5) == 0) {
+        if (likely(parse_ptr->size - parse_ptr->offset >= 5 && memcmp("false", str, 5) == 0)) {
             jkey->type = JSON_BOOL;
             value->vnum.vbool = false;
             _UPDATE_PARSE_OFFSET(5);
@@ -3519,7 +3516,7 @@ next3:
         }
         break;
     case 't':
-        if (strncmp(str, "true", 4) == 0) {
+        if (likely(parse_ptr->size - parse_ptr->offset >= 4 && memcmp("true", str, 4) == 0)) {
             jkey->type = JSON_BOOL;
             value->vnum.vbool = true;
             _UPDATE_PARSE_OFFSET(4);
@@ -3530,7 +3527,7 @@ next3:
         break;
 
     case 'n':
-        if (strncmp(str, "null", 4) == 0) {
+        if (likely(parse_ptr->size - parse_ptr->offset >= 4 && memcmp("null", str, 4) == 0)) {
             jkey->type = JSON_NULL;
             _UPDATE_PARSE_OFFSET(4);
         } else {
