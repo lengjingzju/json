@@ -4,6 +4,7 @@
 
 LJSON is a C implemented JSON library that is much faster than cJSON and substantially faster than RapidJSON, it is currently the fastest general-purpose JSON library.
 LJSON supports JSON parsing, printing and editing, provides DOM and SAX APIs, and I/O supports string and file, it fully supports the test cases of nativejson-benchmark.
+LJSON uses the grisu2 algorithm to print double number: the default implementation of grisu2 is **5.7** times faster than sprintf, the pre-optimal implementation is **9.1** times faster than sprintf, and the implementation of LJSON is **11.4** times faster than sprintf.
 
 ## Features
 

@@ -7,8 +7,8 @@
 PACKAGE_NAME    = ljson
 
 major_ver       = 1
-minor_ver       = 2
-patch_ver       = 3
+minor_ver       = 3
+patch_ver       = 0
 staticlib       = lib$(PACKAGE_NAME).a
 sharedlib       = lib$(PACKAGE_NAME).so $(major_ver) $(minor_ver) $(patch_ver)
 testedbin       = ljson
@@ -20,6 +20,7 @@ all:
 	@echo "Build $(PACKAGE_NAME) Done!"
 
 INC_MAKES      := app
+object_byte_size=2176
 include inc.makes
 $(eval $(call add-liba-build,$(staticlib),json.c))
 $(eval $(call add-libso-build,$(sharedlib),json.c))

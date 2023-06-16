@@ -10,7 +10,7 @@
 #include <stdbool.h>
 #include <stdlib.h>
 
-#define JSON_VERSION                    0x010203
+#define JSON_VERSION                    0x010300
 #define JSON_SAX_APIS_SUPPORT           1
 #define JSON_LONG_LONG_SUPPORT          1
 
@@ -477,7 +477,7 @@ json_object *json_get_object_item(json_object *json, const char *key, json_objec
  * @return: NULL on failure, a pointer on success
  * @description: LJSON uses dichotomy to search the specific json object.
  */
-json_object* json_search_object_item(json_items_t *items, json_string_t *jkey, unsigned int hash);
+json_object *json_search_object_item(json_items_t *items, json_string_t *jkey, unsigned int hash);
 
 /*
  * json_free_items - Free alloced memory in json_items_t
@@ -605,56 +605,56 @@ int json_copy_item_to_object(json_object *object, json_object *item);
  * @return: NULL on failure, a pointer on success
  * @description: the pointer points to the created json object
  */
-json_object* json_add_new_item_to_array(json_object *array, json_type_t type, void* value);
+json_object *json_add_new_item_to_array(json_object *array, json_type_t type, void* value);
 
-static inline json_object* json_add_null_to_array(json_object *array)
+static inline json_object *json_add_null_to_array(json_object *array)
 {
     return json_add_new_item_to_array(array, JSON_NULL, NULL);
 }
 
-static inline json_object* json_add_bool_to_array(json_object *array, bool value)
+static inline json_object *json_add_bool_to_array(json_object *array, bool value)
 {
     return json_add_new_item_to_array(array, JSON_BOOL, &value);
 }
 
-static inline json_object* json_add_int_to_array(json_object *array, int value)
+static inline json_object *json_add_int_to_array(json_object *array, int value)
 {
     return json_add_new_item_to_array(array, JSON_INT, &value);
 }
 
-static inline json_object* json_add_hex_to_array(json_object *array, unsigned int value)
+static inline json_object *json_add_hex_to_array(json_object *array, unsigned int value)
 {
     return json_add_new_item_to_array(array, JSON_HEX, &value);
 }
 
 #if JSON_LONG_LONG_SUPPORT
-static inline json_object* json_add_lint_to_array(json_object *array, long long int value)
+static inline json_object *json_add_lint_to_array(json_object *array, long long int value)
 {
     return json_add_new_item_to_array(array, JSON_LINT, &value);
 }
 
-static inline json_object* json_add_lhex_to_array(json_object *array, unsigned long long int value)
+static inline json_object *json_add_lhex_to_array(json_object *array, unsigned long long int value)
 {
     return json_add_new_item_to_array(array, JSON_LHEX, &value);
 }
 #endif
 
-static inline json_object* json_add_double_to_array(json_object *array, double value)
+static inline json_object *json_add_double_to_array(json_object *array, double value)
 {
     return json_add_new_item_to_array(array, JSON_DOUBLE, &value);
 }
 
-static inline json_object* json_add_string_to_array(json_object *array, json_string_t *value)
+static inline json_object *json_add_string_to_array(json_object *array, json_string_t *value)
 {
     return json_add_new_item_to_array(array, JSON_STRING, &value);
 }
 
-static inline json_object* json_add_array_to_array(json_object *array)
+static inline json_object *json_add_array_to_array(json_object *array)
 {
     return json_add_new_item_to_array(array, JSON_ARRAY, NULL);
 }
 
-static inline json_object* json_add_object_to_array(json_object *array)
+static inline json_object *json_add_object_to_array(json_object *array)
 {
     return json_add_new_item_to_array(array, JSON_OBJECT, NULL);
 }
@@ -668,56 +668,56 @@ static inline json_object* json_add_object_to_array(json_object *array)
  * @return: NULL on failure, a pointer on success
  * @description: the pointer points to the created json object
  */
-json_object* json_add_new_item_to_object(json_object *object, json_type_t type, json_string_t *jkey, void* value);
+json_object *json_add_new_item_to_object(json_object *object, json_type_t type, json_string_t *jkey, void* value);
 
-static inline json_object* json_add_null_to_object(json_object *object, json_string_t *jkey)
+static inline json_object *json_add_null_to_object(json_object *object, json_string_t *jkey)
 {
     return json_add_new_item_to_object(object, JSON_NULL, jkey, NULL);
 }
 
-static inline json_object* json_add_bool_to_object(json_object *object, json_string_t *jkey, bool value)
+static inline json_object *json_add_bool_to_object(json_object *object, json_string_t *jkey, bool value)
 {
     return json_add_new_item_to_object(object, JSON_BOOL, jkey, &value);
 }
 
-static inline json_object* json_add_int_to_object(json_object *object, json_string_t *jkey, int value)
+static inline json_object *json_add_int_to_object(json_object *object, json_string_t *jkey, int value)
 {
     return json_add_new_item_to_object(object, JSON_INT, jkey, &value);
 }
 
-static inline json_object* json_add_hex_to_object(json_object *object, json_string_t *jkey, unsigned int value)
+static inline json_object *json_add_hex_to_object(json_object *object, json_string_t *jkey, unsigned int value)
 {
     return json_add_new_item_to_object(object, JSON_HEX, jkey, &value);
 }
 
 #if JSON_LONG_LONG_SUPPORT
-static inline json_object* json_add_lint_to_object(json_object *object, json_string_t *jkey, long long int value)
+static inline json_object *json_add_lint_to_object(json_object *object, json_string_t *jkey, long long int value)
 {
     return json_add_new_item_to_object(object, JSON_LINT, jkey, &value);
 }
 
-static inline json_object* json_add_lhex_to_object(json_object *object, json_string_t *jkey, unsigned long long int value)
+static inline json_object *json_add_lhex_to_object(json_object *object, json_string_t *jkey, unsigned long long int value)
 {
     return json_add_new_item_to_object(object, JSON_LHEX, jkey, &value);
 }
 #endif
 
-static inline json_object* json_add_double_to_object(json_object *object, json_string_t *jkey, double value)
+static inline json_object *json_add_double_to_object(json_object *object, json_string_t *jkey, double value)
 {
     return json_add_new_item_to_object(object, JSON_DOUBLE, jkey, &value);
 }
 
-static inline json_object* json_add_string_to_object(json_object *object, json_string_t *jkey, json_string_t *value)
+static inline json_object *json_add_string_to_object(json_object *object, json_string_t *jkey, json_string_t *value)
 {
     return json_add_new_item_to_object(object, JSON_STRING, jkey, &value);
 }
 
-static inline json_object* json_add_array_to_object(json_object *object, json_string_t *jkey)
+static inline json_object *json_add_array_to_object(json_object *object, json_string_t *jkey)
 {
     return json_add_new_item_to_object(object, JSON_ARRAY, jkey, NULL);
 }
 
-static inline json_object* json_add_object_to_object(json_object *object, json_string_t *jkey)
+static inline json_object *json_add_object_to_object(json_object *object, json_string_t *jkey)
 {
     return json_add_new_item_to_object(object, JSON_OBJECT, jkey, NULL);
 }
@@ -1009,55 +1009,55 @@ int pjson_copy_item_to_object(json_object *object, json_object *item, json_mem_t
  * @return: NULL on failure, a pointer on success
  * @description: the pointer points to the created json object
  */
-json_object* pjson_add_new_item_to_array(json_object *array, json_type_t type, void *value, json_mem_t *mem);
+json_object *pjson_add_new_item_to_array(json_object *array, json_type_t type, void *value, json_mem_t *mem);
 
-static inline json_object* pjson_add_null_to_array(json_object *array, json_mem_t *mem)
+static inline json_object *pjson_add_null_to_array(json_object *array, json_mem_t *mem)
 {
     return pjson_add_new_item_to_array(array, JSON_NULL, NULL, mem); }
 
-static inline json_object* pjson_add_bool_to_array(json_object *array, bool value, json_mem_t *mem)
+static inline json_object *pjson_add_bool_to_array(json_object *array, bool value, json_mem_t *mem)
 {
     return pjson_add_new_item_to_array(array, JSON_BOOL, &value, mem);
 }
 
-static inline json_object* pjson_add_int_to_array(json_object *array, int value, json_mem_t *mem)
+static inline json_object *pjson_add_int_to_array(json_object *array, int value, json_mem_t *mem)
 {
     return pjson_add_new_item_to_array(array, JSON_INT, &value, mem);
 }
 
-static inline json_object* pjson_add_hex_to_array(json_object *array, unsigned int value, json_mem_t *mem)
+static inline json_object *pjson_add_hex_to_array(json_object *array, unsigned int value, json_mem_t *mem)
 {
     return pjson_add_new_item_to_array(array, JSON_HEX, &value, mem);
 }
 
 #if JSON_LONG_LONG_SUPPORT
-static inline json_object* pjson_add_lint_to_array(json_object *array, long long int value, json_mem_t *mem)
+static inline json_object *pjson_add_lint_to_array(json_object *array, long long int value, json_mem_t *mem)
 {
     return pjson_add_new_item_to_array(array, JSON_LINT, &value, mem);
 }
 
-static inline json_object* pjson_add_lhex_to_array(json_object *array, unsigned long long int value, json_mem_t *mem)
+static inline json_object *pjson_add_lhex_to_array(json_object *array, unsigned long long int value, json_mem_t *mem)
 {
     return pjson_add_new_item_to_array(array, JSON_LHEX, &value, mem);
 }
 #endif
 
-static inline json_object* pjson_add_double_to_array(json_object *array, double value, json_mem_t *mem)
+static inline json_object *pjson_add_double_to_array(json_object *array, double value, json_mem_t *mem)
 {
     return pjson_add_new_item_to_array(array, JSON_DOUBLE, &value, mem);
 }
 
-static inline json_object* pjson_add_string_to_array(json_object *array, json_string_t *value, json_mem_t *mem)
+static inline json_object *pjson_add_string_to_array(json_object *array, json_string_t *value, json_mem_t *mem)
 {
     return pjson_add_new_item_to_array(array, JSON_STRING, value, mem);
 }
 
-static inline json_object* pjson_add_array_to_array(json_object *array, json_mem_t *mem)
+static inline json_object *pjson_add_array_to_array(json_object *array, json_mem_t *mem)
 {
     return pjson_add_new_item_to_array(array, JSON_ARRAY, NULL, mem);
 }
 
-static inline json_object* pjson_add_object_to_array(json_object *array, json_mem_t *mem)
+static inline json_object *pjson_add_object_to_array(json_object *array, json_mem_t *mem)
 {
     return pjson_add_new_item_to_array(array, JSON_OBJECT, NULL, mem);
 }
@@ -1072,55 +1072,55 @@ static inline json_object* pjson_add_object_to_array(json_object *array, json_me
  * @return: NULL on failure, a pointer on success
  * @description: the pointer points to the created json object
  */
-json_object* pjson_add_new_item_to_object(json_object *object, json_type_t type, json_string_t *jkey, void *value, json_mem_t *mem);
+json_object *pjson_add_new_item_to_object(json_object *object, json_type_t type, json_string_t *jkey, void *value, json_mem_t *mem);
 
-static inline json_object* pjson_add_null_to_object(json_object *object, json_string_t *jkey, json_mem_t *mem)
+static inline json_object *pjson_add_null_to_object(json_object *object, json_string_t *jkey, json_mem_t *mem)
 {
     return pjson_add_new_item_to_object(object, JSON_NULL, jkey, NULL, mem); }
 
-static inline json_object* pjson_add_bool_to_object(json_object *object, json_string_t *jkey, bool value, json_mem_t *mem)
+static inline json_object *pjson_add_bool_to_object(json_object *object, json_string_t *jkey, bool value, json_mem_t *mem)
 {
     return pjson_add_new_item_to_object(object, JSON_BOOL, jkey, &value, mem);
 }
 
-static inline json_object* pjson_add_int_to_object(json_object *object, json_string_t *jkey, int value, json_mem_t *mem)
+static inline json_object *pjson_add_int_to_object(json_object *object, json_string_t *jkey, int value, json_mem_t *mem)
 {
     return pjson_add_new_item_to_object(object, JSON_INT, jkey, &value, mem);
 }
 
-static inline json_object* pjson_add_hex_to_object(json_object *object, json_string_t *jkey, unsigned int value, json_mem_t *mem)
+static inline json_object *pjson_add_hex_to_object(json_object *object, json_string_t *jkey, unsigned int value, json_mem_t *mem)
 {
     return pjson_add_new_item_to_object(object, JSON_HEX, jkey, &value, mem);
 }
 
 #if JSON_LONG_LONG_SUPPORT
-static inline json_object* pjson_add_lint_to_object(json_object *object, json_string_t *jkey, long long int value, json_mem_t *mem)
+static inline json_object *pjson_add_lint_to_object(json_object *object, json_string_t *jkey, long long int value, json_mem_t *mem)
 {
     return pjson_add_new_item_to_object(object, JSON_LINT, jkey, &value, mem);
 }
 
-static inline json_object* pjson_add_lhex_to_object(json_object *object, json_string_t *jkey, unsigned long long int value, json_mem_t *mem)
+static inline json_object *pjson_add_lhex_to_object(json_object *object, json_string_t *jkey, unsigned long long int value, json_mem_t *mem)
 {
     return pjson_add_new_item_to_object(object, JSON_LHEX, jkey, &value, mem);
 }
 #endif
 
-static inline json_object* pjson_add_double_to_object(json_object *object, json_string_t *jkey, double value, json_mem_t *mem)
+static inline json_object *pjson_add_double_to_object(json_object *object, json_string_t *jkey, double value, json_mem_t *mem)
 {
     return pjson_add_new_item_to_object(object, JSON_DOUBLE, jkey, &value, mem);
 }
 
-static inline json_object* pjson_add_string_to_object(json_object *object, json_string_t *jkey, json_string_t *value, json_mem_t *mem)
+static inline json_object *pjson_add_string_to_object(json_object *object, json_string_t *jkey, json_string_t *value, json_mem_t *mem)
 {
     return pjson_add_new_item_to_object(object, JSON_STRING, jkey, value, mem);
 }
 
-static inline json_object* pjson_add_array_to_object(json_object *object, json_string_t *jkey, json_mem_t *mem)
+static inline json_object *pjson_add_array_to_object(json_object *object, json_string_t *jkey, json_mem_t *mem)
 {
     return pjson_add_new_item_to_object(object, JSON_ARRAY, jkey, NULL, mem);
 }
 
-static inline json_object* pjson_add_object_to_object(json_object *object, json_string_t *jkey, json_mem_t *mem)
+static inline json_object *pjson_add_object_to_object(json_object *object, json_string_t *jkey, json_mem_t *mem)
 {
     return pjson_add_new_item_to_object(object, JSON_OBJECT, jkey, NULL, mem);
 }
