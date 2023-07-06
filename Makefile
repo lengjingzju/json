@@ -20,7 +20,7 @@ all:
 	@echo "Build $(PACKAGE_NAME) Done!"
 
 INC_MAKES      := app
-object_byte_size=2176
+object_byte_size=2304
 include inc.makes
 $(eval $(call add-liba-build,$(staticlib),json.c))
 $(eval $(call add-libso-build,$(sharedlib),json.c))

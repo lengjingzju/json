@@ -4,7 +4,7 @@
 
 LJSON is a C implemented JSON library that is much faster than cJSON and substantially faster than RapidJSON, it is currently the fastest general-purpose JSON library.
 LJSON supports JSON parsing, printing and editing, provides DOM and SAX APIs, and I/O supports string and file, it fully supports the test cases of nativejson-benchmark.
-LJSON uses the grisu2 algorithm to print double number: the default implementation of grisu2 is **5.7** times faster than sprintf, the pre-optimal implementation is **9.1** times faster than sprintf, and the implementation of LJSON is **11.4** times faster than sprintf.
+By default, LJSON uses the personally developed ldouble algorithm to print double to string. Compared with the standard library, it may only be the 15th decimal place difference. It is currently the fastest double to string algorithm; users can also choose the personally optimized grisu2 algorithm or dragonbox algorithm.
 
 ## Features
 
@@ -35,6 +35,12 @@ make O=<output path> && make O=<output path> DESTDIR=<install path>
 make O=<output path> CROSS_COMPILE=<tool prefix> && make O=<output path> DESTDIR=<install path>
 ```
 
+* Select double to string algorithm `gcc -DJSON_DTOA_ALGORITHM=n`, n may be 0 / 1 / 2 / 3
+    * 0: Personal implementation of ldouble algorithm: faster than Google's default implementation of grisu2 **117%** , faster than Tencent optimized grisu2 implementation **30%**, faster than sprintf **13.3** times
+    * 1: C standard library sprintf
+    * 2: Personal optimized grisu2 algorithm: Google's grisu2 default implementation is **5.7** times faster than sprintf, Tencent optimized grisu2 implementation is **9.1** times faster than sprintf, LJSON optimized implementation is faster than sprintf **11.4** times
+    * 3: Personal optimized dragonbox algorithm: the speed performance is basically the same as the ldouble algorithm
+
 ### Run Method
 
 ```sh
@@ -58,12 +64,12 @@ make O=<output path> CROSS_COMPILE=<tool prefix> && make O=<output path> DESTDIR
 Note: 'O2' optimization level and default option compilation, the test files come from the [nativejson-benchmark](https://github.com/miloyip/nativejson-benchmark) project
 
 > Test Platform: Ambarella CV25M Board | CPU: ARM CortexA53 | OS: Linux-5.15<br>
-> Test Result: LJSON parses 450% faster and prints 1700% faster than cJSON, LJSON parses 131% faster and prints 88% faster than RapidJSON
+> Test Result: LJSON parses 450% faster and prints 2232% faster than cJSON, LJSON parses 131% faster and prints 122% faster than RapidJSON
 
 ![AARCH64-Linux Test Result](test_result/test_for_aarch64.png)
 
 > Test Platform: PC | CPU: Intel i7-10700 | OS: Ubuntu 18.04 (VirtualBox)<br>
-> Test Result: LJSON parses 549% faster and prints 2042% faster than cJSON, LJSON parses 73% faster and prints 107% faster than RapidJSON
+> Test Result: LJSON parses 555% faster and prints 2397% faster than cJSON, LJSON parses 75% faster and prints 107% faster than RapidJSON
 
 ![x86_64-Linux Test Result](test_result/test_for_x86_64.png)
 

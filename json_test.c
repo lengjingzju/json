@@ -249,7 +249,7 @@ int main(int argc, char *argv[])
     size_t orig_size = 0, print_size = 0;
     json_mem_t mem;
     json_object *json = NULL;
-    unsigned int ms1 = 0, ms2 = 0, ms3 = 0, ms4 = 0;
+    unsigned int ms1 = 0, ms2 = 0, ms3 = 0, ms4 = 0, ms5 = 0;
     int fast_flag = 0;
 
     pjson_memory_init(&mem);
@@ -383,8 +383,10 @@ int main(int argc, char *argv[])
         json_memory_free(print_str);
         print_str = NULL;
     }
-
     ms3 = _system_ms_get();
+
+    sleep(1);
+    ms4 = _system_ms_get();
     snprintf(s_dst_json_path, sizeof(s_dst_json_path), "%s-%d.unformat.json", file, choice);
     switch(choice)
     {
@@ -411,7 +413,7 @@ int main(int argc, char *argv[])
         json_memory_free(print_str);
         print_str = NULL;
     }
-    ms4 = _system_ms_get();
+    ms5 = _system_ms_get();
 
 #if JSON_SAX_APIS_SUPPORT
 end:
@@ -423,7 +425,7 @@ end:
         read_file_data_free(&orig_data, &orig_size);
 
     if (choice < 6)
-        printf("parse ms=%d, format print_ms=%d, unformat print_ms=%d\n", ms2-ms1, ms3-ms2, ms4-ms3);
+        printf("parse ms=%d, format print_ms=%d, unformat print_ms=%d\n", ms2-ms1, ms3-ms2, ms5-ms4);
     else
         printf("sax parse+print ms=%d\n", ms2-ms1);
     return 0;
