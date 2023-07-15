@@ -1298,6 +1298,214 @@ typedef struct _json_print_t {
 #define GET_BUF_USED_SIZE(bp) ((bp)->cur - (bp)->ptr)
 #define GET_BUF_FREE_SIZE(bp) ((bp)->size - ((bp)->cur - (bp)->ptr))
 
+#if !FAST_FILL_DIGITS_EXISTED
+#define FAST_FILL_DIGITS_EXISTED  1
+
+static const char ch_100_lut[200] = {
+    '0','0','0','1','0','2','0','3','0','4','0','5','0','6','0','7','0','8','0','9',
+    '1','0','1','1','1','2','1','3','1','4','1','5','1','6','1','7','1','8','1','9',
+    '2','0','2','1','2','2','2','3','2','4','2','5','2','6','2','7','2','8','2','9',
+    '3','0','3','1','3','2','3','3','3','4','3','5','3','6','3','7','3','8','3','9',
+    '4','0','4','1','4','2','4','3','4','4','4','5','4','6','4','7','4','8','4','9',
+    '5','0','5','1','5','2','5','3','5','4','5','5','5','6','5','7','5','8','5','9',
+    '6','0','6','1','6','2','6','3','6','4','6','5','6','6','6','7','6','8','6','9',
+    '7','0','7','1','7','2','7','3','7','4','7','5','7','6','7','7','7','8','7','9',
+    '8','0','8','1','8','2','8','3','8','4','8','5','8','6','8','7','8','8','8','9',
+    '9','0','9','1','9','2','9','3','9','4','9','5','9','6','9','7','9','8','9','9',
+};
+
+static const uint8_t tz_100_lut[100] = {
+    2, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    1, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    1, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    1, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    1, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    1, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    1, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    1, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    1, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    1, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+};
+
+#define FAST_DIV10(n)       (ch_100_lut[(n) << 1] - '0')                    /* 0 <= n < 100 */
+#define FAST_DIV100(n)      (((n) * 5243) >> 19)                            /* 0 <= n < 10000 */
+#define FAST_DIV10000(n)    ((uint32_t)(((uint64_t)(n) * 109951163) >> 40)) /* 0 <= n < 100000000 */
+
+static inline int32_t fill_1_4_digits(char *buffer, uint32_t digits, int32_t *ptz)
+{
+    char *s = buffer;
+
+    if (digits < 100) {
+        if (digits >= 10) {
+            *ptz = tz_100_lut[digits];
+            memcpy(s, &ch_100_lut[digits<<1], 2);
+            s += 2;
+        } else {
+            *ptz = 0;
+            *s++ = digits + '0';
+        }
+    } else {
+        uint32_t q = FAST_DIV100(digits);
+        uint32_t r = digits - q * 100;
+
+        if (q >= 10) {
+            *ptz = tz_100_lut[q];
+            memcpy(s, &ch_100_lut[q<<1], 2);
+            s += 2;
+        } else {
+            *ptz = 0;
+            *s++ = q + '0';
+        }
+
+        if (!r) {
+            *ptz += 2;
+            memset(s, '0', 2);
+            s += 2;
+        } else {
+            *ptz = tz_100_lut[r];
+            memcpy(s, &ch_100_lut[r<<1], 2);
+            s += 2;
+        }
+    }
+
+    return s - buffer;
+}
+
+static inline int32_t fill_t_4_digits(char *buffer, uint32_t digits, int32_t *ptz)
+{
+    char *s = buffer;
+    uint32_t q = FAST_DIV100(digits);
+    uint32_t r = digits - q * 100;
+
+    memcpy(s, &ch_100_lut[q<<1], 2);
+    memcpy(s + 2, &ch_100_lut[r<<1], 2);
+
+    if (!r) {
+        *ptz = tz_100_lut[q] + 2;
+    } else {
+        *ptz = tz_100_lut[r];
+    }
+
+    return 4;
+}
+
+static inline int32_t fill_1_8_digits(char *buffer, uint32_t digits, int32_t *ptz)
+{
+    char *s = buffer;
+
+    if (digits < 10000) {
+        return fill_1_4_digits(s, digits, ptz);
+    } else {
+        uint32_t q = FAST_DIV10000(digits);
+        uint32_t r = digits - q * 10000;
+
+        s += fill_1_4_digits(s, q, ptz);
+        if (!r) {
+            *ptz += 4;
+            memset(s, '0', 4);
+            s += 4;
+        } else {
+            s += fill_t_4_digits(s, r, ptz);
+        }
+    }
+
+    return s - buffer;
+}
+
+static inline int32_t fill_t_8_digits(char *buffer, uint32_t digits, int32_t *ptz)
+{
+    char *s = buffer;
+
+    if (digits < 10000) {
+        memset(s, '0', 4);
+        fill_t_4_digits(s + 4, digits, ptz);
+    } else {
+        uint32_t q = FAST_DIV10000(digits);
+        uint32_t r = digits - q * 10000;
+
+        fill_t_4_digits(s, q, ptz);
+        if (!r) {
+            memset(s + 4, '0', 4);
+            *ptz += 4;
+        } else {
+            fill_t_4_digits(s + 4, r, ptz);
+        }
+    }
+
+    return 8;
+}
+
+static inline int32_t fill_1_16_digits(char *buffer, uint64_t digits, int32_t *ptz)
+{
+    char *s = buffer;
+
+    if (digits < 100000000llu) {
+        return fill_1_8_digits(s, (uint32_t)digits, ptz);
+    } else {
+        uint32_t q = (uint32_t)(digits / 100000000);
+        uint32_t r = (uint32_t)(digits - (uint64_t)q * 100000000);
+
+        s += fill_1_8_digits(s, q, ptz);
+        if (!r) {
+            *ptz += 8;
+            memset(s, '0', 8);
+            s += 8;
+        } else {
+            s += fill_t_8_digits(s, r, ptz);
+        }
+    }
+
+    return s - buffer;
+}
+
+static inline int32_t fill_t_16_digits(char *buffer, uint64_t digits, int32_t *ptz)
+{
+    char *s = buffer;
+
+    if (digits < 100000000llu) {
+        memset(s, '0', 8);
+        fill_t_8_digits(s + 8, digits, ptz);
+    } else {
+        uint32_t q = (uint32_t)(digits / 100000000);
+        uint32_t r = (uint32_t)(digits - (uint64_t)q * 100000000);
+
+        fill_t_8_digits(s, q, ptz);
+        if (!r) {
+            memset(s + 8, '0', 8);
+            *ptz += 8;
+        } else {
+            fill_t_8_digits(s + 8, r, ptz);
+        }
+    }
+
+    return 16;
+}
+
+static inline int32_t fill_1_20_digits(char *buffer, uint64_t digits, int32_t *ptz)
+{
+    char *s = buffer;
+
+    if (digits < 10000000000000000llu) {
+        return fill_1_16_digits(s, digits, ptz);
+    } else {
+        uint32_t q = (uint32_t)(digits / 10000000000000000llu);
+        uint64_t r = (digits - (uint64_t)q * 10000000000000000llu);
+
+        s += fill_1_4_digits(s, q, ptz);
+        if (!r) {
+            memset(s, '0', 16);
+            s += 16;
+            *ptz = 16;
+        } else {
+            s += fill_t_16_digits(s, r, ptz);
+        }
+    }
+
+    return s - buffer;
+}
+
+#endif
+
 static const char hex_array[] = {
     '0', '1', '2', '3', '4',
     '5', '6', '7', '8', '9',
@@ -1374,8 +1582,82 @@ static int fname(ftype n, char *c)          \
     return i + a;                           \
 }
 
+#if INT_MAX > 2147483647U
 INT_TO_STRING_FUNC(int_to_string, int)
+#else
+static int int_to_string(int num, char *buffer)
+{
+    char *s = buffer;
+    uint32_t n = 0;
+    int32_t tz = 0;
+
+    if (num == 0) {
+        memcpy(s, "0", 2);
+        return 1;
+    }
+
+    if (num < 0) {
+        n = -num;
+        *s++ = '-';
+    } else {
+        n = num;
+    }
+
+    if (n < 100000000) {
+        s += fill_1_8_digits(s, (uint32_t)n, &tz);
+    } else {
+        uint32_t q = n / 100000000;
+        uint32_t r = n - q * 100000000;
+
+        if (q >= 10) {
+            tz = tz_100_lut[q];
+            memcpy(s, &ch_100_lut[q<<1], 2);
+            s += 2;
+        } else {
+            tz = 0;
+            *s++ = q + '0';
+        }
+
+        if (!r) {
+            tz += 8;
+            memset(s, '0', 8);
+            s += 8;
+        } else {
+            s += fill_t_8_digits(s, r, &tz);
+        }
+    }
+
+    return s - buffer;
+}
+#endif
+
+#if LLONG_MAX > 9223372036854775807LLU
 INT_TO_STRING_FUNC(lint_to_string, long long int)
+#else
+static int lint_to_string(long long int num, char *buffer)
+{
+    char *s = buffer;
+    uint64_t n = 0;
+    int32_t tz = 0;
+
+    if (num == 0) {
+        memcpy(s, "0", 2);
+        return 1;
+    }
+
+    if (num < 0) {
+        n = -num;
+        *s++ = '-';
+    } else {
+        n = num;
+    }
+
+    s += fill_1_20_digits(buffer, n, &tz);
+
+    return s - buffer;
+}
+#endif
+
 HEX_TO_STRING_FUNC(hex_to_string, unsigned int)
 #if JSON_LONG_LONG_SUPPORT
 HEX_TO_STRING_FUNC(lhex_to_string, unsigned long long int)
@@ -1747,209 +2029,6 @@ static inline void ldouble_convert(diy_fp_t *v)
 
     v->f = u128_calc(x.f, f);
     v->e = e - x.e + 19;
-}
-
-static const char ch_100_lut[200] = {
-    '0','0','0','1','0','2','0','3','0','4','0','5','0','6','0','7','0','8','0','9',
-    '1','0','1','1','1','2','1','3','1','4','1','5','1','6','1','7','1','8','1','9',
-    '2','0','2','1','2','2','2','3','2','4','2','5','2','6','2','7','2','8','2','9',
-    '3','0','3','1','3','2','3','3','3','4','3','5','3','6','3','7','3','8','3','9',
-    '4','0','4','1','4','2','4','3','4','4','4','5','4','6','4','7','4','8','4','9',
-    '5','0','5','1','5','2','5','3','5','4','5','5','5','6','5','7','5','8','5','9',
-    '6','0','6','1','6','2','6','3','6','4','6','5','6','6','6','7','6','8','6','9',
-    '7','0','7','1','7','2','7','3','7','4','7','5','7','6','7','7','7','8','7','9',
-    '8','0','8','1','8','2','8','3','8','4','8','5','8','6','8','7','8','8','8','9',
-    '9','0','9','1','9','2','9','3','9','4','9','5','9','6','9','7','9','8','9','9',
-};
-
-static const uint8_t tz_100_lut[100] = {
-    2, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-    1, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-    1, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-    1, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-    1, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-    1, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-    1, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-    1, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-    1, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-    1, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-};
-
-#define FAST_DIV10(n)       (ch_100_lut[(n) << 1] - '0')                    /* 0 <= n < 100 */
-#define FAST_DIV100(n)      (((n) * 5243) >> 19)                            /* 0 <= n < 10000 */
-#define FAST_DIV10000(n)    ((uint32_t)(((uint64_t)(n) * 109951163) >> 40)) /* 0 <= n < 100000000 */
-
-static inline int32_t fill_1_4_digits(char *buffer, uint32_t digits, int32_t *ptz)
-{
-    char *s = buffer;
-
-    if (digits < 100) {
-        if (digits >= 10) {
-            *ptz = tz_100_lut[digits];
-            memcpy(s, &ch_100_lut[digits<<1], 2);
-            s += 2;
-        } else {
-            *ptz = 0;
-            *s++ = digits + '0';
-        }
-    } else {
-        uint32_t q = FAST_DIV100(digits);
-        uint32_t r = digits - q * 100;
-
-        if (q >= 10) {
-            *ptz = tz_100_lut[q];
-            memcpy(s, &ch_100_lut[q<<1], 2);
-            s += 2;
-        } else {
-            *ptz = 0;
-            *s++ = q + '0';
-        }
-
-        if (!r) {
-            *ptz += 2;
-            memset(s, '0', 2);
-            s += 2;
-        } else {
-            *ptz = tz_100_lut[r];
-            memcpy(s, &ch_100_lut[r<<1], 2);
-            s += 2;
-        }
-    }
-
-    return s - buffer;
-}
-
-static inline int32_t fill_t_4_digits(char *buffer, uint32_t digits, int32_t *ptz)
-{
-    char *s = buffer;
-    uint32_t q = FAST_DIV100(digits);
-    uint32_t r = digits - q * 100;
-
-    memcpy(s, &ch_100_lut[q<<1], 2);
-    memcpy(s + 2, &ch_100_lut[r<<1], 2);
-
-    if (!r) {
-        *ptz = tz_100_lut[q] + 2;
-    } else {
-        *ptz = tz_100_lut[r];
-    }
-
-    return 4;
-}
-
-static inline int32_t fill_1_8_digits(char *buffer, uint32_t digits, int32_t *ptz)
-{
-    char *s = buffer;
-
-    if (digits < 10000) {
-        return fill_1_4_digits(s, digits, ptz);
-    } else {
-        uint32_t q = FAST_DIV10000(digits);
-        uint32_t r = digits - q * 10000;
-
-        s += fill_1_4_digits(s, q, ptz);
-        if (!r) {
-            *ptz += 4;
-            memset(s, '0', 4);
-            s += 4;
-        } else {
-            s += fill_t_4_digits(s, r, ptz);
-        }
-    }
-
-    return s - buffer;
-}
-
-static inline int32_t fill_t_8_digits(char *buffer, uint32_t digits, int32_t *ptz)
-{
-    char *s = buffer;
-
-    if (digits < 10000) {
-        memset(s, '0', 4);
-        fill_t_4_digits(s + 4, digits, ptz);
-    } else {
-        uint32_t q = FAST_DIV10000(digits);
-        uint32_t r = digits - q * 10000;
-
-        fill_t_4_digits(s, q, ptz);
-        if (!r) {
-            memset(s + 4, '0', 4);
-            *ptz += 4;
-        } else {
-            fill_t_4_digits(s + 4, r, ptz);
-        }
-    }
-
-    return 8;
-}
-
-static inline int32_t fill_1_16_digits(char *buffer, uint64_t digits, int32_t *ptz)
-{
-    char *s = buffer;
-
-    if (digits < 100000000llu) {
-        return fill_1_8_digits(s, (uint32_t)digits, ptz);
-    } else {
-        uint32_t q = (uint32_t)(digits / 100000000);
-        uint32_t r = (uint32_t)(digits - (uint64_t)q * 100000000);
-
-        s += fill_1_8_digits(s, q, ptz);
-        if (!r) {
-            *ptz += 8;
-            memset(s, '0', 8);
-            s += 8;
-        } else {
-            s += fill_t_8_digits(s, r, ptz);
-        }
-    }
-
-    return s - buffer;
-}
-
-static inline int32_t fill_t_16_digits(char *buffer, uint64_t digits, int32_t *ptz)
-{
-    char *s = buffer;
-
-    if (digits < 100000000llu) {
-        memset(s, '0', 8);
-        fill_t_8_digits(s + 8, digits, ptz);
-    } else {
-        uint32_t q = (uint32_t)(digits / 100000000);
-        uint32_t r = (uint32_t)(digits - (uint64_t)q * 100000000);
-
-        fill_t_8_digits(s, q, ptz);
-        if (!r) {
-            memset(s + 8, '0', 8);
-            *ptz += 8;
-        } else {
-            fill_t_8_digits(s + 8, r, ptz);
-        }
-    }
-
-    return 16;
-}
-
-static inline int32_t fill_1_20_digits(char *buffer, uint64_t digits, int32_t *ptz)
-{
-    char *s = buffer;
-
-    if (digits < 10000000000000000llu) {
-        return fill_1_16_digits(s, digits, ptz);
-    } else {
-        uint32_t q = (uint32_t)(digits / 10000000000000000llu);
-        uint64_t r = (digits - (uint64_t)q * 10000000000000000llu);
-
-        s += fill_1_4_digits(s, q, ptz);
-        if (!r) {
-            memset(s, '0', 16);
-            s += 16;
-            *ptz = 16;
-        } else {
-            s += fill_t_16_digits(s, r, ptz);
-        }
-    }
-
-    return s - buffer;
 }
 
 static inline int32_t fill_significand(char *buffer, uint64_t digits, int32_t *ptz)
@@ -2914,8 +2993,8 @@ static inline unsigned int _hex_char_calculate(char c)
 
 static int _parse_num(char **sstr, json_number_t *vnum)
 {
-    int sign = 1;
-    unsigned long long int k = 1, m = 0, n = 0;
+    int sign = 1, k = 0;
+    unsigned long long int m = 0, n = 0;
     double d = 0;
     char *num = *sstr;
 
@@ -2938,6 +3017,11 @@ static int _parse_num(char **sstr, json_number_t *vnum)
             return JSON_HEX;
         }
     } else {
+        static const double div10_lut[20] = {
+            1    , 1e-1 , 1e-2 , 1e-3 , 1e-4 , 1e-5 , 1e-6 , 1e-7 , 1e-8 , 1e-9 ,
+            1e-10, 1e-11, 1e-12, 1e-13, 1e-14, 1e-15, 1e-16, 1e-17, 1e-18, 1e-19,
+        };
+
         switch (*num) {
         case '-': ++num; sign = -1; break;
         case '+': ++num; break;
@@ -2946,16 +3030,26 @@ static int _parse_num(char **sstr, json_number_t *vnum)
 
         while (*num == '0')
             ++num;
-        while (_dec_char_check(*num))
+
+        k = 0;
+        while (_dec_char_check(*num)) {
             m = (m << 3) + (m << 1) + (*num++ - '0');
+            ++k;
+        }
+        if (k >= 20)
+            return 0xff;
 
         if (*num == '.') {
             ++num;
+            k = 0;
             while (_dec_char_check(*num)) {
                 n = (n << 3) + (n << 1) + (*num++ - '0');
-                k = (k << 3) + (k << 1);
+                ++k;
             }
-            d = m + 1.0 * n / k;
+            if (k >= 20)
+                return 0xff;
+
+            d = m + n * div10_lut[k];
 
             *sstr = num;
             vnum->vdbl = sign == 1 ? d : -d;
@@ -2982,7 +3076,7 @@ static int _parse_num(char **sstr, json_number_t *vnum)
 
 static json_type_t _json_parse_number(char **sstr, json_number_t *vnum)
 {
-    json_type_t ret = JSON_NULL;
+    int ret = JSON_NULL;
     const char *num = *sstr;
 
 #if JSON_STRICT_PARSE_MODE == 2
@@ -3012,6 +3106,9 @@ static json_type_t _json_parse_number(char **sstr, json_number_t *vnum)
             return ret;
         }
         break;
+    case 0xff:
+        vnum->vdbl = strtod(num, sstr);
+        return JSON_DOUBLE;
     default:
         return JSON_NULL;
     }

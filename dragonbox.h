@@ -885,6 +885,8 @@ end:
     v->e = minus_k + KAPPA_VALUE + kappa_plus;
 }
 
+#if !FAST_FILL_DIGITS_EXISTED
+#define FAST_FILL_DIGITS_EXISTED  1
 static const char ch_100_lut[200] = {
     '0','0','0','1','0','2','0','3','0','4','0','5','0','6','0','7','0','8','0','9',
     '1','0','1','1','1','2','1','3','1','4','1','5','1','6','1','7','1','8','1','9',
@@ -1064,28 +1066,25 @@ static inline int32_t fill_t_16_digits(char *buffer, uint64_t digits, int32_t *p
 
     return 16;
 }
+#endif
 
 static inline int32_t fill_significand(char *buffer, uint64_t digits, int32_t *ptz)
 {
     char *s = buffer;
 
-    if (digits < 100000000llu) {
-        return fill_1_8_digits(s, (uint32_t)digits, ptz);
+    if (digits < 10000000000000000llu) {
+        return fill_1_16_digits(s, digits, ptz);
     } else {
-        if (digits < 10000000000000000llu) {
-            return fill_1_16_digits(s, digits, ptz);
-        } else {
-            uint32_t q = (uint32_t)(digits / 10000000000000000llu);
-            uint64_t r = (digits - (uint64_t)q * 10000000000000000llu);
+        uint32_t q = (uint32_t)(digits / 10000000000000000llu);
+        uint64_t r = (digits - (uint64_t)q * 10000000000000000llu);
 
-            *s++ = q + '0';
-            if (!r) {
-                memset(s, '0', 16);
-                s += 16;
-                *ptz = 16;
-            } else {
-                s += fill_t_16_digits(s, r, ptz);
-            }
+        *s++ = q + '0';
+        if (!r) {
+            memset(s, '0', 16);
+            s += 16;
+            *ptz = 16;
+        } else {
+            s += fill_t_16_digits(s, r, ptz);
         }
     }
 
