@@ -10,7 +10,7 @@
 #include <stdbool.h>
 #include <stdlib.h>
 
-#define JSON_VERSION                    0x010300
+#define JSON_VERSION                    0x010301
 #define JSON_SAX_APIS_SUPPORT           1
 #define JSON_LONG_LONG_SUPPORT          1
 
@@ -803,6 +803,13 @@ void pjson_memory_free(json_mem_t *mem);
 void pjson_memory_init(json_mem_t *mem);
 
 /*
+ * pjson_memory_statistics - Count the alloced memory of the memory blocks
+ * @mgr: IN, the block memory manager node
+ * @return: the alloced memory size
+ */
+int pjson_memory_statistics(json_mem_mgr_t *mgr);
+
+/*
  * pjson_new_object - Create a pool json object without value
  * @type: IN, the json object type
  * @mem: IN, the block memory manager
@@ -1164,15 +1171,17 @@ char *json_print_common(json_object *json, json_print_choice_t *choice);
 /*
  * json_print_format - Formatted DOM printer to string
  * @json: IN, the json object to be printed
+ * @item_total: IN, the total json objects, it is better to set the value by users
  * @length: OUT, the length of returned print string
  * @return: NULL on failure, a pointer on success
  */
-static inline char *json_print_format(json_object *json, size_t *length)
+static inline char *json_print_format(json_object *json, int item_total, size_t *length)
 {
     json_print_choice_t choice = {0};
     char *str = NULL;
 
     choice.format_flag = true;
+    choice.item_total = item_total;
     str = json_print_common(json, &choice);
     if (length)
         *length = choice.str_len;
@@ -1182,15 +1191,17 @@ static inline char *json_print_format(json_object *json, size_t *length)
 /*
  * json_print_unformat - Compressed DOM printer to string
  * @json: IN, the json object to be printed
+ * @item_total: IN, the total json objects, it is better to set the value by users
  * @length: OUT, the length of returned print string
  * @return: NULL on failure, a pointer on success
  */
-static inline char *json_print_unformat(json_object *json, size_t *length)
+static inline char *json_print_unformat(json_object *json, int item_total, size_t *length)
 {
     json_print_choice_t choice = {0};
     char *str = NULL;
 
     choice.format_flag = false;
+    choice.item_total = item_total;
     str = json_print_common(json, &choice);
     if (length)
         *length = choice.str_len;
@@ -1200,14 +1211,16 @@ static inline char *json_print_unformat(json_object *json, size_t *length)
 /*
  * json_fprint_format - Formatted DOM printer to file
  * @json: IN, the json object to be printed
+ * @item_total: IN, the total json objects, it is better to set the value by users
  * @path: IN, the file to store the printed string
  * @return: NULL on failure, a pointer on success
  */
-static inline char *json_fprint_format(json_object *json, const char *path)
+static inline char *json_fprint_format(json_object *json, int item_total, const char *path)
 {
     json_print_choice_t choice = {0};
 
     choice.format_flag = true;
+    choice.item_total = item_total;
     choice.path = path;
     return json_print_common(json, &choice);
 }
@@ -1215,14 +1228,16 @@ static inline char *json_fprint_format(json_object *json, const char *path)
 /*
  * json_fprint_unformat - Compressed DOM printer to file
  * @json: IN, the json object to be printed
+ * @item_total: IN, the total json objects, it is better to set the value by users
  * @path: IN, the file to store the printed string
  * @return: NULL on failure, a pointer on success
  */
-static inline char *json_fprint_unformat(json_object *json, const char *path)
+static inline char *json_fprint_unformat(json_object *json, int item_total, const char *path)
 {
     json_print_choice_t choice = {0};
 
     choice.format_flag = false;
+    choice.item_total = item_total;
     choice.path = path;
     return json_print_common(json, &choice);
 }

@@ -65,12 +65,12 @@ make O=<编译输出目录> CROSS_COMPILE=<交叉编译器前缀> && make O=<编
 注：主要是测试速度，`O2` 优化等级且默认选项编译，测试文件来自 [nativejson-benchmark](https://github.com/miloyip/nativejson-benchmark) 项目
 
 > 测试平台: Ambarella CV25M Board | CPU: ARM CortexA53 | OS: Linux-5.15<br>
-> 测试结果: LJSON 比cJSON 解析最快可达 450%，打印最快可达 2232%，LJSON 比 RapidJSON 解析最快可达 131%，打印最快可达 122%
+> 测试结果: LJSON 比cJSON 解析最快可达 462%，打印最快可达 2436%，LJSON 比 RapidJSON 解析最快可达 131%，打印最快可达 137%
 
 ![AARCH64-Linux测试结果](test_result/test_for_aarch64.png)
 
 > 测试平台: PC | CPU: Intel i7-10700 | OS: Ubuntu 18.04 (VirtualBox)<br>
-> 测试结果: :LJSON 比cJSON 解析最快可达 555%，打印最快可达 2397%，LJSON 比 RapidJSON 解析最快可达 75%，打印最快可达 107%
+> 测试结果: :LJSON 比cJSON 解析最快可达 563%，打印最快可达 2554%，LJSON 比 RapidJSON 解析最快可达 75%，打印最快可达 124%
 
 ![x86_64-Linux测试结果](test_result/test_for_x86_64.png)
 
@@ -408,10 +408,12 @@ typedef struct {
 ```c
 void pjson_memory_free(json_mem_t *mem);
 void pjson_memory_init(json_mem_t *mem);
++int pjson_memory_statistics(json_mem_mgr_t *mgr);
 ```
 
 * pjson_memory_free: 释放json内存池管理的所有内存
 * pjson_memory_init: 初始化json内存池管理结构
+* pjson_memory_statistics: 统计内存池分配的内存
 * 注：编辑模式初始化内存池后可修改mem_size
 * 注：使用内存池前需要使用pjson_memory_init初始化内存池入口，全部使用完成后使用pjson_memory_free释放
 * 注：绝对不要调用存在malloc, free之类的api，例如`json_new_object`和`json_del_object`等
@@ -532,10 +534,10 @@ typedef struct {
 ```c
 char *json_print_common(json_object *json, json_print_choice_t *choice);
 
-static inline char *json_print_format(json_object *json, size_t *length);
-static inline char *json_print_unformat(json_object *json, size_t *length);
-static inline char *json_fprint_format(json_object *json, const char *path);
-static inline char *json_fprint_unformat(json_object *json, const char *path);
+static inline char *json_print_format(json_object *json, int item_total, size_t *length);
+static inline char *json_print_unformat(json_object *json, int item_total, size_t *length);
+static inline char *json_fprint_format(json_object *json, int item_total, const char *path);
+static inline char *json_fprint_unformat(json_object *json, int item_total, const char *path);
 ```
 
 * json_print_common: 打印通用接口

@@ -437,6 +437,13 @@ CPFLAGS        += -fanalyzer
 LDFLAGS        += -fanalyzer
 endif
 
+# Usage: gprof -b <execute> gmon.out > report.txt
+# For more description, refer to https://sourceware.org/binutils/docs-2.40/gprof.html
+ifeq ($(ENV_PROFILING),y)
+CPFLAGS        += -pg
+LDFLAGS        += -pg
+endif
+
 # Use https://github.com/slimm609/checksec.sh/ to check the secture
 ifeq ($(ENV_SECURITY),y)
 # NX(No-eXecute) or DEP(Data Execution Prevention)

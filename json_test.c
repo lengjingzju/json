@@ -251,6 +251,7 @@ int main(int argc, char *argv[])
     json_object *json = NULL;
     unsigned int ms1 = 0, ms2 = 0, ms3 = 0, ms4 = 0, ms5 = 0;
     int fast_flag = 0;
+    int item_total = 0;
 
     pjson_memory_init(&mem);
 
@@ -357,23 +358,34 @@ int main(int argc, char *argv[])
     }
 
     ms2 = _system_ms_get();
+    switch(choice)
+    {
+    case 2:
+    case 3:
+    case 5:
+        item_total = pjson_memory_statistics(&mem.obj_mgr) >> 6;
+        break;
+    default:
+        break;
+    }
+
     snprintf(s_dst_json_path, sizeof(s_dst_json_path), "%s-%d.format.json", file, choice);
     switch(choice)
     {
     case 1:
-        print_str = json_print_format(json, &print_size);
+        print_str = json_print_format(json, item_total, &print_size);
         break;
     case 2:
-        print_str = json_print_format(json, &print_size);
+        print_str = json_print_format(json, item_total, &print_size);
         break;
     case 3:
-        print_str = json_print_format(json, &print_size);
+        print_str = json_print_format(json, item_total, &print_size);
         break;
     case 4:
-        json_fprint_format(json, s_dst_json_path);
+        json_fprint_format(json, item_total, s_dst_json_path);
         break;
     case 5:
-        json_fprint_format(json, s_dst_json_path);
+        json_fprint_format(json, item_total, s_dst_json_path);
         break;
     default:
         break;
@@ -391,19 +403,19 @@ int main(int argc, char *argv[])
     switch(choice)
     {
     case 1:
-        print_str = json_print_unformat(json, &print_size);
+        print_str = json_print_unformat(json, item_total, &print_size);
         break;
     case 2:
-        print_str = json_print_unformat(json, &print_size);
+        print_str = json_print_unformat(json, item_total, &print_size);
         break;
     case 3:
-        print_str = json_print_unformat(json, &print_size);
+        print_str = json_print_unformat(json, item_total, &print_size);
         break;
     case 4:
-        json_fprint_unformat(json, s_dst_json_path);
+        json_fprint_unformat(json, item_total, s_dst_json_path);
         break;
     case 5:
-        json_fprint_unformat(json, s_dst_json_path);
+        json_fprint_unformat(json, item_total, s_dst_json_path);
         break;
     default:
         break;

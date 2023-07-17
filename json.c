@@ -95,7 +95,9 @@
 
 /* print choice size */
 #define JSON_PRINT_UTF16_SUPPORT        0
+#define JSON_PRINT_NUM_INIT_DEF         1024
 #define JSON_PRINT_NUM_PLUS_DEF         64
+#define JSON_PRINT_DEPTH_DEF            16
 #define JSON_PRINT_SIZE_PLUS_DEF        1024
 #define JSON_FORMAT_ITEM_SIZE_DEF       32
 #define JSON_UNFORMAT_ITEM_SIZE_DEF     24
@@ -170,19 +172,16 @@ void json_memory_free(void *ptr)
         json_free(ptr);
 }
 
-int json_item_total_get(json_object *json)
+static inline int _item_total_get(json_object *json)
 {
     int cnt = 0;
     json_object *item = NULL;
-
-    if (!json)
-        return 0;
 
     switch (json->type_member) {
     case JSON_ARRAY:
     case JSON_OBJECT:
         json_list_for_each_entry(item, &json->value.head, list) {
-            cnt += json_item_total_get(item);
+            cnt += _item_total_get(item);
         }
         break;
     default:
@@ -191,6 +190,13 @@ int json_item_total_get(json_object *json)
     ++cnt;
 
     return cnt;
+}
+
+int json_item_total_get(json_object *json)
+{
+    if (!json)
+        return 0;
+    return _item_total_get(json);
 }
 
 void json_del_object(json_object *json)
@@ -979,6 +985,17 @@ void pjson_memory_free(json_mem_t *mem)
     _json_mem_free(&mem->obj_mgr);
     _json_mem_free(&mem->key_mgr);
     _json_mem_free(&mem->str_mgr);
+}
+
+int pjson_memory_statistics(json_mem_mgr_t *mgr)
+{
+    json_mem_node_t *pos = NULL;
+    int size = 0;
+
+    json_list_for_each_entry(pos, &mgr->head, list) {
+        size += pos->size;
+    }
+    return size;
 }
 
 json_object *pjson_new_object(json_type_t type, json_mem_t *mem)
@@ -2600,7 +2617,7 @@ char *json_print_common(json_object *json, json_print_choice_t *choice)
     if (!json)
         return NULL;
 
-    print_val.item_total = choice->item_total ? print_val.item_total : json_item_total_get(json);
+    print_val.item_total = choice->item_total ? choice->item_total : JSON_PRINT_NUM_INIT_DEF;
     if (_print_val_init(&print_val, choice) < 0)
         return NULL;
 
@@ -2742,7 +2759,7 @@ int json_sax_print_value(json_sax_print_hd handle, json_type_t type, json_string
         switch ((*(json_sax_cmd_t*)value)) {
         case JSON_SAX_START:
             if (unlikely(print_handle->count == print_handle->total)) {
-                print_handle->total += JSON_PRINT_NUM_PLUS_DEF;
+                print_handle->total += JSON_PRINT_DEPTH_DEF;
                 if (unlikely((print_handle->array = json_realloc(print_handle->array,
                             print_handle->total * sizeof(json_sax_print_depth_t))) == NULL)) {
                     JsonErr("malloc failed!\n");
@@ -2818,13 +2835,13 @@ json_sax_print_hd json_sax_print_start(json_print_choice_t *choice)
         return NULL;
     }
     if (choice->item_total == 0)
-        choice->item_total = JSON_PRINT_NUM_PLUS_DEF;
+        choice->item_total = JSON_PRINT_NUM_INIT_DEF;
     if (_print_val_init(&print_handle->print_val, choice) < 0) {
         json_free(print_handle);
         return NULL;
     }
 
-    print_handle->total = JSON_PRINT_NUM_PLUS_DEF;
+    print_handle->total = JSON_PRINT_DEPTH_DEF;
     if ((print_handle->array = json_malloc(print_handle->total * sizeof(json_sax_print_depth_t))) == NULL) {
         _print_val_release(&print_handle->print_val, true, NULL);
         json_free(print_handle);
