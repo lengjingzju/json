@@ -13,6 +13,9 @@ staticlib       = lib$(PACKAGE_NAME).a
 sharedlib       = lib$(PACKAGE_NAME).so $(major_ver) $(minor_ver) $(patch_ver)
 testedbin       = ljson
 
+ldoublelib      = libldouble.a
+ldoublebin      = ldouble
+
 INSTALL_HEADERS = json.h
 
 .PHONY: all clean install
@@ -25,6 +28,11 @@ include inc.makes
 $(eval $(call add-liba-build,$(staticlib),json.c))
 $(eval $(call add-libso-build,$(sharedlib),json.c))
 $(eval $(call add-bin-build,$(testedbin),json_test.c,-static -L $(OBJ_PREFIX) -lljson))
+$(OBJ_PREFIX)/$(testedbin): $(OBJ_PREFIX)/$(staticlib)
+
+$(eval $(call add-liba-build,$(ldoublelib),ldouble.c))
+$(eval $(call add-bin-build,$(ldoublebin),ldouble_test.c,-static -L $(OBJ_PREFIX) -lldouble))
+$(OBJ_PREFIX)/$(ldoublebin): $(OBJ_PREFIX)/$(ldoublelib)
 
 all: $(BIN_TARGETS) $(LIB_TARGETS)
 

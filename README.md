@@ -73,6 +73,8 @@ Note: 'O2' optimization level and default option compilation, the test files com
 
 ![x86_64-Linux Test Result](test_result/test_for_x86_64.png)
 
+![ldouble-x86_64 Test Result](test_result/ldb_for_x86_64.png)
+
 ## Contact
 
 * Phone: +86 18368887550

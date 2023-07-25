@@ -2129,8 +2129,8 @@ static inline char* ldouble_format(char* buffer, uint64_t digits, int32_t decima
         ++buffer;
         if (vnum_digits != 1) {
             /* d.igitsE+123 */
-            *buffer++ = '.';
-            buffer += vnum_digits + 1;
+            *buffer = '.';
+            buffer += vnum_digits;
         } else {
             /* dE+123 */
         }

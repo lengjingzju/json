@@ -16,7 +16,7 @@
 #define _fclose_fp(fp) do {if (fp) fclose(fp); fp = NULL; } while(0)
 #define _free_ptr(ptr) do {if (ptr) _ffree(ptr); ptr = NULL; } while(0)
 
-static unsigned _system_ms_get(void)
+static unsigned int _system_ms_get(void)
 {
     struct timespec ts;
     clock_gettime(CLOCK_MONOTONIC, &ts);

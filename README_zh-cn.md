@@ -74,6 +74,8 @@ make O=<编译输出目录> CROSS_COMPILE=<交叉编译器前缀> && make O=<编
 
 ![x86_64-Linux测试结果](test_result/test_for_x86_64.png)
 
+![ldouble-x86_64测试结果](test_result/ldb_for_x86_64.png)
+
 > 测试平台: Nationalchip STB | CPU: CSKY | DDR3: 128MB, 533MHz | OS: ECOS<br>
 > 注: 老版本测试结果，新版本删除了临时buffer，且解析速度提升了两倍
 
