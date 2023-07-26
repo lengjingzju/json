@@ -44,7 +44,8 @@ int main(int argc, char *argv[])
             ldouble_dtoa(d, buf);
         }
         ms3 = _system_ms_get();
-        printf("original: %s\nprintf  : %0.15g\t%ums\nldouble : %s\t%ums\n", argv[1], d, ms2 - ms1, buf, ms3 - ms2);
+        printf("original: %s\nprintf  : %0.15g\t%ums\nldouble : %s\t%ums\t%.0lf%%\n", argv[1], d,
+            ms2 - ms1, buf, ms3 - ms2, 100.0 * (ms2 - ms1) / (ms3 - ms2));
     }
 
     return 0;

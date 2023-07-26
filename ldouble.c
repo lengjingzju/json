@@ -52,11 +52,9 @@ static inline uint64_t u128_calc(uint64_t x, uint64_t y)
 #endif
 
     val = hi * 1.8446744073709551616; /* 1<<64 = 18446744073709551616 */
-    ret = (uint64_t)val;
+    ret = (uint64_t)val + 1;
     if (lo >= div)
-        ++hi;
-    if (val - ret >= 0.49)
-        ++hi;
+        ++ret;
 
     return ret;
 }
@@ -137,8 +135,8 @@ def print_pow_array(unit, index, end, positive):
 def print_positive_array():
     # 1 * (2 ** 4) = 1.6 * (10 ** 1)
     # 16 = 1.6 * (10 ** 1)
-    # 242 = (1023 - 52) / 4
-    print_pow_array(16, 1, 242, True)
+    # 243 = (1023 - 52) / 4 + 1
+    print_pow_array(16, 1, 243, True)
 
 def print_negative_array():
     # 1 * (2 ** -4) = 0.625 * (10 ** -1)
@@ -153,7 +151,7 @@ print_negative_array()
 
 static inline diy_fp_t positive_diy_fp(int32_t e)
 {
-    static const uint64_t positive_base_lut[243] = {
+    static const uint64_t positive_base_lut[244] = {
         0x0de0b6b3a7640000, 0x16345785d8a00000, 0x2386f26fc1000000, 0x38d7ea4c68000000,
         0x5af3107a40000000, 0x0e8d4a5100000000, 0x174876e800000000, 0x2540be4000000000,
         0x3b9aca0000000000, 0x5f5e100000000000, 0x0f42400000000000, 0x186a000000000000,
@@ -214,10 +212,10 @@ static inline diy_fp_t positive_diy_fp(int32_t e)
         0x300c50c958de864f, 0x4ce0814227ca707e, 0x7b00ced03faa4d96, 0x13ae3591f5b4d937,
         0x1f7d228322baf525, 0x3261d0d1d12b21d4, 0x509c814fb511cfba, 0x80fa687f881c7f8f,
         0x14a2f1ffecd15c17, 0x2104b66647b56025, 0x34d4570a0c5566a1, 0x5486f1a9ad557102,
-        0x873e4f75e2224e69, 0x15a391d56bdc876d, 0x229f4fbbdfc73f15
+        0x873e4f75e2224e69, 0x15a391d56bdc876d, 0x229f4fbbdfc73f15, 0x37654c5fcc71fe88
     };
 
-    static const int8_t positive_index_lut[243] = {
+    static const int8_t positive_index_lut[244] = {
         18 , 18 , 18 , 18 , 18 , 17 , 17 , 17 , 17 , 17 , 16 , 16 , 16 , 16 , 16 , 15 , 15 , 15 , 15 , 15 ,
         14 , 14 , 14 , 14 , 14 , 13 , 13 , 13 , 13 , 13 , 12 , 12 , 12 , 12 , 12 , 11 , 11 , 11 , 11 , 11 ,
         10 , 10 , 10 , 10 , 10 , 9  , 9  , 9  , 9  , 8  , 8  , 8  , 8  , 8  , 7  , 7  , 7  , 7  , 7  , 6  ,
@@ -230,7 +228,7 @@ static inline diy_fp_t positive_diy_fp(int32_t e)
         -18, -18, -19, -19, -19, -19, -19, -20, -20, -20, -20, -20, -21, -21, -21, -21, -22, -22, -22, -22,
         -22, -23, -23, -23, -23, -23, -24, -24, -24, -24, -24, -25, -25, -25, -25, -25, -26, -26, -26, -26,
         -26, -27, -27, -27, -27, -27, -28, -28, -28, -28, -28, -29, -29, -29, -29, -29, -30, -30, -30, -30,
-        -30, -31, -31
+        -30, -31, -31, -31
     };
 
     const diy_fp_t v = { .f = positive_base_lut[e], .e = positive_index_lut[e] };
@@ -343,7 +341,10 @@ static inline void ldouble_convert(diy_fp_t *v)
 
     e >>= 2;
     t -= e << 2;
-    f <<= t;
+    if (t) {
+        ++e;
+        f >>= 4 - t;
+    }
     if (e >= 0) {
         x = positive_diy_fp(e);
     } else {

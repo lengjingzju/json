@@ -65,12 +65,12 @@ make O=<编译输出目录> CROSS_COMPILE=<交叉编译器前缀> && make O=<编
 注：主要是测试速度，`O2` 优化等级且默认选项编译，测试文件来自 [nativejson-benchmark](https://github.com/miloyip/nativejson-benchmark) 项目
 
 > 测试平台: Ambarella CV25M Board | CPU: ARM CortexA53 | OS: Linux-5.15<br>
-> 测试结果: LJSON 比cJSON 解析最快可达 462%，打印最快可达 2436%，LJSON 比 RapidJSON 解析最快可达 131%，打印最快可达 137%
+> 测试结果: LJSON 比cJSON 解析最快可达 475%，打印最快可达 2225%，LJSON 比 RapidJSON 解析最快可达 131%，打印最快可达 137%
 
 ![AARCH64-Linux测试结果](test_result/test_for_aarch64.png)
 
 > 测试平台: PC | CPU: Intel i7-10700 | OS: Ubuntu 18.04 (VirtualBox)<br>
-> 测试结果: :LJSON 比cJSON 解析最快可达 563%，打印最快可达 2554%，LJSON 比 RapidJSON 解析最快可达 75%，打印最快可达 124%
+> 测试结果: :LJSON 比cJSON 解析最快可达 560%，打印最快可达 2894%，LJSON 比 RapidJSON 解析最快可达 75%，打印最快可达 124%
 
 ![x86_64-Linux测试结果](test_result/test_for_x86_64.png)
 
