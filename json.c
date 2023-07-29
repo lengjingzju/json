@@ -29,13 +29,6 @@
 #endif
 
 /*
- * Using table lookup methods to accelerate division, etc
- */
-#ifndef GRISU2_USING_LUT_ACCELERATE
-#define GRISU2_USING_LUT_ACCELERATE     1
-#endif
-
-/*
  * JSON_STRICT_PARSE_MODE can be: 0 / 1 / 2
  * 0: not strict mode
  * 1: will enable more checks
@@ -1706,7 +1699,9 @@ static inline int double_to_string(double value, char* buffer)
 #define DP_EXPONENT_MASK            0x7FF0000000000000  /* Exponent Mask, 11 bits */
 #define DP_SIGNIFICAND_MASK         0x000FFFFFFFFFFFFF  /* Mantissa Mask, 52 bits */
 #define DP_HIDDEN_BIT               0x0010000000000000  /* Integer bit for Mantissa */
-#define LSHIFT_RESERVED_BIT         11
+#ifndef LSHIFT_RESERVED_BIT
+#define LSHIFT_RESERVED_BIT         11                  /* The value should be less than or equal to 11 */
+#endif
 
 typedef struct {
     uint64_t f;
@@ -1829,14 +1824,14 @@ def print_pow_array(unit, index, end, positive):
 def print_positive_array():
     # 1 * (2 ** 4) = 1.6 * (10 ** 1)
     # 16 = 1.6 * (10 ** 1)
-    # 243 = (1023 - 52) / 4 + 1
+    # 243 = (1023 - 52 - (11 - x)) / 4 + 1
     print_pow_array(16, 1, 243, True)
 
 def print_negative_array():
     # 1 * (2 ** -4) = 0.625 * (10 ** -1)
     # 625 = 0.625 * (10 ** 3)
-    # 282 = (1022 + 52 + (63 - 11)) / 4 + 1
-    print_pow_array(625, 3, 282, False)
+    # 285 = (1022 + 52 + (63 - (11 - x))) / 4 + 1
+    print_pow_array(625, 3, 285, False)
 
 print_positive_array()
 print()
@@ -1931,7 +1926,7 @@ static inline diy_fp_t positive_diy_fp(int32_t e)
 
 static inline diy_fp_t negative_diy_fp(int32_t e)
 {
-    static const uint64_t negative_base_lut[283] = {
+    static const uint64_t negative_base_lut[286] = {
         0x0de0b6b3a7640000, 0x56bc75e2d6310000, 0x3635c9adc5dea000, 0x21e19e0c9bab2400,
         0x152d02c7e14af680, 0x84595161401484a0, 0x52b7d2dcc80cd2e4, 0x33b2e3c9fd0803cf,
         0x204fce5e3e250262, 0x1431e0fae6d7217d, 0x7e37be2022c0914c, 0x4ee2d6d415b85acf,
@@ -2002,10 +1997,11 @@ static inline diy_fp_t negative_diy_fp(int32_t e)
         0x1b6d1859505da541, 0x11242f37d23a8749, 0x6b22271ce1edcd85, 0x42f558720d34a073,
         0x29d957474840e448, 0x1a27d68c8d288ead, 0x1058e617d839592d, 0x662b9e1507666d54,
         0x3fdb42cd24a00455, 0x27e909c036e402b5, 0x18f1a618224e81b1, 0x0f9707cf1571110f,
-        0x616ff0ce4602aa9b, 0x3ce5f680ebc1aaa1, 0x260fba1093590aa5
+        0x616ff0ce4602aa9b, 0x3ce5f680ebc1aaa1, 0x260fba1093590aa5, 0x17c9d44a5c17a6a7,
+        0x0ede24ae798ec829, 0x5cec654277bc62fc
     };
 
-    static const int8_t negative_index_lut[283] = {
+    static const int8_t negative_index_lut[286] = {
         18 , 19 , 19 , 19 , 19 , 20 , 20 , 20 , 20 , 20 , 21 , 21 , 21 , 21 , 21 , 22 , 22 , 22 , 22 , 22 ,
         23 , 23 , 23 , 23 , 23 , 24 , 24 , 24 , 24 , 24 , 25 , 25 , 25 , 25 , 25 , 26 , 26 , 26 , 26 , 26 ,
         27 , 27 , 27 , 27 , 27 , 28 , 28 , 28 , 28 , 29 , 29 , 29 , 29 , 29 , 30 , 30 , 30 , 30 , 30 , 31 ,
@@ -2020,7 +2016,7 @@ static inline diy_fp_t negative_diy_fp(int32_t e)
         63 , 64 , 64 , 64 , 64 , 64 , 65 , 65 , 65 , 65 , 65 , 66 , 66 , 66 , 66 , 66 , 67 , 67 , 67 , 67 ,
         67 , 68 , 68 , 68 , 68 , 69 , 69 , 69 , 69 , 69 , 70 , 70 , 70 , 70 , 70 , 71 , 71 , 71 , 71 , 71 ,
         72 , 72 , 72 , 72 , 72 , 73 , 73 , 73 , 73 , 73 , 74 , 74 , 74 , 74 , 74 , 75 , 75 , 75 , 75 , 75 ,
-        76 , 76 , 76
+        76 , 76 , 76 , 76 , 76 , 77
     };
 
     const diy_fp_t v = { .f = negative_base_lut[e], .e = negative_index_lut[e] };
@@ -2039,11 +2035,8 @@ static inline void ldouble_convert(diy_fp_t *v)
         ++e;
         f >>= 4 - t;
     }
-    if (e >= 0) {
-        x = positive_diy_fp(e);
-    } else {
-        x = negative_diy_fp(-e);
-    }
+    x = e >= 0 ? positive_diy_fp(e) : negative_diy_fp(-e);
+
 
     v->f = u128_calc(x.f, f);
     v->e = e - x.e + 19;
@@ -2148,6 +2141,7 @@ static int ldouble_dtoa(double value, char* buffer)
 {
     diy_fp_t v;
     char *s = buffer;
+    int32_t lshiftbit = 11 - LSHIFT_RESERVED_BIT;
     union {double d; uint64_t n;} u = {.d = value};
     int32_t signbit = u.n >> (DIY_SIGNIFICAND_SIZE - 1);
     int32_t exponent = (u.n & DP_EXPONENT_MASK) >> DP_SIGNIFICAND_SIZE; /* Exponent */
@@ -2174,10 +2168,9 @@ static int ldouble_dtoa(double value, char* buffer)
             v.f = significand; /* Non-normalized double doesn't have a extra integer bit for Mantissa */
             v.e = 1 - DP_EXPONENT_OFFSET - DP_SIGNIFICAND_SIZE; /* Fixed Exponent: -1022, divisor of Mantissa: pow(2,52) */
 
-            /* The smallest e is (-1022 - 52 - (63 - 11)) = -1126 */
-            int32_t lshiftbit = u64_pz_get(v.f) - LSHIFT_RESERVED_BIT;
+            lshiftbit = u64_pz_get(v.f) - LSHIFT_RESERVED_BIT;
             v.f <<= lshiftbit;
-            v.e -= lshiftbit; /* The smallest e is (-1022 - 52 - (63 - 11)) = -1126 */
+            v.e -= lshiftbit; /* The smallest e is (-1022 - 52 - (63 - LSHIFT_RESERVED_BIT)) */
         } else {
             memcpy(s, "0.0", 4);
             return signbit + 3;
@@ -2196,7 +2189,8 @@ static int ldouble_dtoa(double value, char* buffer)
             memcpy(s + n, ".0", 3);
             return n + 2 + signbit;
         } else {
-            /* The largest e is (1023 - 52) = 971 */
+            v.f <<= lshiftbit;
+            v.e -= lshiftbit; /* The largest e is (1023 - 52 - (11 - LSHIFT_RESERVED_BIT)) */
         }
         break;
     }

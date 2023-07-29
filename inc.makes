@@ -5,6 +5,8 @@
 # https://github.com/lengjingzju/cbuild-ng #
 ############################################
 
+############# Date: 2023-07-29 #############
+
 # The default behavior only includes inc.env.mk and inc.ins.mk.
 # INC_MAKES can be set to a combination of `disenv` `conf` `app` `mod` `disins`.
 #   disenv: Excluding inc.env.mk
@@ -279,7 +281,7 @@ define sync_config_header
 endef
 
 ifneq ($(DEF_CONFIG), )
-config_hash_file = $(CONFIG_PATH)-md5-$(shell md5sum $(CONF_SAVE_PATH)/$(DEF_CONFIG) | cut -d ' ' -f 1)
+config_hash_file  = $(CONFIG_PATH)-md5-$(shell md5sum $(CONF_SAVE_PATH)/$(DEF_CONFIG) | cut -d ' ' -f 1)
 define process_config_hash
 	rm -f $(CONFIG_PATH)-md5-* && echo > $(config_hash_file)
 endef
@@ -300,29 +302,21 @@ endef
 
 .PHONY: buildkconfig cleankconfig menuconfig loadconfig defconfig cleanconfig
 
-ifneq ($(ENV_BUILD_MODE), yocto)
+ifneq ($(ENV_BUILD_MODE),yocto)
 
-ifeq ($(wildcard $(CONF_PATH)/mconf), )
-
-CONF_MAKE_FLAGS   = -s O=$(CONF_WORKDIR)/build DESTDIR=$(CONF_WORKDIR)/image -C $(CONF_SRC)
+CONF_MAKES       ?= -s O=$(CONF_WORKDIR)/build DESTDIR=$(CONF_WORKDIR)/image -C $(CONF_SRC)
 
 buildkconfig:
-	@unset PKG_CONFIG_LIBDIR PKG_CONFIG_PATH; $(MAKE) $(CONF_MAKE_FLAGS) && $(MAKE) $(CONF_MAKE_FLAGS) install
-
-cleankconfig:
-	@rm -rf $(CONF_WORKDIR)
-
-else
-
-buildkconfig cleankconfig:
-	@
-
+ifeq ($(wildcard $(CONF_PATH)/mconf), )
+	@unset PKG_CONFIG_LIBDIR PKG_CONFIG_PATH; $(MAKE) $(CONF_MAKES) && $(MAKE) $(CONF_MAKES) install
 endif
 
+cleankconfig:
+	@-$(MAKE) $(CONF_MAKES) clean
+
 else
 
 buildkconfig cleankconfig:
-	@
 
 endif
 
@@ -397,12 +391,6 @@ CPFLAGS        += $(call link_hdrs)
 LDFLAGS        += $(call link_libs)
 endif
 
-CPFLAGS        += -Wall # This enables all the warnings about constructions that some users consider questionable.
-CPFLAGS        += -Wextra # This enables some extra warning flags that are not enabled by -Wall (This option used to be called -W).
-CPFLAGS        += -Wlarger-than=$(if $(object_byte_size),$(object_byte_size),1024) # Warn whenever an object is defined whose size exceeds object_byte_size.
-CPFLAGS        += -Wframe-larger-than=$(if $(frame_byte_size),$(frame_byte_size),8192) # Warn if the size of a function frame exceeds frame_byte_size.
-#CPFLAGS       += -Wdate-time #Warn when macros __TIME__, __DATE__ or __TIMESTAMP__ are encountered as they might prevent bit-wise-identical reproducible compilations.
-
 CPFLAGS        += $(OPTIMIZATION_FLAG)
 LDFLAGS        += -Wl,-O1
 ifeq ($(ENV_OPTIMIZATION),release)
@@ -410,6 +398,35 @@ CPFLAGS        += -ffunction-sections -fdata-sections
 LDFLAGS        += -Wl,--gc-sections
 endif
 #LDFLAGS       += -static
+
+CPFLAGS        += -Wall # This enables all the warnings about constructions that some users consider questionable.
+CPFLAGS        += -Wextra # This enables some extra warning flags that are not enabled by -Wall (This option used to be called -W).
+CPFLAGS        += -Wlarger-than=$(if $(object_byte_size),$(object_byte_size),1024) # Warn whenever an object is defined whose size exceeds object_byte_size.
+CPFLAGS        += -Wframe-larger-than=$(if $(frame_byte_size),$(frame_byte_size),8192) # Warn if the size of a function frame exceeds frame_byte_size.
+#CPFLAGS       += -Wdate-time #Warn when macros __TIME__, __DATE__ or __TIMESTAMP__ are encountered as they might prevent bit-wise-identical reproducible compilations.
+
+# Use https://github.com/slimm609/checksec.sh/ to check the secture
+ifeq ($(ENV_SECURITY),y)
+# NX(No-eXecute) or DEP(Data Execution Prevention)
+#-z execstack # the default value is execstack, close it with noexecstack
+# Canary
+SEC_CPFLAGS    += -fstack-protector-strong  # check stack overflow
+# Fortify
+SEC_CPFLAGS    += -D_FORTIFY_SOURCE=2       # check string funcs overflow
+SEC_CPFLAGS    += -Wformat -Werror=format-security
+# PIC(Position Independent Code) / PIE(Position-Independent Executable) / ASLR(Address Space Layout Randomization)
+#CPFLAGS: -fPIC for libraries, -fPIE for executables; LDFLAGS: -fPIC for shared libraries, -pie for executables
+# Don't link unused shared libraries
+SEC_LDFLAGS    += -Wl,--as-needed
+# RELRO(Relocation Read-Only) https://www.redhat.com/en/blog/hardening-elf-binaries-using-relocation-read-only-relro
+SEC_LDFLAGS    += -Wl,-z,relro,-z,now
+
+CPFLAGS        += $(SEC_CPFLAGS)
+PRE_LDFLAGS    += $(SEC_LDFLAGS)
+endif
+
+CPFLAGS        += $(IMAKE_CPFLAGS)
+LDFLAGS        += $(IMAKE_LDFLAGS)
 
 # For more description, refer to https://gcc.gnu.org/onlinedocs/gcc-13.1.0/gcc/Instrumentation-Options.html
 ifeq ($(ENV_SANITIZER),1)
@@ -435,33 +452,6 @@ LDFLAGS        += $(SANITIZER_FLAG)
 ifeq ($(ENV_ANALYZER)-$(shell expr `$(CC) -dumpversion` \>= 10),y-1)
 CPFLAGS        += -fanalyzer
 LDFLAGS        += -fanalyzer
-endif
-
-# Usage: gprof -b <execute> gmon.out > report.txt
-# For more description, refer to https://sourceware.org/binutils/docs-2.40/gprof.html
-ifeq ($(ENV_PROFILING),y)
-CPFLAGS        += -pg
-LDFLAGS        += -pg
-endif
-
-# Use https://github.com/slimm609/checksec.sh/ to check the secture
-ifeq ($(ENV_SECURITY),y)
-# NX(No-eXecute) or DEP(Data Execution Prevention)
-#-z execstack # the default value is execstack, close it with noexecstack
-# Canary
-SECURITY_CPFLAGS   += -fstack-protector-strong  # check stack overflow
-# Fortify
-SECURITY_CPFLAGS   += -D_FORTIFY_SOURCE=2       # check string funcs overflow
-SECURITY_CPFLAGS   += -Wformat -Werror=format-security
-# PIC(Position Independent Code) / PIE(Position-Independent Executable) / ASLR(Address Space Layout Randomization)
-#CPFLAGS: -fPIC for libraries, -fPIE for executables; LDFLAGS: -fPIC for shared libraries, -pie for executables
-# Don't link unused shared libraries
-SECURITY_LDFLAGS   += -Wl,--as-needed
-# RELRO(Relocation Read-Only) https://www.redhat.com/en/blog/hardening-elf-binaries-using-relocation-read-only-relro
-SECURITY_LDFLAGS   += -Wl,-z,relro,-z,now
-
-CPFLAGS            += $(SECURITY_CPFLAGS)
-PRE_LDFLAGS        += $(SECURITY_LDFLAGS)
 endif
 
 define translate_obj
@@ -496,12 +486,12 @@ ifneq ($(filter %.$(1),$(SRCS)), )
 $$(patsubst %.$(1),$$(OBJ_PREFIX)/%.o,$$(filter %.$(1),$$(SRCS))): $$(OBJ_PREFIX)/%.o: %.$(1)
 	@mkdir -p $$(dir $$@)
 ifeq ($(filter $(1),$(ASM_SUFFIX)), )
-	@$(2) -c $(if $(filter $(1),$(CXX_SUFFIX)),$$(CXXFLAGS),$$(CFLAGS)) $$(CPFLAGS) $$(CFLAGS_$$(patsubst %.$(1),%.o,$$<)) $$(PRIVATE_CPFLAGS) -MM -MT $$@ -MF $$(patsubst %.o,%.d,$$@) $$<
+	@$(2) -c $(if $(filter $(1),$(CXX_SUFFIX)),$$(CXXFLAGS) $$(CPFLAGS) $$(IMAKE_CXXFLAGS),$$(CFLAGS) $$(CPFLAGS) $$(IMAKE_CFLAGS)) $$(CFLAGS_$$(patsubst %.$(1),%.o,$$<)) $$(PRIVATE_CPFLAGS) -MM -MT $$@ -MF $$(patsubst %.o,%.d,$$@) $$<
 	@cat $$(patsubst %.o,%.d,$$@) | sed -e 's/#.*//' -e 's/^[^:]*:\s*//' -e 's/\s*\\$$$$//' -e 's/[ \t\v][ \t\v]*/\n/g' | sed -e '/^$$$$/ d' -e 's/$$$$/:/g' >> $$(patsubst %.o,%.d,$$@)
 endif
 	@$(COLORECHO) "\033[032m$(2)\033[0m	$$<" $(LOGOUTPUT)
 ifneq ($(2),$(AS))
-	@$(2) -c $(if $(filter $(1),$(CXX_SUFFIX)),$$(CXXFLAGS),$$(CFLAGS)) $$(CPFLAGS) $$(CFLAGS_$$(patsubst %.$(1),%.o,$$<)) $$(PRIVATE_CPFLAGS) -o $$@ $$<
+	@$(2) -c $(if $(filter $(1),$(CXX_SUFFIX)),$$(CXXFLAGS) $$(CPFLAGS) $$(IMAKE_CXXFLAGS),$$(CFLAGS) $$(CPFLAGS) $$(IMAKE_CFLAGS)) $$(CFLAGS_$$(patsubst %.$(1),%.o,$$<)) $$(PRIVATE_CPFLAGS) -o $$@ $$<
 else
 	@$(2) $$(AFLAGS) $$(AFLAGS_$$(patsubst %.$(1),%.o,$$<)) -o $$@ $$<
 endif
@@ -533,7 +523,7 @@ $(OBJS): $(MAKEFILE_LIST)
 .PHONY: clean_objs
 
 clean_objs:
-	@-rm -rf $(OBJS) $(DEPS)
+	@rm -rf $(OBJS) $(DEPS)
 
 define add-liba-build
 LIB_TARGETS += $$(OBJ_PREFIX)/$(1)
@@ -618,6 +608,7 @@ ifneq ($(SEARCH_HDRS), )
 ccflags-y      += $(call link_hdrs)
 endif
 ccflags-y      += $(OPTIMIZATION_FLAG)
+ccflags-y      += $(IMAKE_CCFLAGS)
 
 define translate_obj
 $(patsubst $(src)/%,%,$(patsubst %,%.o,$(basename $(1))))
@@ -651,22 +642,23 @@ endif
 else # KERNELRELEASE
 
 KERNEL_SRC     ?= /lib/modules/$(shell uname -r)/build
+MOD_PATH       ?= $(shell pwd)
 MOD_MAKES      += -C $(KERNEL_SRC)
 
 ifneq ($(ENV_BUILD_MODE), yocto)
 MOD_MAKES      += $(if $(KERNEL_OUT),O=$(KERNEL_OUT),O=)
 endif
 
-ifneq ($(filter $(OBJ_PREFIX),. $(shell pwd)), )
-MOD_MAKES      += M=$(shell pwd)
+ifneq ($(filter $(OBJ_PREFIX),. $(MOD_PATH)), )
+MOD_MAKES      += M=$(MOD_PATH)
 else
 
-MOD_MAKES      += M=$(OBJ_PREFIX) src=$(shell pwd)
-KBUILD_MK       = $(if $(wildcard Kbuild),Kbuild,Makefile)
+MOD_MAKES      += M=$(OBJ_PREFIX) src=$(MOD_PATH)
+KBUILD_MK       = $(if $(wildcard $(MOD_PATH)/Kbuild),Kbuild,Makefile)
 
 modules modules_clean modules_install: $(OBJ_PREFIX)/$(KBUILD_MK)
 
-$(OBJ_PREFIX)/$(KBUILD_MK): $(KBUILD_MK)
+$(OBJ_PREFIX)/$(KBUILD_MK): $(MOD_PATH)/$(KBUILD_MK)
 	@-mkdir -p $(dir $@)
 	@-cp -f $< $@
 
@@ -697,7 +689,7 @@ modules_install:
 
 symvers_install:
 	@install -d $(INS_PREFIX)/usr/include/$(INSTALL_HDR)
-	@cp -dfp $(OBJ_PREFIX)/Module.symvers $(INS_PREFIX)/usr/include/$(INSTALL_HDR)
+	@cp -drf --preserve=mode,timestamps $(OBJ_PREFIX)/Module.symvers $(INS_PREFIX)/usr/include/$(INSTALL_HDR)
 
 install_hdrs: symvers_install
 
@@ -725,7 +717,7 @@ define install_obj
 .PHONY: install_$(1)s
 install_$(1)s:
 	@install -d $$(INS_PREFIX)$$($(1)dir)
-	@cp $(2) $$($(shell echo install_$(1)s | tr 'a-z' 'A-Z')) $$(INS_PREFIX)$$($(1)dir)
+	@cp -drf --preserve=mode,timestamps $$($(shell echo install_$(1)s | tr 'a-z' 'A-Z')) $$(INS_PREFIX)$$($(1)dir)
 endef
 
 define install_ext
@@ -733,52 +725,44 @@ install_$(1)s_%:
 	@ivar="$$($(shell echo install_$(1)s | tr 'a-z' 'A-Z')$$(patsubst install_$(1)s%,%,$$@))"; \
 	isrc="$$$$(echo $$$${ivar} | sed -E 's/\s+[a-zA-Z0-9/@_\.\-]+$$$$//g')"; \
 	idst="$$(INS_PREFIX)$$($(1)dir)$$$$(echo $$$${ivar} | sed -E 's/.*\s+([a-zA-Z0-9/@_\.\-]+)$$$$/\1/g')"; \
-	install -d $$$${idst} && cp $(2) $$$${isrc} $$$${idst}
+	install -d $$$${idst} && cp -drf --preserve=mode,timestamps $$$${isrc} $$$${idst}
 endef
 
-$(eval $(call install_obj,base_bin,-drf))
-$(eval $(call install_obj,base_sbin,-drf))
-$(eval $(call install_obj,base_lib,-drf))
-$(eval $(call install_obj,bin,-drf))
-$(eval $(call install_obj,sbin,-drf))
-$(eval $(call install_obj,lib,-drf))
-$(eval $(call install_obj,libexec,-drf))
-$(eval $(call install_obj,hdr,-drfp))
-$(eval $(call install_obj,include,-drfp))
-$(eval $(call install_obj,data,-drf))
-$(eval $(call install_obj,info,-drf))
-$(eval $(call install_obj,locale,-drf))
-$(eval $(call install_obj,man,-drf))
-$(eval $(call install_obj,doc,-drf))
-$(eval $(call install_obj,sysconf,-drf))
-$(eval $(call install_obj,service,-drf))
-$(eval $(call install_obj,sharedstate,-drf))
-$(eval $(call install_obj,localstate,-drf))
-$(eval $(call install_obj,runstate,-drf))
+$(eval $(call install_obj,base_bin))
+$(eval $(call install_obj,base_sbin))
+$(eval $(call install_obj,base_lib))
+$(eval $(call install_obj,bin))
+$(eval $(call install_obj,sbin))
+$(eval $(call install_obj,lib))
+$(eval $(call install_obj,libexec))
+$(eval $(call install_obj,hdr))
+$(eval $(call install_obj,include))
+$(eval $(call install_obj,data))
+$(eval $(call install_obj,info))
+$(eval $(call install_obj,locale))
+$(eval $(call install_obj,man))
+$(eval $(call install_obj,doc))
+$(eval $(call install_obj,sysconf))
+$(eval $(call install_obj,service))
+$(eval $(call install_obj,sharedstate))
+$(eval $(call install_obj,localstate))
+$(eval $(call install_obj,runstate))
 
-$(eval $(call install_ext,include,-drfp))
-$(eval $(call install_ext,data,-drf))
-$(eval $(call install_ext,sysconf,-drf))
+$(eval $(call install_ext,include))
+$(eval $(call install_ext,data))
+$(eval $(call install_ext,sysconf))
 
 install_todir_%:
 	@ivar="$($(shell echo install_todir | tr 'a-z' 'A-Z')$(patsubst install_todir%,%,$@))"; \
 	isrc="$$(echo $${ivar} | sed -E 's/\s+[a-zA-Z0-9/@_\.\-]+$$//g')"; \
 	idst="$(INS_PREFIX)$$(echo $${ivar} | sed -E 's/.*\s+([a-zA-Z0-9/@_\.\-]+)$$/\1/g')"; \
-	iopt="-drf"; \
-	if [ $$(echo $${ivar} | sed -E 's/.*\s+([a-zA-Z0-9/@_\.\-]+)$$/\1/g' | grep -c '/include') -eq 1 ]; then \
-		iopt="-drfp"; \
-	fi; \
-	install -d $${idst} && cp $${iopt} $${isrc} $${idst}
+	install -d $${idst} && cp -drf --preserve=mode,timestamps $${isrc} $${idst}
 
 install_tofile_%:
 	@ivar="$($(shell echo install_tofile | tr 'a-z' 'A-Z')$(patsubst install_tofile%,%,$@))"; \
 	isrc="$$(echo $${ivar} | sed -E 's/\s+[a-zA-Z0-9/@_\.\-]+$$//g')"; \
 	idst="$(INS_PREFIX)$$(echo $${ivar} | sed -E 's/.*\s+([a-zA-Z0-9/@_\.\-]+)$$/\1/g')"; \
-	iopt="-drf"; \
-	if [ $$(echo $${ivar} | sed -E 's/.*\s+([a-zA-Z0-9/@_\.\-]+)$$/\1/g' | grep -c '/include') -eq 1 ]; then \
-		iopt="-drfp"; \
-	fi; \
-	install -d $$(dirname $${idst}) && cp $${iopt} $${isrc} $${idst}
+	install -d $$(dirname $${idst}) && cp -drf --preserve=mode,timestamps $${isrc} $${idst}
 
 ifneq ($(ENV_BUILD_MODE), yocto)
 ifneq ($(DIS_LICENSE), y)

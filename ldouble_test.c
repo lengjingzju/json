@@ -29,7 +29,14 @@ int main(int argc, char *argv[])
 
     if (argc == 2) {
         ldouble_dtoa(d, buf);
+#if 1
         printf("original: %s\nprintf  : %0.15g\nldouble : %s\n", argv[1], d, buf);
+#else
+        char buf2[64] = {0};
+        sprintf(buf2, "%0.15g", d);
+        if (strcmp(buf, buf2))
+            printf("original: %s\nprintf  : %s\nldouble : %s\n", argv[1], buf2, buf);
+#endif
     } else {
         int i;
         int cnt = atoi(argv[2]);
@@ -45,7 +52,7 @@ int main(int argc, char *argv[])
         }
         ms3 = _system_ms_get();
         printf("original: %s\nprintf  : %0.15g\t%ums\nldouble : %s\t%ums\t%.0lf%%\n", argv[1], d,
-            ms2 - ms1, buf, ms3 - ms2, 100.0 * (ms2 - ms1) / (ms3 - ms2));
+            ms2 - ms1, buf, ms3 - ms2, ms3 - ms2 ? 100.0 * (ms2 - ms1) / (ms3 - ms2) : 0);
     }
 
     return 0;
