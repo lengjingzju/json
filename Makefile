@@ -17,8 +17,10 @@ ldoublelib      = libldouble.a
 ldoublebin      = ldouble
 
 INSTALL_HEADERS = json.h
-CPFLAGS        += -DJSON_DTOA_ALGORITHM=0   # 0:ldouble 1:sprintf 2:grisu2 3:dragonbox
-CPFLAGS        += -DLSHIFT_RESERVED_BIT=11  # 11 is 8% faster than 10, 10 is more similar to sprintf than 11
+DTOA           ?= 0
+RBIT           ?= 11
+CPFLAGS        += -DJSON_DTOA_ALGORITHM=$(DTOA) # 0:ldouble 1:sprintf 2:grisu2 3:dragonbox
+CPFLAGS        += -DLSHIFT_RESERVED_BIT=$(RBIT) # 11 is 8% faster than 10, 10 is more similar to sprintf than 11
 
 .PHONY: all clean install
 all:

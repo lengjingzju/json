@@ -5,7 +5,7 @@
 # https://github.com/lengjingzju/cbuild-ng #
 ############################################
 
-############# Date: 2023-07-29 #############
+############# Date: 2023-08-05 #############
 
 # The default behavior only includes inc.env.mk and inc.ins.mk.
 # INC_MAKES can be set to a combination of `disenv` `conf` `app` `mod` `disins`.
@@ -24,7 +24,7 @@ LOGOUTPUT      ?= $(if $(filter y,$(BUILDVERBOSE)),,1>/dev/null)
 
 INSTALL_HDR    ?= $(PACKAGE_NAME)
 SEARCH_HDRS    ?= $(PACKAGE_DEPS)
-ifneq ($(NATIVE_BUILD), y)
+ifneq ($(NATIVE_BUILD),y)
 PACKAGE_ID     := $(PACKAGE_NAME)
 else
 PACKAGE_ID     := $(PACKAGE_NAME)-native
@@ -39,16 +39,16 @@ else
 OPTIMIZATION_FLAG   ?= -O2
 endif
 
-ifneq ($(ENV_BUILD_MODE), yocto)
+ifneq ($(ENV_BUILD_MODE),yocto)
 
-ifneq ($(NATIVE_BUILD), y)
+ifneq ($(NATIVE_BUILD),y)
 ENV_CROSS_ROOT ?= $(shell pwd)
 WORKDIR        ?= $(ENV_CROSS_ROOT)/objects/$(PACKAGE_NAME)
 SYS_PREFIX     ?= $(ENV_CROSS_ROOT)/sysroot
 ifneq ($(CROSS_DESTDIR), )
 INS_PREFIX      = $(CROSS_DESTDIR)
 endif
-ifneq ($(GLOBAL_SYSROOT), y)
+ifneq ($(GLOBAL_SYSROOT),y)
 DEP_PREFIX     ?= $(WORKDIR)/sysroot
 else
 DEP_PREFIX     ?= $(SYS_PREFIX)
@@ -60,7 +60,7 @@ SYS_PREFIX     ?= $(ENV_NATIVE_ROOT)/sysroot
 ifneq ($(NATIVE_DESTDIR), )
 INS_PREFIX      = $(NATIVE_DESTDIR)
 endif
-ifneq ($(GLOBAL_SYSROOT), y)
+ifneq ($(GLOBAL_SYSROOT),y)
 DEP_PREFIX     ?= $(WORKDIR)/sysroot-native
 else
 DEP_PREFIX     ?= $(SYS_PREFIX)
@@ -72,7 +72,7 @@ INS_TOPDIR     ?= $(WORKDIR)/image
 INS_PREFIX     ?= $(WORKDIR)/image
 OBJ_SUBDIR     ?=
 OBJ_PREFIX     ?= $(WORKDIR)/build$(OBJ_SUBDIR)
-ifneq ($(GLOBAL_SYSROOT), y)
+ifneq ($(GLOBAL_SYSROOT),y)
 PATH_PREFIX    ?= $(WORKDIR)/sysroot-native
 else
 PATH_PREFIX    ?= $(ENV_NATIVE_ROOT)/sysroot
@@ -82,7 +82,7 @@ else # ENV_BUILD_MODE
 
 # WORKDIR should be exported by yocto recipe.
 # Yocto doesn't have SYS_PREFIX INS_TOPDIR INS_SUBDIR
-ifneq ($(NATIVE_BUILD), y)
+ifneq ($(NATIVE_BUILD),y)
 INS_PREFIX     ?= $(WORKDIR)/image
 DEP_PREFIX     ?= $(WORKDIR)/recipe-sysroot
 else # NATIVE_BUILD
@@ -109,20 +109,20 @@ DEP_PREFIX      = $(DEPDIR)
 endif
 
 define link_hdrs
-$(addprefix  -I,$(wildcard \
-	$(addprefix $(DEP_PREFIX),/include /usr/include /usr/local/include) \
+$(addprefix  -I,$(addprefix $(DEP_PREFIX),/include /usr/include /usr/local/include) \
+	$(if $(SEARCH_HDRS),$(wildcard \
 	$(addprefix $(DEP_PREFIX)/include/,$(SEARCH_HDRS)) \
 	$(addprefix $(DEP_PREFIX)/usr/include/,$(SEARCH_HDRS)) \
 	$(addprefix $(DEP_PREFIX)/usr/local/include/,$(SEARCH_HDRS)) \
-))
+)))
 endef
 
 ifeq ($(KERNELRELEASE), )
 
 comma          :=,
 define link_libs
-$(addprefix -L,$(wildcard $(addprefix $(DEP_PREFIX),/lib /usr/lib /usr/local/lib))) \
-$(addprefix -Wl$(comma)-rpath-link=,$(wildcard $(addprefix $(DEP_PREFIX),/lib /usr/lib /usr/local/lib)))
+$(addprefix -L,$(addprefix $(DEP_PREFIX),/lib /usr/lib /usr/local/lib)) \
+$(addprefix -Wl$(comma)-rpath-link=,$(addprefix $(DEP_PREFIX),/lib /usr/lib /usr/local/lib))
 endef
 
 ifneq ($(filter y,$(NATIVE_DEPEND) $(NATIVE_BUILD)), )
@@ -131,8 +131,8 @@ export LD_LIBRARY_PATH:=$(shell echo $(addprefix $(PATH_PREFIX),/lib /usr/lib /u
 endif
 
 ifneq ($(LICFILE), )
-ifneq ($(ENV_BUILD_MODE), yocto)
-ifneq ($(NATIVE_BUILD), y)
+ifneq ($(ENV_BUILD_MODE),yocto)
+ifneq ($(NATIVE_BUILD),y)
 LICPATH        ?= $(SRC_PATH)
 LICDEST        ?= $(INS_PREFIX)
 define install_lics
@@ -150,17 +150,17 @@ endif
 
 # yocto envs should be exported by yocto recipe.
 
-ifneq ($(ENV_BUILD_MODE), yocto)
+ifneq ($(ENV_BUILD_MODE),yocto)
 
 PREPARE_SYSROOT = -s CROSS_DESTDIR=$(WORKDIR)/sysroot NATIVE_DESTDIR=$(WORKDIR)/sysroot-native \
                   NATIVE_BUILD= INSTALL_OPTION=link -C $(ENV_TOP_DIR) $(PACKAGE_ID)_psysroot
 
-ifneq ($(DIS_PC_EXPORT), y)
+ifneq ($(DIS_PC_EXPORT),y)
 export PKG_CONFIG_LIBDIR=$(DEP_PREFIX)/usr/lib/pkgconfig
 export PKG_CONFIG_PATH=$(shell echo $(wildcard $(addprefix $(DEP_PREFIX),$(addsuffix /pkgconfig,/lib /usr/lib /usr/local/lib))) | sed 's@ @:@g')
 endif
 
-ifneq ($(NATIVE_BUILD), y)
+ifneq ($(NATIVE_BUILD),y)
 
 ifneq ($(ENV_BUILD_ARCH), )
 ARCH           := $(ENV_BUILD_ARCH)
@@ -373,7 +373,7 @@ COLORECHO      ?= $(if $(findstring dash,$(shell readlink /bin/sh)),echo,echo -e
 SRC_PATH       ?= .
 IGNORE_PATH    ?= .git .pc scripts output
 REG_SUFFIX     ?= c cpp S
-ifeq ($(USING_CXX_BUILD_C), y)
+ifeq ($(USING_CXX_BUILD_C),y)
 CXX_SUFFIX     ?= c cc cp cxx cpp CPP c++ C
 else
 CXX_SUFFIX     ?= cc cp cxx cpp CPP c++ C
@@ -385,11 +385,10 @@ SRCS           ?= $(shell find $(SRC_PATH) $(patsubst %,-path '*/%' -prune -o,$(
                   | sed "s/^\(\.\/\)\(.*\)/\2/g" | xargs)
 
 CPFLAGS        += -I. -I./include $(patsubst %,-I%,$(filter-out .,$(SRC_PATH))) $(patsubst %,-I%/include,$(filter-out .,$(SRC_PATH))) -I$(OBJ_PREFIX)
+LDFLAGS        += -L$(OBJ_PREFIX) -Wl,-rpath-link=$(OBJ_PREFIX)
 
-ifneq ($(SEARCH_HDRS), )
 CPFLAGS        += $(call link_hdrs)
 LDFLAGS        += $(call link_libs)
-endif
 
 CPFLAGS        += $(OPTIMIZATION_FLAG)
 LDFLAGS        += -Wl,-O1
@@ -454,6 +453,21 @@ CPFLAGS        += -fanalyzer
 LDFLAGS        += -fanalyzer
 endif
 
+CHECK_INFO     += ENV_OPTIMIZATION=$(ENV_OPTIMIZATION)  \
+                  ENV_SECURITY=$(ENV_SECURITY)          \
+                  ENV_SANITIZER=$(ENV_SANITIZER)        \
+                  ENV_ANALYZER=$(ENV_ANALYZER)          \
+                  USING_CXX_BUILD_C=$(USING_CXX_BUILD_C)\
+                  CC=$(CC)                              \
+                  CPFLAGS=$(CPFLAGS)                    \
+                  CFLAGS=$(CFLAGS)                      \
+                  CXXFLAGS=$(CXXFLAGS)                  \
+                  IMAKE_CFLAGS=$(IMAKE_CFLAGS)          \
+                  IMAKE_CXXFLAGS=$(IMAKE_CXXFLAGS)      \
+                  PRE_LDFLAGS=$(PRE_LDFLAGS)            \
+                  LDFLAGS=$(LDFLAGS)                    \
+                  IMAKE_LDFLAGS=$(IMAKE_LDFLAGS)
+
 define translate_obj
 $(patsubst %,$(OBJ_PREFIX)/%.o,$(basename $(1)))
 endef
@@ -499,7 +513,7 @@ endif
 endif
 endef
 
-ifeq ($(USING_CXX_BUILD_C), y)
+ifeq ($(USING_CXX_BUILD_C),y)
 $(eval $(call compile_obj,c,$$(CXX)))
 else
 $(eval $(call compile_obj,c,$$(CC)))
@@ -517,13 +531,26 @@ $(eval $(call compile_obj,asm,$$(AS)))
 
 OBJS            = $(call translate_obj,$(SRCS))
 DEPS            = $(patsubst %.o,%.d,$(OBJS))
-$(OBJS): $(MAKEFILE_LIST)
+CHECK_FILE      = $(OBJ_PREFIX)/checkinfo
+
+$(OBJS): $(MAKEFILE_LIST) $(CHECK_FILE)
 -include $(DEPS)
+
+$(CHECK_FILE): $(CHECK_FILE).tmp
+	@if [ -e $@ ] && [ $$(md5sum $@ | cut -d ' ' -f 1) = $$(md5sum $< | cut -d ' ' -f 1) ]; then \
+		rm -f $<; \
+	else \
+		mv -f $< $@; \
+	fi
+
+$(CHECK_FILE).tmp:
+	@mkdir -p $(OBJ_PREFIX)
+	@echo "$(CHECK_INFO)" > $@
 
 .PHONY: clean_objs
 
 clean_objs:
-	@rm -rf $(OBJS) $(DEPS)
+	@rm -rf $(OBJS) $(DEPS) $(OBJ_PREFIX)/checkinfo
 
 define add-liba-build
 LIB_TARGETS += $$(OBJ_PREFIX)/$(1)
@@ -604,9 +631,7 @@ MOD_NAME       ?= hello
 obj-m          := $(patsubst %,%.o,$(MOD_NAME))
 
 ccflags-y      += $(patsubst %,-I%,$(src) $(src)/include $(obj))
-ifneq ($(SEARCH_HDRS), )
 ccflags-y      += $(call link_hdrs)
-endif
 ccflags-y      += $(OPTIMIZATION_FLAG)
 ccflags-y      += $(IMAKE_CCFLAGS)
 
@@ -618,7 +643,7 @@ define set_flags
 $(foreach v,$(2),$(eval $(1)_$(call translate_obj,$(v)) = $(3)))
 endef
 
-ifeq ($(words $(MOD_NAME)), 1)
+ifeq ($(words $(MOD_NAME)),1)
 
 IGNORE_PATH    ?= .git .pc scripts output
 REG_SUFFIX     ?= c S
@@ -628,7 +653,7 @@ SRCS           ?= $(filter-out %.mod.c,$(shell find $(src) \
                      | xargs))
 OBJS            = $(call translate_obj,$(SRCS))
 
-ifneq ($(words $(OBJS))-$(OBJS), 1-$(MOD_NAME).o)
+ifneq ($(words $(OBJS))-$(OBJS),1-$(MOD_NAME).o)
 $(MOD_NAME)-y  := $(OBJS)
 endif
 
@@ -645,7 +670,7 @@ KERNEL_SRC     ?= /lib/modules/$(shell uname -r)/build
 MOD_PATH       ?= $(shell pwd)
 MOD_MAKES      += -C $(KERNEL_SRC)
 
-ifneq ($(ENV_BUILD_MODE), yocto)
+ifneq ($(ENV_BUILD_MODE),yocto)
 MOD_MAKES      += $(if $(KERNEL_OUT),O=$(KERNEL_OUT),O=)
 endif
 
@@ -764,8 +789,8 @@ install_tofile_%:
 	idst="$(INS_PREFIX)$$(echo $${ivar} | sed -E 's/.*\s+([a-zA-Z0-9/@_\.\-]+)$$/\1/g')"; \
 	install -d $$(dirname $${idst}) && cp -drf --preserve=mode,timestamps $${isrc} $${idst}
 
-ifneq ($(ENV_BUILD_MODE), yocto)
-ifneq ($(DIS_LICENSE), y)
+ifneq ($(ENV_BUILD_MODE),yocto)
+ifneq ($(DIS_LICENSE),y)
 .PHONY: license
 SYSROOT_SCRIPT  := $(ENV_TOOL_DIR)/process_sysroot.sh
 SRC_PATH        ?= .

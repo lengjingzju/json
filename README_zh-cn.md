@@ -70,7 +70,7 @@ make O=<编译输出目录> CROSS_COMPILE=<交叉编译器前缀> && make O=<编
 ![AARCH64-Linux测试结果](test_result/test_for_aarch64.png)
 
 > 测试平台: PC | CPU: Intel i7-10700 | OS: Ubuntu 18.04 (VirtualBox)<br>
-> 测试结果: :LJSON 比cJSON 解析最快可达 560%，打印最快可达 2894%，LJSON 比 RapidJSON 解析最快可达 75%，打印最快可达 124%
+> 测试结果: LJSON 比cJSON 解析最快可达 560%，打印最快可达 2894%，LJSON 比 RapidJSON 解析最快可达 75%，打印最快可达 124%
 
 ![x86_64-Linux测试结果](test_result/test_for_x86_64.png)
 
