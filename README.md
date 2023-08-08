@@ -8,7 +8,7 @@ By default, LJSON uses the personally developed ldouble algorithm to print doubl
 
 ## Features
 
-* Faster: Print and parse faster than both cJSON and RapidJSON, up to 19 times faster than CJSON and 1 time faster than Rapid JSON, refer to below test results
+* Faster: Print and parse faster than both cJSON and RapidJSON, up to **32** times faster than CJSON and **1.5** time faster than Rapid JSON, refer to below test results
 * Lighter: Provide a variety of methods to save memory, such as pool memory, file parsing while reading, file writing while printing, and SAX APIs. It can make memory usage a constant
 * Stronger: Support DOM and SAX-style APIs, provide APIs for JSON in classic mode and memory pool mode, support string and file as input and output, is extended to support long long integer and hexadecimal number
 * More friendly: C language implementation, does not depend on any other library, does not contain platform-related code, only one header file and source file, and the interface corresponding to cJSON. the code logic is clearer than any other JSON libraries
@@ -36,10 +36,10 @@ make O=<output path> CROSS_COMPILE=<tool prefix> && make O=<output path> DESTDIR
 ```
 
 * Select double to string algorithm `gcc -DJSON_DTOA_ALGORITHM=n`, n may be 0 / 1 / 2 / 3
-    * 0: Personal implementation of ldouble algorithm: faster than Google's default implementation of grisu2 **117%** , faster than Tencent optimized grisu2 implementation **30%**, faster than sprintf **13.3** times
+    * 0: Personal implementation of ldouble algorithm: faster than Google's default implementation of grisu2 **129%** , faster than Tencent optimized grisu2 implementation **33%**, faster than sprintf **14.6** times
     * 1: C standard library sprintf
     * 2: Personal optimized grisu2 algorithm: Google's grisu2 default implementation is **5.7** times faster than sprintf, Tencent optimized grisu2 implementation is **9.1** times faster than sprintf, LJSON optimized implementation is faster than sprintf **11.4** times
-    * 3: Personal optimized dragonbox algorithm: the speed performance is basically the same as the ldouble algorithm
+    * 3: Personal optimized dragonbox algorithm: the speed performance is slower than ldouble algorithm, but faster than grisu2 algorithm
 
 ### Run Method
 
@@ -64,12 +64,12 @@ make O=<output path> CROSS_COMPILE=<tool prefix> && make O=<output path> DESTDIR
 Note: 'O2' optimization level and default option compilation, the test files come from the [nativejson-benchmark](https://github.com/miloyip/nativejson-benchmark) project
 
 > Test Platform: Ambarella CV25M Board | CPU: ARM CortexA53 | OS: Linux-5.15<br>
-> Test Result: LJSON parses 475% faster and prints 2225% faster than cJSON, LJSON parses 131% faster and prints 137% faster than RapidJSON
+> Test Result: LJSON parses 475% faster and prints 2836% faster than cJSON, LJSON parses 131% faster and prints 147% faster than RapidJSON
 
 ![AARCH64-Linux Test Result](test_result/test_for_aarch64.png)
 
 > Test Platform: PC | CPU: Intel i7-10700 | OS: Ubuntu 18.04 (VirtualBox)<br>
-> Test Result: LJSON parses 560% faster and prints 2894% faster than cJSON, LJSON parses 75% faster and prints 124% faster than RapidJSON
+> Test Result: LJSON parses 560% faster and prints 3184% faster than cJSON, LJSON parses 75% faster and prints 133% faster than RapidJSON
 
 ![x86_64-Linux Test Result](test_result/test_for_x86_64.png)
 

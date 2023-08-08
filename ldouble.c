@@ -555,7 +555,7 @@ static inline int32_t fill_1_20_digits(char *buffer, uint64_t digits, int32_t *p
         if (!r) {
             memset(s, '0', 16);
             s += 16;
-            *ptz = 16;
+            *ptz += 16;
         } else {
             s += fill_t_16_digits(s, r, ptz);
         }
@@ -564,9 +564,107 @@ static inline int32_t fill_1_20_digits(char *buffer, uint64_t digits, int32_t *p
     return s - buffer;
 }
 
+static inline int32_t fill_a_4_digits(char *buffer, uint32_t digits, int32_t *ptz)
+{
+    char *s = buffer;
+    uint32_t q = FAST_DIV100(digits);
+    uint32_t r = digits - q * 100;
+
+    memcpy(s, &ch_100_lut[q<<1], 2);
+    memcpy(s + 2, &ch_100_lut[r<<1], 2);
+
+    if (r < 5) {
+        *ptz = tz_100_lut[q] + 2;
+    } else {
+        if (s[3] < '5') {
+            s[3] = '0';
+            *ptz = 1;
+        } else {
+            s[3] -= 2;
+            *ptz = 0;
+        }
+    }
+
+    return 4;
+}
+
+static inline int32_t fill_a_8_digits(char *buffer, uint32_t digits, int32_t *ptz)
+{
+    char *s = buffer;
+
+    if (digits < 10000) {
+        memset(s, '0', 4);
+        fill_a_4_digits(s + 4, digits, ptz);
+    } else {
+        uint32_t q = FAST_DIV10000(digits);
+        uint32_t r = digits - q * 10000;
+
+        fill_t_4_digits(s, q, ptz);
+        if (r < 5) {
+            memset(s + 4, '0', 4);
+            *ptz += 4;
+        } else {
+            fill_a_4_digits(s + 4, r, ptz);
+        }
+    }
+
+    return 8;
+}
+
+static inline int32_t fill_a_16_digits(char *buffer, uint64_t digits, int32_t *ptz)
+{
+    char *s = buffer;
+
+    if (digits < 100000000llu) {
+        memset(s, '0', 8);
+        fill_a_8_digits(s + 8, digits, ptz);
+    } else {
+        uint32_t q = (uint32_t)(digits / 100000000);
+        uint32_t r = (uint32_t)(digits - (uint64_t)q * 100000000);
+
+        fill_t_8_digits(s, q, ptz);
+        if (r < 5) {
+            memset(s + 8, '0', 8);
+            *ptz += 8;
+        } else {
+            fill_a_8_digits(s + 8, r, ptz);
+        }
+    }
+
+    return 16;
+}
+
 static inline int32_t fill_significand(char *buffer, uint64_t digits, int32_t *ptz)
 {
-   return fill_1_20_digits(buffer, digits, ptz);
+    char *s = buffer;
+
+    if (digits < 10000000000000000llu) {
+        uint32_t q = (uint32_t)(digits / 100000000);
+        uint32_t r = (uint32_t)(digits - (uint64_t)q * 100000000);
+
+        s += fill_1_8_digits(s, q, ptz);
+        if (r < 5) {
+            *ptz += 8;
+            memset(s, '0', 8);
+            s += 8;
+        } else {
+            s += fill_a_8_digits(s, r, ptz);
+        }
+    } else {
+        uint32_t q = (uint32_t)(digits / 10000000000000000llu);
+        uint64_t r = (digits - (uint64_t)q * 10000000000000000llu);
+
+        s += fill_1_4_digits(s, q, ptz);
+        if (r < 5) {
+            memset(s, '0', 16);
+            s += 16;
+            *ptz += 16;
+        } else {
+            s += fill_a_16_digits(s, r, ptz);
+        }
+    }
+
+    return s - buffer;
 }
 
 static inline int32_t fill_exponent(int32_t K, char* buffer)
@@ -603,15 +701,6 @@ static inline char* ldouble_format(char* buffer, uint64_t digits, int32_t decima
     int32_t num_digits, trailing_zeros, vnum_digits, decimal_point;
 
     num_digits = fill_significand(buffer + 1, digits + 2, &trailing_zeros);
-    if (buffer[num_digits] >= '5') {
-        buffer[num_digits] -= 2;
-    } else {
-        buffer[num_digits] = '0';
-        for (trailing_zeros = 1; trailing_zeros < num_digits; ++trailing_zeros) {
-            if (buffer[num_digits - trailing_zeros] != '0')
-                break;
-        }
-    }
     vnum_digits = num_digits - trailing_zeros;
     decimal_point = num_digits + decimal_exponent;
 

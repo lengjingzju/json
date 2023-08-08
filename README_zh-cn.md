@@ -9,7 +9,7 @@ LJSON 默认使用个人开发的 ldouble 算法打印浮点数，和标准库�
 
 ## 功能特点
 
-* 更快：打印和解析速度比 cJSON 和 RapidJSON 都要快，速度最高可比 CJSON 快19倍，比 Rapid JSON 快1倍，见测试结果
+* 更快：打印和解析速度比 cJSON 和 RapidJSON 都要快，速度最高可比 CJSON 快32倍，比 Rapid JSON 快1.5倍，见测试结果
 * 更省：提供多种省内存的手段，例如内存池、文件边读边解析、边打印边写文件、SAX方式的接口，可做到内存占用是个常数
 * 更强：支持DOM和SAX风格的API，提供普通模式和内存池模式JSON的接口，支持字符串和文件作为输入输出(可扩展支持其它流)，扩展支持长长整形和十六进制数字
 * 更友好：C语言实现，不依赖任何库，不含平台相关代码，只有一个头文件和库文件，和cJSON对应一致的接口，代码逻辑比任何JSON库都更清晰
@@ -37,10 +37,10 @@ make O=<编译输出目录> CROSS_COMPILE=<交叉编译器前缀> && make O=<编
 ```
 
 * 选择浮点数转字符串算法 `gcc -DJSON_DTOA_ALGORITHM=n`， n可能为 0 / 1 / 2 / 3 
-    * 0: 个人实现的 ldouble 算法: 比谷歌的 grisu2 的默认实现快 **117%** ，比腾讯优化的 grisu2 实现快 **30%** ，比 sprintf 快 **13.3** 倍
+    * 0: 个人实现的 ldouble 算法: 比谷歌的 grisu2 的默认实现快 **129%** ，比腾讯优化的 grisu2 实现快 **33%** ，比 sprintf 快 **14.6** 倍
     * 1: C标准库的 sprintf
     * 2: 个人优化的 grisu2 算法: 谷歌的 grisu2 的默认实现比 sprintf 快 **5.7** 倍，腾讯优化的 grisu2 实现比 sprintf 快 **9.1** 倍，LJSON 的优化实现比 sprintf 快 **11.4** 倍
-    * 3: 个人优化的 dragonbox 算法: 性能和 ldouble 算法基本相差无几
+    * 3: 个人优化的 dragonbox 算法: 性能和 ldouble 算法差，比 grisu2 算法强
 
 ### 运行方法
 
@@ -65,12 +65,12 @@ make O=<编译输出目录> CROSS_COMPILE=<交叉编译器前缀> && make O=<编
 注：主要是测试速度，`O2` 优化等级且默认选项编译，测试文件来自 [nativejson-benchmark](https://github.com/miloyip/nativejson-benchmark) 项目
 
 > 测试平台: Ambarella CV25M Board | CPU: ARM CortexA53 | OS: Linux-5.15<br>
-> 测试结果: LJSON 比cJSON 解析最快可达 475%，打印最快可达 2225%，LJSON 比 RapidJSON 解析最快可达 131%，打印最快可达 137%
+> 测试结果: LJSON 比cJSON 解析最快可达 475%，打印最快可达 2836%，LJSON 比 RapidJSON 解析最快可达 131%，打印最快可达 147%
 
 ![AARCH64-Linux测试结果](test_result/test_for_aarch64.png)
 
 > 测试平台: PC | CPU: Intel i7-10700 | OS: Ubuntu 18.04 (VirtualBox)<br>
-> 测试结果: LJSON 比cJSON 解析最快可达 560%，打印最快可达 2894%，LJSON 比 RapidJSON 解析最快可达 75%，打印最快可达 124%
+> 测试结果: LJSON 比cJSON 解析最快可达 560%，打印最快可达 3184%，LJSON 比 RapidJSON 解析最快可达 75%，打印最快可达 133%
 
 ![x86_64-Linux测试结果](test_result/test_for_x86_64.png)
 
