@@ -5,7 +5,7 @@
 # https://github.com/lengjingzju/cbuild-ng #
 ############################################
 
-############# Date: 2023-08-05 #############
+############# Date: 2023-08-12 #############
 
 # The default behavior only includes inc.env.mk and inc.ins.mk.
 # INC_MAKES can be set to a combination of `disenv` `conf` `app` `mod` `disins`.
@@ -19,7 +19,7 @@
 
 ifeq ($(filter disenv,$(INC_MAKES)), )
 
-COLORECHO      ?= $(if $(findstring dash,$(shell readlink /bin/sh)),echo,echo -e)
+COLORECHO      := $(if $(findstring dash,$(shell readlink /bin/sh)),echo,echo -e)
 LOGOUTPUT      ?= $(if $(filter y,$(BUILDVERBOSE)),,1>/dev/null)
 
 INSTALL_HDR    ?= $(PACKAGE_NAME)
@@ -46,7 +46,7 @@ ENV_CROSS_ROOT ?= $(shell pwd)
 WORKDIR        ?= $(ENV_CROSS_ROOT)/objects/$(PACKAGE_NAME)
 SYS_PREFIX     ?= $(ENV_CROSS_ROOT)/sysroot
 ifneq ($(CROSS_DESTDIR), )
-INS_PREFIX      = $(CROSS_DESTDIR)
+INS_PREFIX     := $(CROSS_DESTDIR)
 endif
 ifneq ($(GLOBAL_SYSROOT),y)
 DEP_PREFIX     ?= $(WORKDIR)/sysroot
@@ -58,7 +58,7 @@ ENV_NATIVE_ROOT?= $(shell pwd)
 WORKDIR        ?= $(ENV_NATIVE_ROOT)/objects/$(PACKAGE_NAME)
 SYS_PREFIX     ?= $(ENV_NATIVE_ROOT)/sysroot
 ifneq ($(NATIVE_DESTDIR), )
-INS_PREFIX      = $(NATIVE_DESTDIR)
+INS_PREFIX     := $(NATIVE_DESTDIR)
 endif
 ifneq ($(GLOBAL_SYSROOT),y)
 DEP_PREFIX     ?= $(WORKDIR)/sysroot-native
@@ -97,15 +97,15 @@ PATH_PREFIX    ?= $(WORKDIR)/recipe-sysroot-native
 endif # ENV_BUILD_MODE
 
 ifneq ($(O), )
-OBJ_PREFIX      = $(O)$(OBJ_SUBDIR)
+OBJ_PREFIX     := $(O)$(OBJ_SUBDIR)
 endif
 
 ifneq ($(DESTDIR), )
-INS_PREFIX      = $(DESTDIR)
+INS_PREFIX     := $(DESTDIR)
 endif
 
 ifneq ($(DEPDIR), )
-DEP_PREFIX      = $(DEPDIR)
+DEP_PREFIX     := $(DEPDIR)
 endif
 
 define link_hdrs
@@ -152,12 +152,12 @@ endif
 
 ifneq ($(ENV_BUILD_MODE),yocto)
 
-PREPARE_SYSROOT = -s CROSS_DESTDIR=$(WORKDIR)/sysroot NATIVE_DESTDIR=$(WORKDIR)/sysroot-native \
+PREPARE_SYSROOT := -s CROSS_DESTDIR=$(WORKDIR)/sysroot NATIVE_DESTDIR=$(WORKDIR)/sysroot-native \
                   NATIVE_BUILD= INSTALL_OPTION=link -C $(ENV_TOP_DIR) $(PACKAGE_ID)_psysroot
 
 ifneq ($(DIS_PC_EXPORT),y)
-export PKG_CONFIG_LIBDIR=$(DEP_PREFIX)/usr/lib/pkgconfig
-export PKG_CONFIG_PATH=$(shell echo $(wildcard $(addprefix $(DEP_PREFIX),$(addsuffix /pkgconfig,/lib /usr/lib /usr/local/lib))) | sed 's@ @:@g')
+export PKG_CONFIG_LIBDIR:=$(DEP_PREFIX)/usr/lib/pkgconfig
+export PKG_CONFIG_PATH:=$(shell echo $(wildcard $(addprefix $(DEP_PREFIX),$(addsuffix /pkgconfig,/lib /usr/lib /usr/local/lib))) | sed 's@ @:@g')
 endif
 
 ifneq ($(NATIVE_BUILD),y)
@@ -215,26 +215,26 @@ endif # ENV_BUILD_MODE
 # Meson: https://mesonbuild.com/Builtin-options.html#directories
 # Yocto: https://git.yoctoproject.org/poky/tree/meta/conf/bitbake.conf
 
-base_bindir     = /bin
-base_sbindir    = /sbin
-base_libdir     = /lib
-bindir          = /usr/bin
-sbindir         = /usr/sbin
-libdir          = /usr/lib
-libexecdir      = /usr/libexec
-hdrdir          = /usr/include/$(INSTALL_HDR)
-includedir      = /usr/include
-datarootdir     = /usr/share
-datadir         = $(datarootdir)
-infodir         = $(datadir)/info
-localedir       = $(datadir)/locale
-mandir          = $(datadir)/man
-docdir          = $(datadir)/doc
-sysconfdir      = /etc
-servicedir      = /srv
-sharedstatedir  = /com
-localstatedir   = /var
-runstatedir     = /run
+base_bindir    := /bin
+base_sbindir   := /sbin
+base_libdir    := /lib
+bindir         := /usr/bin
+sbindir        := /usr/sbin
+libdir         := /usr/lib
+libexecdir     := /usr/libexec
+hdrdir         := /usr/include/$(INSTALL_HDR)
+includedir     := /usr/include
+datarootdir    := /usr/share
+datadir        := $(datarootdir)
+infodir        := $(datadir)/info
+localedir      := $(datadir)/locale
+mandir         := $(datadir)/man
+docdir         := $(datadir)/doc
+sysconfdir     := /etc
+servicedir     := /srv
+sharedstatedir := /com
+localstatedir  := /var
+runstatedir    := /run
 
 endif # KERNELRELEASE
 endif
@@ -254,10 +254,10 @@ CONF_PREFIX      ?= srctree=$(shell pwd)
 CONF_HEADER      ?= $(shell echo __$(PACKAGE_NAME)_CONFIG_H__ | tr '[:lower:]' '[:upper:]')
 CONF_APPEND_CMD  ?=
 
-CONFIG_PATH       = $(CONF_OUT)/.config
-AUTOCONFIG_PATH   = $(CONF_OUT)/autoconfig/auto.conf
-AUTOHEADER_PATH   = $(CONF_OUT)/config.h
-CONF_OPTIONS      = $(KCONFIG) --configpath $(CONFIG_PATH) \
+CONFIG_PATH      := $(CONF_OUT)/.config
+AUTOCONFIG_PATH  := $(CONF_OUT)/autoconfig/auto.conf
+AUTOHEADER_PATH  := $(CONF_OUT)/config.h
+CONF_OPTIONS     := $(KCONFIG) --configpath $(CONFIG_PATH) \
 					--autoconfigpath $(AUTOCONFIG_PATH) \
 					--autoheaderpath $(AUTOHEADER_PATH)
 
@@ -281,7 +281,7 @@ define sync_config_header
 endef
 
 ifneq ($(DEF_CONFIG), )
-config_hash_file  = $(CONFIG_PATH)-md5-$(shell md5sum $(CONF_SAVE_PATH)/$(DEF_CONFIG) | cut -d ' ' -f 1)
+config_hash_file := $(CONFIG_PATH)-md5-$(shell md5sum $(CONF_SAVE_PATH)/$(DEF_CONFIG) | cut -d ' ' -f 1)
 define process_config_hash
 	rm -f $(CONFIG_PATH)-md5-* && echo > $(config_hash_file)
 endef
@@ -304,7 +304,9 @@ endef
 
 ifneq ($(ENV_BUILD_MODE),yocto)
 
-CONF_MAKES       ?= -s O=$(CONF_WORKDIR)/build DESTDIR=$(CONF_WORKDIR)/image -C $(CONF_SRC)
+ifeq ($(CONF_MAKES), )
+CONF_MAKES       := -s O=$(CONF_WORKDIR)/build DESTDIR=$(CONF_WORKDIR)/image -C $(CONF_SRC)
+endif
 
 buildkconfig:
 ifeq ($(wildcard $(CONF_PATH)/mconf), )
@@ -369,7 +371,7 @@ endif
 ifneq ($(filter app,$(INC_MAKES)), )
 ifeq ($(KERNELRELEASE), )
 
-COLORECHO      ?= $(if $(findstring dash,$(shell readlink /bin/sh)),echo,echo -e)
+COLORECHO      := $(if $(findstring dash,$(shell readlink /bin/sh)),echo,echo -e)
 SRC_PATH       ?= .
 IGNORE_PATH    ?= .git .pc scripts output
 REG_SUFFIX     ?= c cpp S
@@ -380,29 +382,32 @@ CXX_SUFFIX     ?= cc cp cxx cpp CPP c++ C
 endif
 ASM_SUFFIX     ?= S s asm
 
-SRCS           ?= $(shell find $(SRC_PATH) $(patsubst %,-path '*/%' -prune -o,$(IGNORE_PATH)) \
+ifeq ($(SRCS), )
+SRCS           := $(shell find $(SRC_PATH) $(patsubst %,-path '*/%' -prune -o,$(IGNORE_PATH)) \
                       $(shell echo '$(patsubst %,-o -name "*.%" -print,$(REG_SUFFIX))' | sed 's/^...//') \
                   | sed "s/^\(\.\/\)\(.*\)/\2/g" | xargs)
-
-CPFLAGS        += -I. -I./include $(patsubst %,-I%,$(filter-out .,$(SRC_PATH))) $(patsubst %,-I%/include,$(filter-out .,$(SRC_PATH))) -I$(OBJ_PREFIX)
-LDFLAGS        += -L$(OBJ_PREFIX) -Wl,-rpath-link=$(OBJ_PREFIX)
-
-CPFLAGS        += $(call link_hdrs)
-LDFLAGS        += $(call link_libs)
-
-CPFLAGS        += $(OPTIMIZATION_FLAG)
-LDFLAGS        += -Wl,-O1
-ifeq ($(ENV_OPTIMIZATION),release)
-CPFLAGS        += -ffunction-sections -fdata-sections
-LDFLAGS        += -Wl,--gc-sections
 endif
-#LDFLAGS       += -static
 
-CPFLAGS        += -Wall # This enables all the warnings about constructions that some users consider questionable.
-CPFLAGS        += -Wextra # This enables some extra warning flags that are not enabled by -Wall (This option used to be called -W).
-CPFLAGS        += -Wlarger-than=$(if $(object_byte_size),$(object_byte_size),1024) # Warn whenever an object is defined whose size exceeds object_byte_size.
-CPFLAGS        += -Wframe-larger-than=$(if $(frame_byte_size),$(frame_byte_size),8192) # Warn if the size of a function frame exceeds frame_byte_size.
-#CPFLAGS       += -Wdate-time #Warn when macros __TIME__, __DATE__ or __TIMESTAMP__ are encountered as they might prevent bit-wise-identical reproducible compilations.
+imake_cpflags  := -I. -I./include $(patsubst %,-I%,$(filter-out .,$(SRC_PATH))) $(patsubst %,-I%/include,$(filter-out .,$(SRC_PATH))) -I$(OBJ_PREFIX)
+imake_ldflags  := -L$(OBJ_PREFIX) -Wl,-rpath-link=$(OBJ_PREFIX)
+prior_ldflags  :=
+
+imake_cpflags  += $(call link_hdrs)
+imake_ldflags  += $(call link_libs)
+
+imake_cpflags  += $(OPTIMIZATION_FLAG)
+imake_ldflags  += -Wl,-O1
+ifeq ($(ENV_OPTIMIZATION),release)
+imake_cpflags  += -ffunction-sections -fdata-sections
+imake_ldflags  += -Wl,--gc-sections
+endif
+#imake_ldflags += -static
+
+imake_cpflags  += -Wall # This enables all the warnings about constructions that some users consider questionable.
+imake_cpflags  += -Wextra # This enables some extra warning flags that are not enabled by -Wall (This option used to be called -W).
+imake_cpflags  += -Wlarger-than=$(if $(object_byte_size),$(object_byte_size),1024) # Warn whenever an object is defined whose size exceeds object_byte_size.
+imake_cpflags  += -Wframe-larger-than=$(if $(frame_byte_size),$(frame_byte_size),8192) # Warn if the size of a function frame exceeds frame_byte_size.
+#imake_cpflags += -Wdate-time #Warn when macros __TIME__, __DATE__ or __TIMESTAMP__ are encountered as they might prevent bit-wise-identical reproducible compilations.
 
 # Use https://github.com/slimm609/checksec.sh/ to check the secture
 ifeq ($(ENV_SECURITY),y)
@@ -420,12 +425,9 @@ SEC_LDFLAGS    += -Wl,--as-needed
 # RELRO(Relocation Read-Only) https://www.redhat.com/en/blog/hardening-elf-binaries-using-relocation-read-only-relro
 SEC_LDFLAGS    += -Wl,-z,relro,-z,now
 
-CPFLAGS        += $(SEC_CPFLAGS)
-PRE_LDFLAGS    += $(SEC_LDFLAGS)
+imake_cpflags  += $(SEC_CPFLAGS)
+prior_ldflags  += $(SEC_LDFLAGS)
 endif
-
-CPFLAGS        += $(IMAKE_CPFLAGS)
-LDFLAGS        += $(IMAKE_LDFLAGS)
 
 # For more description, refer to https://gcc.gnu.org/onlinedocs/gcc-13.1.0/gcc/Instrumentation-Options.html
 ifeq ($(ENV_SANITIZER),1)
@@ -444,14 +446,18 @@ else ifeq ($(ENV_SANITIZER),4)
 # Various computations are instrumented to detect undefined behavior at runtime.
 SANITIZER_FLAG ?= -fsanitize=undefined
 endif
-CPFLAGS        += $(SANITIZER_FLAG)
-LDFLAGS        += $(SANITIZER_FLAG)
+imake_cpflags  += $(SANITIZER_FLAG)
+imake_ldflags  += $(SANITIZER_FLAG)
 
 # For more description, refer to https://gcc.gnu.org/onlinedocs/gcc-13.1.0/gcc/Static-Analyzer-Options.html
 ifeq ($(ENV_ANALYZER)-$(shell expr `$(CC) -dumpversion` \>= 10),y-1)
-CPFLAGS        += -fanalyzer
-LDFLAGS        += -fanalyzer
+imake_cpflags  += -fanalyzer
+imake_ldflags  += -fanalyzer
 endif
+
+imake_cpflags  += $(IMAKE_CPFLAGS)
+imake_ldflags  += $(IMAKE_LDFLAGS)
+prior_ldflags  += $(PRIOR_LDFLAGS)
 
 CHECK_INFO     += ENV_OPTIMIZATION=$(ENV_OPTIMIZATION)  \
                   ENV_SECURITY=$(ENV_SECURITY)          \
@@ -459,21 +465,20 @@ CHECK_INFO     += ENV_OPTIMIZATION=$(ENV_OPTIMIZATION)  \
                   ENV_ANALYZER=$(ENV_ANALYZER)          \
                   USING_CXX_BUILD_C=$(USING_CXX_BUILD_C)\
                   CC=$(CC)                              \
-                  CPFLAGS=$(CPFLAGS)                    \
                   CFLAGS=$(CFLAGS)                      \
                   CXXFLAGS=$(CXXFLAGS)                  \
-                  IMAKE_CFLAGS=$(IMAKE_CFLAGS)          \
-                  IMAKE_CXXFLAGS=$(IMAKE_CXXFLAGS)      \
-                  PRE_LDFLAGS=$(PRE_LDFLAGS)            \
+                  CPFLAGS=$(CPFLAGS)                    \
                   LDFLAGS=$(LDFLAGS)                    \
-                  IMAKE_LDFLAGS=$(IMAKE_LDFLAGS)
+                  imake_cpflags=$(imake_cpflags)        \
+                  imake_ldflags=$(imake_ldflags)        \
+                  prior_ldflags=$(prior_ldflags)
 
 define translate_obj
 $(patsubst %,$(OBJ_PREFIX)/%.o,$(basename $(1)))
 endef
 
 define set_flags
-$(foreach v,$(2),$(eval $(1)_$(patsubst %,%.o,$(basename $(v))) = $(3)))
+$(foreach v,$(2),$(eval $(1)_$(patsubst %,%.o,$(basename $(v))) := $(3)))
 endef
 
 define all_ver_obj
@@ -500,12 +505,12 @@ ifneq ($(filter %.$(1),$(SRCS)), )
 $$(patsubst %.$(1),$$(OBJ_PREFIX)/%.o,$$(filter %.$(1),$$(SRCS))): $$(OBJ_PREFIX)/%.o: %.$(1)
 	@mkdir -p $$(dir $$@)
 ifeq ($(filter $(1),$(ASM_SUFFIX)), )
-	@$(2) -c $(if $(filter $(1),$(CXX_SUFFIX)),$$(CXXFLAGS) $$(CPFLAGS) $$(IMAKE_CXXFLAGS),$$(CFLAGS) $$(CPFLAGS) $$(IMAKE_CFLAGS)) $$(CFLAGS_$$(patsubst %.$(1),%.o,$$<)) $$(PRIVATE_CPFLAGS) -MM -MT $$@ -MF $$(patsubst %.o,%.d,$$@) $$<
+	@$(2) -c $(if $(filter $(1),$(CXX_SUFFIX)),$$(CXXFLAGS),$$(CFLAGS)) $$(imake_cpflags) $$(CPFLAGS) $$(CFLAGS_$$(patsubst %.$(1),%.o,$$<)) $$(PRIVATE_CPFLAGS) -MM -MT $$@ -MF $$(patsubst %.o,%.d,$$@) $$<
 	@cat $$(patsubst %.o,%.d,$$@) | sed -e 's/#.*//' -e 's/^[^:]*:\s*//' -e 's/\s*\\$$$$//' -e 's/[ \t\v][ \t\v]*/\n/g' | sed -e '/^$$$$/ d' -e 's/$$$$/:/g' >> $$(patsubst %.o,%.d,$$@)
 endif
 	@$(COLORECHO) "\033[032m$(2)\033[0m	$$<" $(LOGOUTPUT)
 ifneq ($(2),$(AS))
-	@$(2) -c $(if $(filter $(1),$(CXX_SUFFIX)),$$(CXXFLAGS) $$(CPFLAGS) $$(IMAKE_CXXFLAGS),$$(CFLAGS) $$(CPFLAGS) $$(IMAKE_CFLAGS)) $$(CFLAGS_$$(patsubst %.$(1),%.o,$$<)) $$(PRIVATE_CPFLAGS) -o $$@ $$<
+	@$(2) -c $(if $(filter $(1),$(CXX_SUFFIX)),$$(CXXFLAGS),$$(CFLAGS)) $$(imake_cpflags) $$(CPFLAGS) $$(CFLAGS_$$(patsubst %.$(1),%.o,$$<)) $$(PRIVATE_CPFLAGS) -o $$@ $$<
 else
 	@$(2) $$(AFLAGS) $$(AFLAGS_$$(patsubst %.$(1),%.o,$$<)) -o $$@ $$<
 endif
@@ -529,9 +534,9 @@ $(eval $(call compile_obj,S,$$(CC)))
 $(eval $(call compile_obj,s,$$(AS)))
 $(eval $(call compile_obj,asm,$$(AS)))
 
-OBJS            = $(call translate_obj,$(SRCS))
-DEPS            = $(patsubst %.o,%.d,$(OBJS))
-CHECK_FILE      = $(OBJ_PREFIX)/checkinfo
+OBJS           := $(call translate_obj,$(SRCS))
+DEPS           := $(patsubst %.o,%.d,$(OBJS))
+CHECK_FILE     := $(OBJ_PREFIX)/checkinfo
 
 $(OBJS): $(MAKEFILE_LIST) $(CHECK_FILE)
 -include $(DEPS)
@@ -550,7 +555,7 @@ $(CHECK_FILE).tmp:
 .PHONY: clean_objs
 
 clean_objs:
-	@rm -rf $(OBJS) $(DEPS) $(OBJ_PREFIX)/checkinfo
+	@rm -rf $(OBJS) $(DEPS) $(CHECK_FILE)
 
 define add-liba-build
 LIB_TARGETS += $$(OBJ_PREFIX)/$(1)
@@ -576,7 +581,7 @@ LIB_TARGETS += $(patsubst %,$(OBJ_PREFIX)/%,$(call all_ver_obj,$(1)))
 $$(OBJ_PREFIX)/$$(firstword $$(libso_names)): PRIVATE_CPFLAGS := -fPIC $(4)
 $$(OBJ_PREFIX)/$$(firstword $$(libso_names)): $$(call translate_obj,$(2))
 	@$(COLORECHO) "\033[032mlib:\033[0m	\033[44m$$@\033[0m"
-	@$$(call compile_tool,$(2)) -shared -fPIC -o $$@ $$(call translate_obj,$(2)) $$(PRE_LDFLAGS) $$(LDFLAGS) $(3) \
+	@$$(call compile_tool,$(2)) -shared -fPIC -o $$@ $$(call translate_obj,$(2)) $$(prior_ldflags) $$(LDFLAGS) $$(imake_ldflags) $(3) \
 		$$(if $$(findstring -soname=,$(3)),,-Wl$$(comma)-soname=$$(if $$(word 2,$(1)),$$(firstword $(1)).$$(word 2,$(1)),$(1)))
 
 ifneq ($$(word 2,$$(libso_names)), )
@@ -601,7 +606,7 @@ BIN_TARGETS += $$(OBJ_PREFIX)/$(1)
 $$(OBJ_PREFIX)/$(1): PRIVATE_CPFLAGS := $(if $(filter y,$(ENV_SECURITY)),-fPIE) $(4)
 $$(OBJ_PREFIX)/$(1): $$(call translate_obj,$(2))
 	@$(COLORECHO) "\033[032mbin:\033[0m	\033[44m$$@\033[0m"
-	@$$(call compile_tool,$(2)) -o $$@ $$(call translate_obj,$(2)) $(if $(filter y,$(ENV_SECURITY)),-pie) $$(PRE_LDFLAGS) $$(LDFLAGS) $(3)
+	@$$(call compile_tool,$(2)) -o $$@ $$(call translate_obj,$(2)) $(if $(filter y,$(ENV_SECURITY)),-pie) $$(prior_ldflags) $$(LDFLAGS) $$(imake_ldflags) $(3)
 endef
 
 ifneq ($(LIBA_NAME), )
@@ -630,10 +635,12 @@ ifneq ($(KERNELRELEASE), )
 MOD_NAME       ?= hello
 obj-m          := $(patsubst %,%.o,$(MOD_NAME))
 
-ccflags-y      += $(patsubst %,-I%,$(src) $(src)/include $(obj))
-ccflags-y      += $(call link_hdrs)
-ccflags-y      += $(OPTIMIZATION_FLAG)
-ccflags-y      += $(IMAKE_CCFLAGS)
+imake_ccflags  := $(patsubst %,-I%,$(src) $(src)/include $(obj))
+imake_ccflags  += $(call link_hdrs)
+imake_ccflags  += $(OPTIMIZATION_FLAG)
+imake_ccflags  += $(IMAKE_CCFLAGS)
+
+ccflags-y      += $(imake_ccflags)
 
 define translate_obj
 $(patsubst $(src)/%,%,$(patsubst %,%.o,$(basename $(1))))
@@ -647,11 +654,14 @@ ifeq ($(words $(MOD_NAME)),1)
 
 IGNORE_PATH    ?= .git .pc scripts output
 REG_SUFFIX     ?= c S
-SRCS           ?= $(filter-out %.mod.c,$(shell find $(src) \
+
+ifeq ($(SRCS), )
+SRCS           := $(filter-out %.mod.c,$(shell find $(src) \
                           $(patsubst %,-path '*/%' -prune -o,$(IGNORE_PATH)) \
                           $(shell echo '$(patsubst %,-o -name "*.%" -print,$(REG_SUFFIX))' | sed 's/^...//') \
                      | xargs))
-OBJS            = $(call translate_obj,$(SRCS))
+endif
+OBJS           := $(call translate_obj,$(SRCS))
 
 ifneq ($(words $(OBJS))-$(OBJS),1-$(MOD_NAME).o)
 $(MOD_NAME)-y  := $(OBJS)
@@ -668,7 +678,12 @@ else # KERNELRELEASE
 
 KERNEL_SRC     ?= /lib/modules/$(shell uname -r)/build
 MOD_PATH       ?= $(shell pwd)
+
+ifeq ($(MOD_MAKES), )
+MOD_MAKES      := -C $(KERNEL_SRC)
+else
 MOD_MAKES      += -C $(KERNEL_SRC)
+endif
 
 ifneq ($(ENV_BUILD_MODE),yocto)
 MOD_MAKES      += $(if $(KERNEL_OUT),O=$(KERNEL_OUT),O=)
@@ -679,7 +694,7 @@ MOD_MAKES      += M=$(MOD_PATH)
 else
 
 MOD_MAKES      += M=$(OBJ_PREFIX) src=$(MOD_PATH)
-KBUILD_MK       = $(if $(wildcard $(MOD_PATH)/Kbuild),Kbuild,Makefile)
+KBUILD_MK      := $(if $(wildcard $(MOD_PATH)/Kbuild),Kbuild,Makefile)
 
 modules modules_clean modules_install: $(OBJ_PREFIX)/$(KBUILD_MK)
 
