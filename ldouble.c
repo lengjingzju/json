@@ -19,8 +19,12 @@
 #define DP_SIGNIFICAND_MASK         0x000FFFFFFFFFFFFF  /* Mantissa Mask, 52 bits */
 #define DP_HIDDEN_BIT               0x0010000000000000  /* Integer bit for Mantissa */
 #ifndef LSHIFT_RESERVED_BIT
-#define LSHIFT_RESERVED_BIT         11                  /* The value should be less than or equal to 11 */
+#define LSHIFT_RESERVED_BIT         7                   /* The value should be less than or equal to 11 */
 #endif
+#ifndef APPROX_TAIL_CMP_VAL
+#define APPROX_TAIL_CMP_VAL         2                   /* The value should be less than or equal to 4 */
+#endif
+static const unsigned int s_tail_cmp = (APPROX_TAIL_CMP_VAL << 1) + 1;
 
 typedef struct {
     uint64_t f;
@@ -356,9 +360,26 @@ static inline void ldouble_convert(diy_fp_t *v)
     }
     x = e >= 0 ? positive_diy_fp(e) : negative_diy_fp(-e);
 
-
-    v->f = u128_calc(x.f, f);
+    f = u128_calc(x.f, f);
+#if LSHIFT_RESERVED_BIT >= 10
+    v->f = f;
     v->e = e - x.e + 19;
+#elif LSHIFT_RESERVED_BIT >= 7
+    v->f = f / 10;
+    if (f - ((v->f << 3) + (v->f << 1)) >= 5)
+        v->f += 1;
+    v->e = e - x.e + 20;
+#elif LSHIFT_RESERVED_BIT >= 4
+    v->f = f / 100;
+    if (f - v->f * 100 >= 50)
+        v->f += 1;
+    v->e = e - x.e + 21;
+#else
+    v->f = f / 1000;
+    if (f - v->f * 1000 >= 500)
+        v->f += 1;
+    v->e = e - x.e + 22;
+#endif
 }
 
 static const char ch_100_lut[200] = {
@@ -573,14 +594,14 @@ static inline int32_t fill_a_4_digits(char *buffer, uint32_t digits, int32_t *pt
     memcpy(s, &ch_100_lut[q<<1], 2);
     memcpy(s + 2, &ch_100_lut[r<<1], 2);
 
-    if (r < 5) {
+    if (r < s_tail_cmp) {
         *ptz = tz_100_lut[q] + 2;
     } else {
-        if (s[3] < '5') {
+        if (s[3] < (char)s_tail_cmp + '0') {
             s[3] = '0';
             *ptz = 1;
         } else {
-            s[3] -= 2;
+            s[3] -= APPROX_TAIL_CMP_VAL;
             *ptz = 0;
         }
     }
@@ -600,7 +621,7 @@ static inline int32_t fill_a_8_digits(char *buffer, uint32_t digits, int32_t *pt
         uint32_t r = digits - q * 10000;
 
         fill_t_4_digits(s, q, ptz);
-        if (r < 5) {
+        if (r < s_tail_cmp) {
             memset(s + 4, '0', 4);
             *ptz += 4;
         } else {
@@ -623,7 +644,7 @@ static inline int32_t fill_a_16_digits(char *buffer, uint64_t digits, int32_t *p
         uint32_t r = (uint32_t)(digits - (uint64_t)q * 100000000);
 
         fill_t_8_digits(s, q, ptz);
-        if (r < 5) {
+        if (r < s_tail_cmp) {
             memset(s + 8, '0', 8);
             *ptz += 8;
         } else {
@@ -638,12 +659,13 @@ static inline int32_t fill_significand(char *buffer, uint64_t digits, int32_t *p
 {
     char *s = buffer;
 
+    digits += APPROX_TAIL_CMP_VAL;
     if (digits < 10000000000000000llu) {
         uint32_t q = (uint32_t)(digits / 100000000);
         uint32_t r = (uint32_t)(digits - (uint64_t)q * 100000000);
 
         s += fill_1_8_digits(s, q, ptz);
-        if (r < 5) {
+        if (r < s_tail_cmp) {
             *ptz += 8;
             memset(s, '0', 8);
             s += 8;
@@ -655,7 +677,7 @@ static inline int32_t fill_significand(char *buffer, uint64_t digits, int32_t *p
         uint64_t r = (digits - (uint64_t)q * 10000000000000000llu);
 
         s += fill_1_4_digits(s, q, ptz);
-        if (r < 5) {
+        if (r < s_tail_cmp) {
             memset(s, '0', 16);
             s += 16;
             *ptz += 16;
@@ -700,7 +722,7 @@ static inline char* ldouble_format(char* buffer, uint64_t digits, int32_t decima
 {
     int32_t num_digits, trailing_zeros, vnum_digits, decimal_point;
 
-    num_digits = fill_significand(buffer + 1, digits + 2, &trailing_zeros);
+    num_digits = fill_significand(buffer + 1, digits, &trailing_zeros);
     vnum_digits = num_digits - trailing_zeros;
     decimal_point = num_digits + decimal_exponent;
 
@@ -796,7 +818,7 @@ int ldouble_dtoa(double value, char* buffer)
         if (0 <= -v.e && -v.e <= DP_SIGNIFICAND_SIZE && ((v.f & (((uint64_t)1 << -v.e) - 1)) == 0)) {
             /* small integer. */
             int32_t tz, n;
-            n = fill_significand(s, v.f >> -v.e, &tz);
+            n = fill_1_20_digits(s, v.f >> -v.e, &tz);
             memcpy(s + n, ".0", 3);
             return n + 2 + signbit;
         } else {

@@ -18,9 +18,11 @@ ldoublebin      = ldouble
 
 INSTALL_HEADERS = json.h
 DTOA           ?= 0
-RBIT           ?= 11
+RBIT           ?= 7
+TCMP           ?= 2
 CPFLAGS        += -DJSON_DTOA_ALGORITHM=$(DTOA) # 0:ldouble 1:sprintf 2:grisu2 3:dragonbox
-CPFLAGS        += -DLSHIFT_RESERVED_BIT=$(RBIT) # 11 is 8% faster than 10, 10 is more similar to sprintf than 11
+CPFLAGS        += -DLSHIFT_RESERVED_BIT=$(RBIT) # 1 <= RBIT <= 11
+CPFLAGS        += -DAPPROX_TAIL_CMP_VAL=$(TCMP) # 0 <= TCMP <= 4
 
 .PHONY: all clean install
 all:
