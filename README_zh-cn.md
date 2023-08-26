@@ -6,7 +6,6 @@ LJSON 是一个远远快于 cJSON、大幅度快于 RapidJSON 的 C 实现的 JS
 LJSON 支持 JSON 的解析、打印、编辑，提供 DOM 和 SAX 接口，I/O 支持字符串和文件，且完全支持 nativejson-benchmark 的测试用例。
 LJSON 默认使用个人开发的 ldouble 算法打印浮点数，和标准库对比可能只有第15位小数的区别，是目前最快的浮点数转字符串算法；也可选择个人优化过的 grisu2 算法或 dragonbox 算法。
 
-
 ## 功能特点
 
 * 更快：打印和解析速度比 cJSON 和 RapidJSON 都要快，速度最高可比 CJSON 快32倍，比 Rapid JSON 快1.5倍，见测试结果
@@ -67,19 +66,19 @@ make O=<编译输出目录> CROSS_COMPILE=<交叉编译器前缀> && make O=<编
 > 测试平台: Ambarella CV25M Board | CPU: ARM CortexA53 | OS: Linux-5.15<br>
 > 测试结果: LJSON 比cJSON 解析最快可达 475%，打印最快可达 2836%，LJSON 比 RapidJSON 解析最快可达 131%，打印最快可达 147%
 
-![AARCH64-Linux测试结果](test_result/test_for_aarch64.png)
+![AARCH64-Linux测试结果](image/test_for_aarch64.png)
 
 > 测试平台: PC | CPU: Intel i7-10700 | OS: Ubuntu 18.04 (VirtualBox)<br>
 > 测试结果: LJSON 比cJSON 解析最快可达 560%，打印最快可达 3184%，LJSON 比 RapidJSON 解析最快可达 75%，打印最快可达 133%
 
-![x86_64-Linux测试结果](test_result/test_for_x86_64.png)
+![x86_64-Linux测试结果](image/test_for_x86_64.png)
 
-![ldouble-x86_64测试结果](test_result/ldb_for_x86_64.png)
+![ldouble-x86_64测试结果](image/ldb_for_x86_64.png)
 
 > 测试平台: Nationalchip STB | CPU: CSKY | DDR3: 128MB, 533MHz | OS: ECOS<br>
 > 注: 老版本测试结果，新版本删除了临时buffer，且解析速度提升了两倍
 
-![ECOS测试结果](test_result/test_for_csky.png)
+![ECOS测试结果](image/test_for_csky.png)
 
 ## json对象结构
 

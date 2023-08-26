@@ -66,14 +66,14 @@ Note: 'O2' optimization level and default option compilation, the test files com
 > Test Platform: Ambarella CV25M Board | CPU: ARM CortexA53 | OS: Linux-5.15<br>
 > Test Result: LJSON parses 475% faster and prints 2836% faster than cJSON, LJSON parses 131% faster and prints 147% faster than RapidJSON
 
-![AARCH64-Linux Test Result](test_result/test_for_aarch64.png)
+![AARCH64-Linux Test Result](image/test_for_aarch64.png)
 
 > Test Platform: PC | CPU: Intel i7-10700 | OS: Ubuntu 18.04 (VirtualBox)<br>
 > Test Result: LJSON parses 560% faster and prints 3184% faster than cJSON, LJSON parses 75% faster and prints 133% faster than RapidJSON
 
-![x86_64-Linux Test Result](test_result/test_for_x86_64.png)
+![x86_64-Linux Test Result](image/test_for_x86_64.png)
 
-![ldouble-x86_64 Test Result](test_result/ldb_for_x86_64.png)
+![ldouble-x86_64 Test Result](image/ldb_for_x86_64.png)
 
 ## Contact
 
