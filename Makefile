@@ -47,5 +47,9 @@ clean: clean_objs
 	@rm -f $(LIB_TARGETS) $(BIN_TARGETS)
 	@echo "Clean $(PACKAGE_NAME) Done."
 
-install: install_hdrs install_libs install_bins
+pkgconfigdir   := /usr/lib/pkgconfig
+INSTALL_PKGCONFIGS := pcfiles/*
+$(eval $(call install_obj,pkgconfig))
+
+install: install_hdrs install_libs install_bins install_pkgconfigs
 	@echo "Install $(PACKAGE_NAME) to $(INS_PREFIX) Done!"

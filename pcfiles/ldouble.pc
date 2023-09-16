@@ -1,0 +1,10 @@
+prefix=${pcfiledir}/../..
+exec_prefix=${prefix}
+libdir=${exec_prefix}/lib
+includedir=${prefix}/include
+
+Name: ldouble
+Description: LDOUBLE is an algorithm to print double to string that is much faster than the grisu2 algorithm and the sprintf algorithm.
+Version: 1.3.3
+Libs: -L${libdir} -lldouble
+Cflags: -I${includedir}

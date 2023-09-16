@@ -109,11 +109,10 @@ DEP_PREFIX     := $(DEPDIR)
 endif
 
 define link_hdrs
-$(addprefix -I,$(addprefix $(DEP_PREFIX),/include /usr/include /usr/local/include) \
+$(addprefix -I,$(addprefix $(DEP_PREFIX),/include /usr/include) \
 	$(if $(SEARCH_HDRS),$(wildcard \
 	$(addprefix $(DEP_PREFIX)/include/,$(SEARCH_HDRS)) \
 	$(addprefix $(DEP_PREFIX)/usr/include/,$(SEARCH_HDRS)) \
-	$(addprefix $(DEP_PREFIX)/usr/local/include/,$(SEARCH_HDRS)) \
 )))
 endef
 
@@ -121,13 +120,13 @@ ifeq ($(KERNELRELEASE), )
 
 comma          :=,
 define link_libs
-$(addprefix -L,$(addprefix $(DEP_PREFIX),/lib /usr/lib /usr/local/lib)) \
-$(addprefix -Wl$(comma)-rpath-link=,$(addprefix $(DEP_PREFIX),/lib /usr/lib /usr/local/lib))
+$(addprefix -L,$(addprefix $(DEP_PREFIX),/lib /usr/lib)) \
+$(addprefix -Wl$(comma)-rpath-link=,$(addprefix $(DEP_PREFIX),/lib /usr/lib))
 endef
 
 ifneq ($(filter y,$(NATIVE_DEPEND) $(NATIVE_BUILD)), )
-export PATH:=$(shell echo $(addprefix $(PATH_PREFIX),/bin /usr/bin /usr/local/bin /sbin /usr/sbin /usr/local/sbin)$(if $(PATH),:$(PATH)) | sed 's/ /:/g')
-export LD_LIBRARY_PATH:=$(shell echo $(addprefix $(PATH_PREFIX),/lib /usr/lib /usr/local/lib)$(if $(LD_LIBRARY_PATH),:$(LD_LIBRARY_PATH)) | sed 's/ /:/g')
+export PATH:=$(shell echo $(addprefix $(PATH_PREFIX),/bin /usr/bin /sbin /usr/sbin)$(if $(PATH),:$(PATH)) | sed 's/ /:/g')
+export LD_LIBRARY_PATH:=$(shell echo $(addprefix $(PATH_PREFIX),/lib /usr/lib)$(if $(LD_LIBRARY_PATH),:$(LD_LIBRARY_PATH)) | sed 's/ /:/g')
 endif
 
 ifneq ($(LICFILE), )
@@ -157,7 +156,7 @@ PREPARE_SYSROOT := -s CROSS_DESTDIR=$(WORKDIR)/sysroot NATIVE_DESTDIR=$(WORKDIR)
 
 ifneq ($(DIS_PC_EXPORT),y)
 export PKG_CONFIG_LIBDIR:=$(DEP_PREFIX)/usr/lib/pkgconfig
-export PKG_CONFIG_PATH:=$(shell echo $(wildcard $(addprefix $(DEP_PREFIX),$(addsuffix /pkgconfig,/lib /usr/lib /usr/local/lib))) | sed 's@ @:@g')
+export PKG_CONFIG_PATH:=$(shell echo $(wildcard $(addprefix $(DEP_PREFIX),$(addsuffix /pkgconfig,/lib /usr/lib))) | sed 's@ @:@g')
 endif
 
 ifneq ($(NATIVE_BUILD),y)
