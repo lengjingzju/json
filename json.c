@@ -2745,9 +2745,9 @@ static int _json_print_string(json_print_t *print_ptr, json_string_t *jstr)
     }
 
 #if JSON_PRINT_UTF16_SUPPORT
-    alloced = (len << 1) + 3;
-#else
     alloced = (len << 2) + (len << 1) + 3;
+#else
+    alloced = (len << 1) + 3;
 #endif
     _PRINT_PTR_REALLOC(alloced);
     *print_ptr->cur++ = '\"';
