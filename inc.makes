@@ -5,7 +5,7 @@
 # https://github.com/lengjingzju/cbuild-ng #
 ############################################
 
-############# Date: 2023-09-09 #############
+############# Date: 2024-01-31 #############
 
 # The default behavior only includes inc.env.mk and inc.ins.mk.
 # INC_MAKES can be set to a combination of `disenv` `conf` `app` `mod` `disins`.
@@ -20,7 +20,7 @@
 ifeq ($(filter disenv,$(INC_MAKES)), )
 
 COLORECHO      := $(if $(findstring dash,$(shell readlink /bin/sh)),echo,echo -e)
-LOGOUTPUT      ?= $(if $(filter y,$(BUILDVERBOSE)),,1>/dev/null)
+TOLOG          ?= $(if $(filter -s,$(MFLAG)),1>/dev/null)
 
 INSTALL_HDR    ?= $(PACKAGE_NAME)
 SEARCH_HDRS    ?= $(PACKAGE_DEPS)
@@ -161,8 +161,8 @@ endif
 
 ifneq ($(NATIVE_BUILD),y)
 
-ifneq ($(ENV_BUILD_ARCH), )
-ARCH           := $(ENV_BUILD_ARCH)
+ifneq ($(KERNEL_ARCH), )
+ARCH           := $(KERNEL_ARCH)
 export ARCH
 endif
 
@@ -328,7 +328,8 @@ endef
 ifneq ($(ENV_BUILD_MODE),yocto)
 
 ifeq ($(CONF_MAKES), )
-CONF_MAKES       := -s O=$(CONF_WORKDIR)/build DESTDIR=$(CONF_WORKDIR)/image -C $(CONF_SRC)
+CONF_MFLAG       ?= -s
+CONF_MAKES       := $(CONF_MFLAG) O=$(CONF_WORKDIR)/build DESTDIR=$(CONF_WORKDIR)/image -C $(CONF_SRC)
 endif
 
 buildkconfig:
@@ -488,6 +489,16 @@ imake_ldflags  += --analyze
 endif
 endif
 
+ifeq ($(ENV_GPROF),y)
+ifneq ($(filter %gcc,$(CC)), )
+# Run the binary, it will generate the file of gmon.out, then run `gprof <bin> gmon.out > analysis.txt`
+# For more description, refer to https://sourceware.org/binutils/docs-2.42/gprof.html
+imake_cpflags  += -pg
+imake_ldflags  += -pg
+endif
+endif
+# Users also can use another performance and analyze tool, like: perf, valgrind
+
 imake_cpflags  += $(IMAKE_CPFLAGS)
 imake_ldflags  += $(IMAKE_LDFLAGS)
 prior_ldflags  += $(PRIOR_LDFLAGS)
@@ -496,6 +507,7 @@ CHECK_INFO     += ENV_OPTIMIZER=$(ENV_OPTIMIZER)        \
                   ENV_SECURITY=$(ENV_SECURITY)          \
                   ENV_SANITIZER=$(ENV_SANITIZER)        \
                   ENV_ANALYZER=$(ENV_ANALYZER)          \
+                  ENV_GPROF=$(ENV_GPROF)                \
                   USING_CXX_BUILD_C=$(USING_CXX_BUILD_C)\
                   CC=$(CC)                              \
                   CFLAGS=$(CFLAGS)                      \
@@ -545,7 +557,7 @@ ifeq ($(filter $(1),$(ASM_SUFFIX)), )
 	@$(2) -c $(if $(filter $(1),$(CXX_SUFFIX)),$$(CXXFLAGS),$$(CFLAGS)) $$(imake_cpflags) $$(CPFLAGS) $$(CFLAGS_$$(patsubst %.$(1),%.o,$$<)) $$(PRIVATE_CPFLAGS) -MM -MT $$@ -MF $$(patsubst %.o,%.d,$$@) $$<
 	@cat $$(patsubst %.o,%.d,$$@) | sed -e 's/#.*//' -e 's/^[^:]*:\s*//' -e 's/\s*\\$$$$//' -e 's/[ \t\v][ \t\v]*/\n/g' | sed -e '/^$$$$/ d' -e 's/$$$$/:/g' >> $$(patsubst %.o,%.d,$$@)
 endif
-	@$(COLORECHO) "\033[032m$(2)\033[0m	$$<" $(LOGOUTPUT)
+	@$(COLORECHO) "\033[032m$(2)\033[0m	$$<" $(TOLOG)
 ifneq ($(2),$(AS))
 	@$(2) -c $(if $(filter $(1),$(CXX_SUFFIX)),$$(CXXFLAGS),$$(CFLAGS)) $$(imake_cpflags) $$(CPFLAGS) $$(CFLAGS_$$(patsubst %.$(1),%.o,$$<)) $$(PRIVATE_CPFLAGS) -o $$@ $$<
 else
@@ -598,7 +610,7 @@ define add-liba-build
 LIB_TARGETS += $$(OBJ_PREFIX)/$(1)
 $$(OBJ_PREFIX)/$(1): PRIVATE_CPFLAGS := -fPIC $(4)
 $$(OBJ_PREFIX)/$(1): $$(call translate_obj,$(2)) $(3) $(5)
-	@$(COLORECHO) "\033[032mlib:\033[0m	\033[44m$$@\033[0m"
+	@$(COLORECHO) "\033[032mlib:\033[0m	\033[44m$$@\033[0m" $(TOLOG)
 	@rm -f $$@
 	@$$(AR) rc $$@ $$(call translate_obj,$(2))
 ifneq ($(3), )
@@ -617,7 +629,7 @@ LIB_TARGETS += $(patsubst %,$(OBJ_PREFIX)/%,$(call all_ver_obj,$(1)))
 
 $$(OBJ_PREFIX)/$$(firstword $$(libso_names)): PRIVATE_CPFLAGS := -fPIC $(4)
 $$(OBJ_PREFIX)/$$(firstword $$(libso_names)): $$(call translate_obj,$(2)) $(5)
-	@$(COLORECHO) "\033[032mlib:\033[0m	\033[44m$$@\033[0m"
+	@$(COLORECHO) "\033[032mlib:\033[0m	\033[44m$$@\033[0m" $(TOLOG)
 	@$$(call compile_tool,$(2)) -shared -fPIC -o $$@ $$(call translate_obj,$(2)) $$(prior_ldflags) $$(LDFLAGS) $$(imake_ldflags) $(3) \
 		$$(if $$(findstring -soname=,$(3)),,-Wl$$(comma)-soname=$$(if $$(word 2,$(1)),$$(firstword $(1)).$$(word 2,$(1)),$(1)))
 
@@ -642,7 +654,7 @@ define add-bin-build
 BIN_TARGETS += $$(OBJ_PREFIX)/$(1)
 $$(OBJ_PREFIX)/$(1): PRIVATE_CPFLAGS := $(if $(filter y,$(ENV_SECURITY)),-fPIE) $(4)
 $$(OBJ_PREFIX)/$(1): $$(call translate_obj,$(2)) $(5)
-	@$(COLORECHO) "\033[032mbin:\033[0m	\033[44m$$@\033[0m"
+	@$(COLORECHO) "\033[032mbin:\033[0m	\033[44m$$@\033[0m" $(TOLOG)
 	@$$(call compile_tool,$(2)) -o $$@ $$(call translate_obj,$(2)) $(if $(filter y,$(ENV_SECURITY)),-pie) $$(prior_ldflags) $$(LDFLAGS) $$(imake_ldflags) $(3)
 endef
 
