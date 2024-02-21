@@ -4,12 +4,9 @@
 * Contact: Jing Leng <lengjingzju@163.com> *
 * URL: https://github.com/lengjingzju/json *
 *******************************************/
-#include <stdio.h>
 #include <stdlib.h>
 #include <stdint.h>
 #include <string.h>
-#include <unistd.h>
-#include <limits.h>
 
 #define DIY_SIGNIFICAND_SIZE        64                  /* Symbol: 1 bit, Exponent, 11 bits, Mantissa, 52 bits */
 #define DP_SIGNIFICAND_SIZE         52                  /* Mantissa, 52 bits */
@@ -917,6 +914,7 @@ static inline int32_t fill_a_4_digits(char *buffer, uint32_t digits, int32_t *pt
     memcpy(s + 2, &ch_100_lut[r<<1], 2);
 
     if (r < s_tail_cmp) {
+        s[3] = '0';
         *ptz = tz_100_lut[q] + 2;
     } else {
         if (s[3] < (char)s_tail_cmp + '0') {
@@ -1066,7 +1064,12 @@ static inline char* ldouble_format(char* buffer, uint64_t digits, int32_t decima
             buffer += vnum_digits + 1;
         } else {
             /* digits[000] */
-            memmove(buffer, buffer + 1, decimal_point);
+            if (decimal_point > num_digits) {
+                memmove(buffer, buffer + 1, num_digits);
+                memset(buffer + num_digits, '0', decimal_point - num_digits);
+            } else {
+                memmove(buffer, buffer + 1, decimal_point);
+            }
             buffer += decimal_point;
             memcpy(buffer, ".0", 2);
             buffer += 2;

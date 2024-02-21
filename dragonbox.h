@@ -1146,6 +1146,8 @@ static inline char* dragonbox_format(char* buffer, uint64_t digits, int32_t deci
             buffer += vnum_digits + 1;
         } else {
             /* digits[000] */
+            if (decimal_point > num_digits)
+                memset(buffer + num_digits, '0', decimal_point - num_digits);
             buffer += decimal_point;
             memcpy(buffer, ".0", 2);
             buffer += 2;
@@ -1176,8 +1178,8 @@ static int dragonbox_dtoa(double value, char* buffer)
     diy_fp_t v;
     char *s = buffer;
     union {double d; uint64_t n;} u = {.d = value};
-    int signbit = u.n >> (DIY_SIGNIFICAND_SIZE - 1);
-    int exponent = (u.n & DP_EXPONENT_MASK) >> DP_SIGNIFICAND_SIZE; /* Exponent */
+    int32_t signbit = u.n >> (DIY_SIGNIFICAND_SIZE - 1);
+    int32_t exponent = (u.n & DP_EXPONENT_MASK) >> DP_SIGNIFICAND_SIZE; /* Exponent */
     uint64_t significand = u.n & DP_SIGNIFICAND_MASK; /* Mantissa */
 
     if (signbit) {

@@ -19,9 +19,9 @@
 #define DP_HIDDEN_BIT               0x0010000000000000  /* Integer bit for Mantissa */
 #define D_1_LOG2_10                 0.30102999566398114 /* 1/lg(10) */
 
-typedef struct diy_fp_t {
+typedef struct {
     uint64_t f;
-    int e;
+    int32_t e;
 } diy_fp_t;
 
 #if 0

@@ -401,7 +401,7 @@ int json_get_number_value(json_object *json, json_type_t type, void *value)
 #endif
 
 #define _get_number(json, etype, val) do {                                    \
-    switch (json->type_member) {                                                \
+    switch (json->type_member) {                                              \
     case JSON_BOOL:   *(etype *)val = (etype)json->value.vnum.vbool;   break; \
     case JSON_INT:    *(etype *)val = (etype)json->value.vnum.vint;    break; \
     case JSON_HEX:    *(etype *)val = (etype)json->value.vnum.vhex;    break; \
@@ -2395,6 +2395,7 @@ static inline int32_t fill_a_4_digits(char *buffer, uint32_t digits, int32_t *pt
     memcpy(s + 2, &ch_100_lut[r<<1], 2);
 
     if (r < s_tail_cmp) {
+        s[3] = '0';
         *ptz = tz_100_lut[q] + 2;
     } else {
         if (s[3] < (char)s_tail_cmp + '0') {
@@ -2544,7 +2545,12 @@ static inline char* ldouble_format(char* buffer, uint64_t digits, int32_t decima
             buffer += vnum_digits + 1;
         } else {
             /* digits[000] */
-            memmove(buffer, buffer + 1, decimal_point);
+            if (decimal_point > num_digits) {
+                memmove(buffer, buffer + 1, num_digits);
+                memset(buffer + num_digits, '0', decimal_point - num_digits);
+            } else {
+                memmove(buffer, buffer + 1, decimal_point);
+            }
             buffer += decimal_point;
             memcpy(buffer, ".0", 2);
             buffer += 2;
@@ -3503,12 +3509,13 @@ static int _parse_num(char **sstr, json_number_t *vnum)
             *sstr = num;
             if (m > INT_MAX) {
 #if JSON_LONG_LONG_SUPPORT
-                vnum->vlint = sign == 1 ? m : -m;
-                return JSON_LINT;
-#else
+                if (m <= LLONG_MAX) {
+                    vnum->vlint = sign == 1 ? m : -m;
+                    return JSON_LINT;
+                }
+#endif
                 vnum->vdbl = sign == 1 ? m : -m;
                 return JSON_DOUBLE;
-#endif
             } else {
                 vnum->vint = sign == 1 ? m : -m;
                 return JSON_INT;
