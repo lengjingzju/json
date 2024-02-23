@@ -4,6 +4,11 @@
  * Section: src/dragonbox.cc
  */
 
+#include <stdint.h>
+#include <stdbool.h>
+#include <string.h>
+#include <stdlib.h>
+
 #define DIY_SIGNIFICAND_SIZE        64                  /* Symbol: 1 bit, Exponent, 11 bits, Mantissa, 52 bits */
 #define DP_SIGNIFICAND_SIZE         52                  /* Mantissa, 52 bits */
 #define DP_EXPONENT_OFFSET          0x3FF               /* Exponent offset is 0x3FF */
@@ -20,13 +25,194 @@ typedef struct {
 typedef struct {
     uint64_t hi;
     uint64_t lo;
-} uint64x2;
+} u64x2_t;
 
-static inline uint64x2 compute_pow10_double(int32_t k)
+
+static const char ch_100_lut[200] = {
+    '0','0','0','1','0','2','0','3','0','4','0','5','0','6','0','7','0','8','0','9',
+    '1','0','1','1','1','2','1','3','1','4','1','5','1','6','1','7','1','8','1','9',
+    '2','0','2','1','2','2','2','3','2','4','2','5','2','6','2','7','2','8','2','9',
+    '3','0','3','1','3','2','3','3','3','4','3','5','3','6','3','7','3','8','3','9',
+    '4','0','4','1','4','2','4','3','4','4','4','5','4','6','4','7','4','8','4','9',
+    '5','0','5','1','5','2','5','3','5','4','5','5','5','6','5','7','5','8','5','9',
+    '6','0','6','1','6','2','6','3','6','4','6','5','6','6','6','7','6','8','6','9',
+    '7','0','7','1','7','2','7','3','7','4','7','5','7','6','7','7','7','8','7','9',
+    '8','0','8','1','8','2','8','3','8','4','8','5','8','6','8','7','8','8','8','9',
+    '9','0','9','1','9','2','9','3','9','4','9','5','9','6','9','7','9','8','9','9',
+};
+
+static const uint8_t tz_100_lut[100] = {
+    2, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    1, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    1, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    1, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    1, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    1, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    1, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    1, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    1, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    1, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+};
+
+#define FAST_DIV10(n)       (ch_100_lut[(n) << 1] - '0')                    /* 0 <= n < 100 */
+#define FAST_DIV100(n)      (((n) * 5243) >> 19)                            /* 0 <= n < 10000 */
+#define FAST_DIV10000(n)    ((uint32_t)(((uint64_t)(n) * 109951163) >> 40)) /* 0 <= n < 100000000 */
+
+static inline int32_t fill_t_4_digits(char *buffer, uint32_t digits, int32_t *ptz)
+{
+    char *s = buffer;
+    uint32_t q = FAST_DIV100(digits);
+    uint32_t r = digits - q * 100;
+
+    memcpy(s, &ch_100_lut[q<<1], 2);
+    memcpy(s + 2, &ch_100_lut[r<<1], 2);
+
+    if (!r) {
+        *ptz = tz_100_lut[q] + 2;
+    } else {
+        *ptz = tz_100_lut[r];
+    }
+
+    return 4;
+}
+
+static inline int32_t fill_t_8_digits(char *buffer, uint32_t digits, int32_t *ptz)
+{
+    char *s = buffer;
+
+    if (digits < 10000) {
+        memset(s, '0', 4);
+        fill_t_4_digits(s + 4, digits, ptz);
+    } else {
+        uint32_t q = FAST_DIV10000(digits);
+        uint32_t r = digits - q * 10000;
+
+        fill_t_4_digits(s, q, ptz);
+        if (!r) {
+            memset(s + 4, '0', 4);
+            *ptz += 4;
+        } else {
+            fill_t_4_digits(s + 4, r, ptz);
+        }
+    }
+
+    return 8;
+}
+
+static inline int32_t fill_t_16_digits(char *buffer, uint64_t digits, int32_t *ptz)
+{
+    char *s = buffer;
+
+    if (digits < 100000000llu) {
+        memset(s, '0', 8);
+        fill_t_8_digits(s + 8, digits, ptz);
+    } else {
+        uint32_t q = (uint32_t)(digits / 100000000);
+        uint32_t r = (uint32_t)(digits - (uint64_t)q * 100000000);
+
+        fill_t_8_digits(s, q, ptz);
+        if (!r) {
+            memset(s + 8, '0', 8);
+            *ptz += 8;
+        } else {
+            fill_t_8_digits(s + 8, r, ptz);
+        }
+    }
+
+    return 16;
+}
+
+static inline int32_t fill_1_4_digits(char *buffer, uint32_t digits, int32_t *ptz)
+{
+    char *s = buffer;
+
+    if (digits < 100) {
+        if (digits >= 10) {
+            *ptz = tz_100_lut[digits];
+            memcpy(s, &ch_100_lut[digits<<1], 2);
+            s += 2;
+        } else {
+            *ptz = 0;
+            *s++ = digits + '0';
+        }
+    } else {
+        uint32_t q = FAST_DIV100(digits);
+        uint32_t r = digits - q * 100;
+
+        if (q >= 10) {
+            *ptz = tz_100_lut[q];
+            memcpy(s, &ch_100_lut[q<<1], 2);
+            s += 2;
+        } else {
+            *ptz = 0;
+            *s++ = q + '0';
+        }
+
+        if (!r) {
+            *ptz += 2;
+            memset(s, '0', 2);
+            s += 2;
+        } else {
+            *ptz = tz_100_lut[r];
+            memcpy(s, &ch_100_lut[r<<1], 2);
+            s += 2;
+        }
+    }
+
+    return s - buffer;
+}
+
+static inline int32_t fill_1_8_digits(char *buffer, uint32_t digits, int32_t *ptz)
+{
+    char *s = buffer;
+
+    if (digits < 10000) {
+        return fill_1_4_digits(s, digits, ptz);
+    } else {
+        uint32_t q = FAST_DIV10000(digits);
+        uint32_t r = digits - q * 10000;
+
+        s += fill_1_4_digits(s, q, ptz);
+        if (!r) {
+            *ptz += 4;
+            memset(s, '0', 4);
+            s += 4;
+        } else {
+            s += fill_t_4_digits(s, r, ptz);
+        }
+    }
+
+    return s - buffer;
+}
+
+static inline int32_t fill_1_16_digits(char *buffer, uint64_t digits, int32_t *ptz)
+{
+    char *s = buffer;
+
+    if (digits < 100000000llu) {
+        return fill_1_8_digits(s, (uint32_t)digits, ptz);
+    } else {
+        uint32_t q = (uint32_t)(digits / 100000000);
+        uint32_t r = (uint32_t)(digits - (uint64_t)q * 100000000);
+
+        s += fill_1_8_digits(s, q, ptz);
+        if (!r) {
+            *ptz += 8;
+            memset(s, '0', 8);
+            s += 8;
+        } else {
+            s += fill_t_8_digits(s, r, ptz);
+        }
+    }
+
+    return s - buffer;
+}
+
+static inline u64x2_t compute_pow10_double(int32_t k)
 {
 #define MIN_K   -292
 #define MAX_K    326
-    static const uint64x2 pow10_lut[MAX_K - MIN_K + 1] = {
+    static const u64x2_t pow10_lut[MAX_K - MIN_K + 1] = {
         {0xFF77B1FCBEBCDC4F, 0x25E8E89C13BB0F7B},
         {0x9FAACF3DF73609B1, 0x77B191618C54E9AD},
         {0xC795830D75038C1D, 0xD59DF5B9EF6A2418},
@@ -738,9 +924,9 @@ static inline int32_t floor_log10_threequarters_pow2(int32_t e)
     return ((e * 1262611 - 524031) >> 22);
 }
 
-static inline uint64x2 mul128_calc(uint64_t x, uint64_t y)
+static inline u64x2_t mul128_calc(uint64_t x, uint64_t y)
 {
-    uint64x2 r;
+    u64x2_t r;
 #if defined(_MSC_VER) && defined(_M_AMD64)
     r.lo = _umul128(x, y, &r.hi);
 #elif (__GNUC__ > 4 || (__GNUC__ == 4 && __GNUC_MINOR__ >= 6) || __clang_major__ >= 9) && (__WORDSIZE == 64)
@@ -769,25 +955,25 @@ static inline uint64x2 mul128_calc(uint64_t x, uint64_t y)
     return r;
 }
 
-static inline uint64_t mul128_shift(uint64_t x, uint64x2 y)
+static inline uint64_t mul128_shift(uint64_t x, u64x2_t y)
 {
     /* Return (x * y) / 2^128 */
-    uint64x2 p1 = mul128_calc(x, y.hi);
-    uint64x2 p0 = mul128_calc(x, y.lo);
+    u64x2_t p1 = mul128_calc(x, y.hi);
+    u64x2_t p0 = mul128_calc(x, y.lo);
 
     p1.lo += p0.hi;
     p1.hi += p1.lo < p0.hi;
     return p1.hi;
 }
 
-static inline bool compute_parity(uint64_t two_f, uint64x2 pow10, int32_t minus_1)
+static inline bool compute_parity(uint64_t two_f, u64x2_t pow10, int32_t minus_1)
 {
     /* The range of minus_1 is [1, 63] */
     const uint64_t mid = two_f * pow10.hi + mul128_calc(two_f, pow10.lo).hi;
     return (mid & ((uint64_t)1 << (64 - minus_1))) != 0;
 }
 
-static inline uint32_t compute_delta(uint64x2 pow10, int32_t minus_1)
+static inline uint32_t compute_delta(u64x2_t pow10, int32_t minus_1)
 {
     /* The range of minus_1 is [0, 63] */
     return (uint32_t)(pow10.hi >> (63 - minus_1));
@@ -798,7 +984,7 @@ static inline void dragonbox_convert_asymmetric(diy_fp_t *v)
     int32_t e = v->e;
     const int32_t minus_k = floor_log10_threequarters_pow2(e);
     const int32_t minus_1 = e + floor_log2_pow10(-minus_k);
-    const uint64x2 pow10  = compute_pow10_double(-minus_k);
+    const u64x2_t pow10  = compute_pow10_double(-minus_k);
     uint64_t lower        = (pow10.hi - (pow10.hi >> (DP_SIGNIFICAND_SIZE + 2))) >> (63 - DP_SIGNIFICAND_SIZE - minus_1);
     uint64_t upper        = (pow10.hi + (pow10.hi >> (DP_SIGNIFICAND_SIZE + 1))) >> (63 - DP_SIGNIFICAND_SIZE - minus_1);
     /*
@@ -840,7 +1026,7 @@ static inline void dragonbox_convert(diy_fp_t *v)
 
     const int32_t minus_k = floor_log10_pow2(e) - KAPPA_VALUE;
     const int32_t minus_1 = e + floor_log2_pow10(-minus_k); /* The range of e is [6, 9] */
-    const uint64x2 pow10 = compute_pow10_double(-minus_k);
+    const u64x2_t pow10 = compute_pow10_double(-minus_k);
     const uint32_t delta = compute_delta(pow10, minus_1); /* The range of delta is [100, 999] */
     const uint64_t two_fc = (f << 1);
     const uint64_t two_fl = two_fc - 1;
@@ -885,189 +1071,6 @@ end:
     v->e = minus_k + KAPPA_VALUE + kappa_plus;
 }
 
-#if !FAST_FILL_DIGITS_EXISTED
-#define FAST_FILL_DIGITS_EXISTED  1
-static const char ch_100_lut[200] = {
-    '0','0','0','1','0','2','0','3','0','4','0','5','0','6','0','7','0','8','0','9',
-    '1','0','1','1','1','2','1','3','1','4','1','5','1','6','1','7','1','8','1','9',
-    '2','0','2','1','2','2','2','3','2','4','2','5','2','6','2','7','2','8','2','9',
-    '3','0','3','1','3','2','3','3','3','4','3','5','3','6','3','7','3','8','3','9',
-    '4','0','4','1','4','2','4','3','4','4','4','5','4','6','4','7','4','8','4','9',
-    '5','0','5','1','5','2','5','3','5','4','5','5','5','6','5','7','5','8','5','9',
-    '6','0','6','1','6','2','6','3','6','4','6','5','6','6','6','7','6','8','6','9',
-    '7','0','7','1','7','2','7','3','7','4','7','5','7','6','7','7','7','8','7','9',
-    '8','0','8','1','8','2','8','3','8','4','8','5','8','6','8','7','8','8','8','9',
-    '9','0','9','1','9','2','9','3','9','4','9','5','9','6','9','7','9','8','9','9',
-};
-
-static const uint8_t tz_100_lut[100] = {
-    2, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-    1, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-    1, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-    1, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-    1, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-    1, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-    1, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-    1, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-    1, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-    1, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-};
-
-#define FAST_DIV10(n)       (ch_100_lut[(n) << 1] - '0')                    /* 0 <= n < 100 */
-#define FAST_DIV100(n)      (((n) * 5243) >> 19)                            /* 0 <= n < 10000 */
-#define FAST_DIV10000(n)    ((uint32_t)(((uint64_t)(n) * 109951163) >> 40)) /* 0 <= n < 100000000 */
-
-static inline int32_t fill_1_4_digits(char *buffer, uint32_t digits, int32_t *ptz)
-{
-    char *s = buffer;
-
-    if (digits < 100) {
-        if (digits >= 10) {
-            *ptz = tz_100_lut[digits];
-            memcpy(s, &ch_100_lut[digits<<1], 2);
-            s += 2;
-        } else {
-            *ptz = 0;
-            *s++ = digits + '0';
-        }
-    } else {
-        uint32_t q = FAST_DIV100(digits);
-        uint32_t r = digits - q * 100;
-
-        if (q >= 10) {
-            *ptz = tz_100_lut[q];
-            memcpy(s, &ch_100_lut[q<<1], 2);
-            s += 2;
-        } else {
-            *ptz = 0;
-            *s++ = q + '0';
-        }
-
-        if (!r) {
-            *ptz += 2;
-            memset(s, '0', 2);
-            s += 2;
-        } else {
-            *ptz = tz_100_lut[r];
-            memcpy(s, &ch_100_lut[r<<1], 2);
-            s += 2;
-        }
-    }
-
-    return s - buffer;
-}
-
-static inline int32_t fill_t_4_digits(char *buffer, uint32_t digits, int32_t *ptz)
-{
-    char *s = buffer;
-    uint32_t q = FAST_DIV100(digits);
-    uint32_t r = digits - q * 100;
-
-    memcpy(s, &ch_100_lut[q<<1], 2);
-    memcpy(s + 2, &ch_100_lut[r<<1], 2);
-
-    if (!r) {
-        *ptz = tz_100_lut[q] + 2;
-    } else {
-        *ptz = tz_100_lut[r];
-    }
-
-    return 4;
-}
-
-static inline int32_t fill_1_8_digits(char *buffer, uint32_t digits, int32_t *ptz)
-{
-    char *s = buffer;
-
-    if (digits < 10000) {
-        return fill_1_4_digits(s, digits, ptz);
-    } else {
-        uint32_t q = FAST_DIV10000(digits);
-        uint32_t r = digits - q * 10000;
-
-        s += fill_1_4_digits(s, q, ptz);
-        if (!r) {
-            *ptz += 4;
-            memset(s, '0', 4);
-            s += 4;
-        } else {
-            s += fill_t_4_digits(s, r, ptz);
-        }
-    }
-
-    return s - buffer;
-}
-
-static inline int32_t fill_t_8_digits(char *buffer, uint32_t digits, int32_t *ptz)
-{
-    char *s = buffer;
-
-    if (digits < 10000) {
-        memset(s, '0', 4);
-        fill_t_4_digits(s + 4, digits, ptz);
-    } else {
-        uint32_t q = FAST_DIV10000(digits);
-        uint32_t r = digits - q * 10000;
-
-        fill_t_4_digits(s, q, ptz);
-        if (!r) {
-            memset(s + 4, '0', 4);
-            *ptz += 4;
-        } else {
-            fill_t_4_digits(s + 4, r, ptz);
-        }
-    }
-
-    return 8;
-}
-
-static inline int32_t fill_1_16_digits(char *buffer, uint64_t digits, int32_t *ptz)
-{
-    char *s = buffer;
-
-    if (digits < 100000000llu) {
-        return fill_1_8_digits(s, (uint32_t)digits, ptz);
-    } else {
-        uint32_t q = (uint32_t)(digits / 100000000);
-        uint32_t r = (uint32_t)(digits - (uint64_t)q * 100000000);
-
-        s += fill_1_8_digits(s, q, ptz);
-        if (!r) {
-            *ptz += 8;
-            memset(s, '0', 8);
-            s += 8;
-        } else {
-            s += fill_t_8_digits(s, r, ptz);
-        }
-    }
-
-    return s - buffer;
-}
-
-static inline int32_t fill_t_16_digits(char *buffer, uint64_t digits, int32_t *ptz)
-{
-    char *s = buffer;
-
-    if (digits < 100000000llu) {
-        memset(s, '0', 8);
-        fill_t_8_digits(s + 8, digits, ptz);
-    } else {
-        uint32_t q = (uint32_t)(digits / 100000000);
-        uint32_t r = (uint32_t)(digits - (uint64_t)q * 100000000);
-
-        fill_t_8_digits(s, q, ptz);
-        if (!r) {
-            memset(s + 8, '0', 8);
-            *ptz += 8;
-        } else {
-            fill_t_8_digits(s + 8, r, ptz);
-        }
-    }
-
-    return 16;
-}
-#endif
-
 static inline int32_t fill_significand(char *buffer, uint64_t digits, int32_t *ptz)
 {
     char *s = buffer;
@@ -1091,7 +1094,7 @@ static inline int32_t fill_significand(char *buffer, uint64_t digits, int32_t *p
     return s - buffer;
 }
 
-static inline int32_t fill_exponent(int32_t K, char* buffer)
+static inline int32_t fill_exponent(int32_t K, char *buffer)
 {
     int32_t i = 0, k = 0;
 
@@ -1120,7 +1123,7 @@ static inline int32_t fill_exponent(int32_t K, char* buffer)
     return i;
 }
 
-static inline char* dragonbox_format(char* buffer, uint64_t digits, int32_t decimal_exponent)
+static inline char* dragonbox_format(char *buffer, uint64_t digits, int32_t decimal_exponent)
 {
     int32_t num_digits, vnum_digits, trailing_zeros, decimal_point;
 
@@ -1173,11 +1176,11 @@ static inline char* dragonbox_format(char* buffer, uint64_t digits, int32_t deci
     return buffer;
 }
 
-static int dragonbox_dtoa(double value, char* buffer)
+int dragonbox_dtoa(double num, char *buffer)
 {
     diy_fp_t v;
     char *s = buffer;
-    union {double d; uint64_t n;} u = {.d = value};
+    union {double d; uint64_t n;} u = {.d = num};
     int32_t signbit = u.n >> (DIY_SIGNIFICAND_SIZE - 1);
     int32_t exponent = (u.n & DP_EXPONENT_MASK) >> DP_SIGNIFICAND_SIZE; /* Exponent */
     uint64_t significand = u.n & DP_SIGNIFICAND_MASK; /* Mantissa */
@@ -1196,6 +1199,7 @@ static int dragonbox_dtoa(double value, char* buffer)
             return signbit + 3;
         }
         break;
+
     case 0:
         if (!significand) {
             /* no-normalized double */

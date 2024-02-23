@@ -6,23 +6,24 @@
 
 PACKAGE_NAME    = ljson
 
-major_ver       = 1
-minor_ver       = 3
-patch_ver       = 3
-staticlib       = lib$(PACKAGE_NAME).a
-sharedlib       = lib$(PACKAGE_NAME).so $(major_ver) $(minor_ver) $(patch_ver)
+staticlib       = libljson.a
+sharedlib       = libljson.so 2 0 0
 testedbin       = ljson
+testednum       = jnum_test
 
-ldoublelib      = libldouble.a
-ldoublebin      = ldouble
-
-INSTALL_HEADERS = json.h
-FMUL           ?= 0
+INSTALL_HEADERS = json.h jnum.h
 DTOA           ?= 0
 RBIT           ?= 11
 TCMP           ?= 2
 
-CPFLAGS        += -DUSE_FLOAT_MUL_CONVERT=$(FMUL)
+libsrcs        := json.c jnum.c
+ifeq ($(DTOA),2)
+libsrcs        += grisu2.c
+endif
+ifeq ($(DTOA),3)
+libsrcs        += dragonbox.c
+endif
+
 CPFLAGS        += -DJSON_DTOA_ALGORITHM=$(DTOA) # 0:ldouble 1:sprintf 2:grisu2 3:dragonbox
 CPFLAGS        += -DLSHIFT_RESERVED_BIT=$(RBIT) # 2 <= RBIT <= 11
 CPFLAGS        += -DAPPROX_TAIL_CMP_VAL=$(TCMP) # 0 <= TCMP <= 4
@@ -32,14 +33,15 @@ all:
 	@echo "Build $(PACKAGE_NAME) Done!"
 
 INC_MAKES      := app
-object_byte_size=2304
+object_byte_size=10240
 include inc.makes
-$(eval $(call add-liba-build,$(staticlib),json.c))
-$(eval $(call add-libso-build,$(sharedlib),json.c))
+
+$(eval $(call add-liba-build,$(staticlib),$(libsrcs)))
+$(eval $(call add-libso-build,$(sharedlib),$(libsrcs)))
 $(eval $(call add-bin-build,$(testedbin),json_test.c,-L $(OBJ_PREFIX) $(call set_links,ljson),,$(OBJ_PREFIX)/$(staticlib)))
 
-$(eval $(call add-liba-build,$(ldoublelib),ldouble.c))
-$(eval $(call add-bin-build,$(ldoublebin),ldouble_test.c,-L $(OBJ_PREFIX) $(call set_links,ldouble),,$(OBJ_PREFIX)/$(ldoublelib)))
+numsrcs        := json.c jnum.c grisu2.c dragonbox.c jnum_test.c
+$(eval $(call add-bin-build,$(testednum),$(numsrcs)))
 
 all: $(BIN_TARGETS) $(LIB_TARGETS)
 

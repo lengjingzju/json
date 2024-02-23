@@ -82,8 +82,6 @@ make O=<编译输出目录> CROSS_COMPILE=<交叉编译器前缀> && make O=<编
 
 ## json对象结构
 
-使用 long long 类型支持，编译时需要设置 json.h 中的 `JSON_LONG_LONG_SUPPORT` 值为 1
-
 ```c
 struct json_list {
     struct json_list *next;
@@ -98,10 +96,8 @@ typedef enum {
     JSON_BOOL,
     JSON_INT,
     JSON_HEX,
-#if JSON_LONG_LONG_SUPPORT
     JSON_LINT,
     JSON_LHEX,
-#endif
     JSON_DOUBLE,
     JSON_STRING,
     JSON_ARRAY,
@@ -119,12 +115,10 @@ typedef struct {
 
 typedef union {
     bool vbool;
-    int vint;
-    unsigned int vhex;
-#if JSON_LONG_LONG_SUPPORT
-    long long int vlint;
-    unsigned long long int vlhex;
-#endif
+    int32_t vint;
+    uint32_t vhex;
+    int64_t vlint;
+    uint64_t vlhex;
     double vdbl;
 } json_number_t;                        // json数字对象值
 
@@ -187,24 +181,20 @@ json_object *json_create_item_array(json_type_t type, void *values, int count);
 
 static inline json_object *json_create_null(void);
 static inline json_object *json_create_bool(bool value);
-static inline json_object *json_create_int(int value);
-static inline json_object *json_create_hex(unsigned int value);
-#if JSON_LONG_LONG_SUPPORT
-static inline json_object *json_create_lint(long long int value);
-static inline json_object *json_create_lhex(unsigned long long int value);
-#endif
+static inline json_object *json_create_int(int32_t value);
+static inline json_object *json_create_hex(uint32_t value);
+static inline json_object *json_create_lint(int64_t value);
+static inline json_object *json_create_lhex(uint64_t value);
 static inline json_object *json_create_double(double value);
 static inline json_object *json_create_string(json_string_t *value);
 static inline json_object *json_create_array(void);
 static inline json_object *json_create_object(void);
 
 static inline json_object *json_create_bool_array(bool *values, int count);
-static inline json_object *json_create_int_array(int *values, int count);
-static inline json_object *json_create_hex_array(unsigned int *values, int count);
-#if JSON_LONG_LONG_SUPPORT
-static inline json_object *json_create_lint_array(long long int *values, int count);
-static inline json_object *json_create_lhex_array(unsigned long long int *values, int count);
-#endif
+static inline json_object *json_create_int_array(int32_t *values, int count);
+static inline json_object *json_create_hex_array(uint32_t *values, int count);
+static inline json_object *json_create_lint_array(int64_t *values, int count);
+static inline json_object *json_create_lhex_array(uint64_t *values, int count);
 static inline json_object *json_create_double_array(double *values, int count);
 static inline json_object *json_create_string_array(json_string_t *values, int count);
 ```
@@ -234,21 +224,17 @@ int json_get_number_value(json_object *json, json_type_t type, void *value);
 int json_set_number_value(json_object *json, json_type_t type, void *value);
 
 static inline bool json_get_bool_value(json_object *json);
-static inline int json_get_int_value(json_object *json);
-static inline unsigned int json_get_hex_value(json_object *json);
-#if JSON_LONG_LONG_SUPPORT
-static inline long long int json_get_lint_value(json_object *json);
-static inline unsigned long long int json_get_lhex_value(json_object *json);
-#endif
+static inline int32_t json_get_int_value(json_object *json);
+static inline uint32_t json_get_hex_value(json_object *json);
+static inline int64_t json_get_lint_value(json_object *json);
+static inline uint64_t json_get_lhex_value(json_object *json);
 static inline double json_get_double_value(json_object *json);
 
 static inline int json_set_bool_value(json_object *json, bool value);
-static inline int json_set_int_value(json_object *json, int value);
-static inline int json_set_hex_value(json_object *json, unsigned int value);
-#if JSON_LONG_LONG_SUPPORT
-static inline int json_set_lint_value(json_object *json, long long int value);
-static inline int json_set_lhex_value(json_object *json, unsigned long long int value);
-#endif
+static inline int json_set_int_value(json_object *json, int32_t value);
+static inline int json_set_hex_value(json_object *json, uint32_t value);
+static inline int json_set_lint_value(json_object *json, int64_t value);
+static inline int json_set_lhex_value(json_object *json, uint64_t value);
 static inline int json_set_double_value(json_object *json, double value);
 ```
 
@@ -326,12 +312,10 @@ json_object *json_add_new_item_to_object(json_object *object, json_type_t type, 
 
 static inline json_object *json_add_null_to_array(json_object *array);
 static inline json_object *json_add_bool_to_array(json_object *array, bool value);
-static inline json_object *json_add_int_to_array(json_object *array, int value);
-static inline json_object *json_add_hex_to_array(json_object *array, unsigned int value);
-#if JSON_LONG_LONG_SUPPORT
-static inline json_object *json_add_lint_to_array(json_object *array, long long int value);
-static inline json_object *json_add_lhex_to_array(json_object *array, unsigned long long int value);
-#endif
+static inline json_object *json_add_int_to_array(json_object *array, int32_t value);
+static inline json_object *json_add_hex_to_array(json_object *array, uint32_t value);
+static inline json_object *json_add_lint_to_array(json_object *array, int64_t value);
+static inline json_object *json_add_lhex_to_array(json_object *array, uint64_t value);
 static inline json_object *json_add_double_to_array(json_object *array, double value);
 static inline json_object *json_add_string_to_array(json_object *array, json_string_t *value);
 static inline json_object *json_add_array_to_array(json_object *array);
@@ -339,12 +323,10 @@ static inline json_object *json_add_object_to_array(json_object *array);
 
 static inline json_object *json_add_null_to_object(json_object *object, json_string_t *jkey);
 static inline json_object *json_add_bool_to_object(json_object *object, json_string_t *jkey, bool value);
-static inline json_object *json_add_int_to_object(json_object *object, json_string_t *jkey, int value);
-static inline json_object *json_add_hex_to_object(json_object *object, json_string_t *jkey, unsigned int value);
-#if JSON_LONG_LONG_SUPPORT
-static inline json_object *json_add_lint_to_object(json_object *object, json_string_t *jkey, long long int value);
-static inline json_object *json_add_lhex_to_object(json_object *object, json_string_t *jkey, unsigned long long int value);
-#endif
+static inline json_object *json_add_int_to_object(json_object *object, json_string_t *jkey, int32_t value);
+static inline json_object *json_add_hex_to_object(json_object *object, json_string_t *jkey, uint32_t value);
+static inline json_object *json_add_lint_to_object(json_object *object, json_string_t *jkey, int64_t value);
+static inline json_object *json_add_lhex_to_object(json_object *object, json_string_t *jkey, uint64_t value);
 static inline json_object *json_add_double_to_object(json_object *object, json_string_t *jkey, double value);
 static inline json_object *json_add_string_to_object(json_object *object, json_string_t *jkey, json_string_t *value);
 static inline json_object *json_add_array_to_object(json_object *object, json_string_t *jkey);
@@ -426,24 +408,20 @@ json_object *pjson_create_item_array(json_type_t item_type, void *values, int co
 
 static inline json_object *pjson_create_null(json_mem_t *mem);
 static inline json_object *pjson_create_bool(bool value, json_mem_t *mem);
-static inline json_object *pjson_create_int(int value, json_mem_t *mem);
-static inline json_object *pjson_create_hex(unsigned int value, json_mem_t *mem);
-#if JSON_LONG_LONG_SUPPORT
-static inline json_object *pjson_create_lint(long long int value, json_mem_t *mem);
-static inline json_object *pjson_create_lhex(unsigned long long int value, json_mem_t *mem);
-#endif
+static inline json_object *pjson_create_int(int32_t value, json_mem_t *mem);
+static inline json_object *pjson_create_hex(uint32_t value, json_mem_t *mem);
+static inline json_object *pjson_create_lint(int64_t value, json_mem_t *mem);
+static inline json_object *pjson_create_lhex(uint64_t value, json_mem_t *mem);
 static inline json_object *pjson_create_double(double value, json_mem_t *mem);
 static inline json_object *pjson_create_string(json_string_t *value, json_mem_t *mem);
 static inline json_object *pjson_create_array(json_mem_t *mem);
 static inline json_object *pjson_create_object(json_mem_t *mem);
 
 static inline json_object *pjson_create_bool_array(bool *values, int count, json_mem_t *mem);
-static inline json_object *pjson_create_int_array(int *values, int count, json_mem_t *mem);
-static inline json_object *pjson_create_hex_array(unsigned int *values, int count, json_mem_t *mem);
-#if JSON_LONG_LONG_SUPPORT
-static inline json_object *pjson_create_lint_array(long long int *values, int count, json_mem_t *mem);
-static inline json_object *pjson_create_lhex_array(unsigned long long int *values, int count, json_mem_t *mem);
-#endif
+static inline json_object *pjson_create_int_array(int32_t *values, int count, json_mem_t *mem);
+static inline json_object *pjson_create_hex_array(uint32_t *values, int count, json_mem_t *mem);
+static inline json_object *pjson_create_lint_array(int64_t *values, int count, json_mem_t *mem);
+static inline json_object *pjson_create_lhex_array(uint64_t *values, int count, json_mem_t *mem);
 static inline json_object *pjson_create_double_array(double *values, int count, json_mem_t *mem);
 static inline json_object *pjson_create_string_array(json_string_t *values, int count, json_mem_t *mem);
 ```
@@ -485,12 +463,10 @@ json_object *pjson_add_new_item_to_object(json_object *object, json_type_t type,
 
 static inline json_object *pjson_add_null_to_array(json_object *array, json_mem_t *mem);
 static inline json_object *pjson_add_bool_to_array(json_object *array, bool value, json_mem_t *mem);
-static inline json_object *pjson_add_int_to_array(json_object *array, int value, json_mem_t *mem);
-static inline json_object *pjson_add_hex_to_array(json_object *array, unsigned int value, json_mem_t *mem);
-#if JSON_LONG_LONG_SUPPORT
-static inline json_object *pjson_add_lint_to_array(json_object *array, long long int value, json_mem_t *mem);
-static inline json_object *pjson_add_lhex_to_array(json_object *array, unsigned long long int value, json_mem_t *mem);
-#endif
+static inline json_object *pjson_add_int_to_array(json_object *array, int32_t value, json_mem_t *mem);
+static inline json_object *pjson_add_hex_to_array(json_object *array, uint32_t value, json_mem_t *mem);
+static inline json_object *pjson_add_lint_to_array(json_object *array, int64_t value, json_mem_t *mem);
+static inline json_object *pjson_add_lhex_to_array(json_object *array, uint64_t value, json_mem_t *mem);
 static inline json_object *pjson_add_double_to_array(json_object *array, double value, json_mem_t *mem);
 static inline json_object *pjson_add_string_to_array(json_object *array, json_string_t *value, json_mem_t *mem);
 static inline json_object *pjson_add_array_to_array(json_object *array, json_mem_t *mem);
@@ -498,12 +474,10 @@ static inline json_object *pjson_add_object_to_array(json_object *array, json_me
 
 static inline json_object *pjson_add_null_to_object(json_object *object, json_string_t *jkey, json_mem_t *mem);
 static inline json_object *pjson_add_bool_to_object(json_object *object, json_string_t *jkey, bool value, json_mem_t *mem);
-static inline json_object *pjson_add_int_to_object(json_object *object, json_string_t *jkey, int value, json_mem_t *mem);
-static inline json_object *pjson_add_hex_to_object(json_object *object, json_string_t *jkey, unsigned int value, json_mem_t *mem);
-#if JSON_LONG_LONG_SUPPORT
-static inline json_object *pjson_add_lint_to_object(json_object *object, json_string_t *jkey, long long int value, json_mem_t *mem);
-static inline json_object *pjson_add_lhex_to_object(json_object *object, json_string_t *jkey, unsigned long long int value, json_mem_t *mem);
-#endif
+static inline json_object *pjson_add_int_to_object(json_object *object, json_string_t *jkey, int32_t value, json_mem_t *mem);
+static inline json_object *pjson_add_hex_to_object(json_object *object, json_string_t *jkey, uint32_t value, json_mem_t *mem);
+static inline json_object *pjson_add_lint_to_object(json_object *object, json_string_t *jkey, int64_t value, json_mem_t *mem);
+static inline json_object *pjson_add_lhex_to_object(json_object *object, json_string_t *jkey, uint64_t value, json_mem_t *mem);
 static inline json_object *pjson_add_double_to_object(json_object *object, json_string_t *jkey, double value, json_mem_t *mem);
 static inline json_object *pjson_add_string_to_object(json_object *object, json_string_t *jkey, json_string_t *value, json_mem_t *mem);
 static inline json_object *pjson_add_array_to_object(json_object *object, json_string_t *jkey, json_mem_t *mem);
@@ -606,12 +580,10 @@ static inline json_sax_print_hd json_sax_fprint_unformat_start(int item_total, c
 int json_sax_print_value(json_sax_print_hd handle, json_type_t type, json_string_t *jkey, const void *value);
 static inline int json_sax_print_null(json_sax_print_hd handle, json_string_t *jkey);
 static inline int json_sax_print_bool(json_sax_print_hd handle, json_string_t *jkey, bool value);
-static inline int json_sax_print_int(json_sax_print_hd handle, json_string_t *jkey, int value);
-static inline int json_sax_print_hex(json_sax_print_hd handle, json_string_t *jkey, unsigned int value);
-#if JSON_LONG_LONG_SUPPORT
-static inline int json_sax_print_lint(json_sax_print_hd handle, json_string_t *jkey, long long int value);
-static inline int json_sax_print_lhex(json_sax_print_hd handle, json_string_t *jkey, unsigned long long int value);
-#endif
+static inline int json_sax_print_int(json_sax_print_hd handle, json_string_t *jkey, int32_t value);
+static inline int json_sax_print_hex(json_sax_print_hd handle, json_string_t *jkey, uint32_t value);
+static inline int json_sax_print_lint(json_sax_print_hd handle, json_string_t *jkey, int64_t value);
+static inline int json_sax_print_lhex(json_sax_print_hd handle, json_string_t *jkey, uint64_t value);
 static inline int json_sax_print_double(json_sax_print_hd handle, json_string_t *jkey, double value);
 static inline int json_sax_print_string(json_sax_print_hd handle, json_string_t *jkey, json_string_t *value);
 static inline int json_sax_print_array(json_sax_print_hd handle, json_string_t *jkey, json_sax_cmd_t value);

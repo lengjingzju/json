@@ -4,6 +4,11 @@
  * Section: src/grisu, src/milo
  */
 
+#include <stdint.h>
+#include <stdbool.h>
+#include <string.h>
+#include <stdlib.h>
+
 /*
  * Using table lookup methods to accelerate division, etc
  */
@@ -354,7 +359,7 @@ static inline int get_u64_prefix0(uint64_t f)
 #if defined(_MSC_VER) && defined(_M_AMD64)
     unsigned long index;
     _BitScanReverse64(&index, f);
-    return (63 - index);
+    return 63 - index;
 #elif defined(__GNUC__) || defined(__clang__)
     return __builtin_clzll(f);
 #else
@@ -543,13 +548,15 @@ static inline void grisu2(double value, char* buffer, int* length, int* K)
     digit_gen(Wv, Wp, Wp.f - Wm.f, buffer, length, K);
 }
 
-static inline int fill_exponent(int K, char* buffer)
+static inline int fill_exponent(int K, char *buffer)
 {
-    int i = 0, k = 0;
+    int32_t i = 0, k = 0;
 
     if (K < 0) {
         buffer[i++] = '-';
         K = -K;
+    } else {
+        buffer[i++] = '+';
     }
 
     if (K < 10) {
@@ -646,21 +653,21 @@ static inline int prettify_string(char* buffer, int length, int K)
     return (length + 2 + fill_exponent(kk - 1, &buffer[length + 2]));
 }
 
-static int grisu2_dtoa(double value, char* buffer)
+int grisu2_dtoa(double num, char *buffer)
 {
     int length, K, pre = 0;
 
-    if (value == 0) {
+    if (num == 0) {
         memcpy(buffer, "0.0", 4);
         return 3;
     }
 
-    if (value < 0) {
+    if (num < 0) {
         *buffer++ = '-';
-        value = -value;
+        num = -num;
         pre = 1;
     }
 
-    grisu2(value, buffer, &length, &K);
+    grisu2(num, buffer, &length, &K);
     return (pre + prettify_string(buffer, length, K));
 }

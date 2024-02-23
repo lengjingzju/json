@@ -21,8 +21,6 @@ static unsigned int _system_ms_get(void)
     struct timespec ts;
     clock_gettime(CLOCK_MONOTONIC, &ts);
     return (ts.tv_sec * 1000 + ts.tv_nsec / 1000000);
-    //extern cyg_uint32 cyg_time_get_ms(void);
-    //return cyg_time_get_ms(); //ecos
 }
 
 int copy_data_to_file(char *data, size_t size, const char *dst)

@@ -4,15 +4,11 @@
 * Contact: Jing Leng <lengjingzju@163.com> *
 * URL: https://github.com/lengjingzju/json *
 *******************************************/
+#pragma once
+#include "jnum.h"
 
-#ifndef __JSON_H__
-#define __JSON_H__
-#include <stdbool.h>
-#include <stdlib.h>
-
-#define JSON_VERSION                    0x010303
+#define JSON_VERSION                    0x020000
 #define JSON_SAX_APIS_SUPPORT           1
-#define JSON_LONG_LONG_SUPPORT          1
 
 /**************** json object structure ****************/
 
@@ -44,10 +40,8 @@ typedef enum {
     JSON_BOOL,                  /* Its value variable is vbool: true, false */
     JSON_INT,                   /* Its value variable is vint */
     JSON_HEX,                   /* Its value variable is vhex */
-#if JSON_LONG_LONG_SUPPORT
     JSON_LINT,                  /* Its value variable is vlint */
     JSON_LHEX,                  /* Its value variable is vlhex */
-#endif
     JSON_DOUBLE,                /* Its value variable is vdbl */
     JSON_STRING,                /* Its value variable is vstr */
     JSON_ARRAY,                 /* Its value variable is head */
@@ -76,16 +70,7 @@ typedef struct {
  * json_number_t - the json number object value
  * @description: LJSON supports decimal and hexadecimal, integer and long long integer.
  */
-typedef union {
-    bool vbool;
-    int vint;
-    unsigned int vhex;
-#if JSON_LONG_LONG_SUPPORT
-    long long int vlint;
-    unsigned long long int vlhex;
-#endif
-    double vdbl;
-} json_number_t;
+typedef jnum_value_t json_number_t;
 
 #if JSON_SAX_APIS_SUPPORT
 /*
@@ -207,27 +192,25 @@ static inline json_object *json_create_bool(bool value)
     return json_create_item(JSON_BOOL, &value);
 }
 
-static inline json_object *json_create_int(int value)
+static inline json_object *json_create_int(int32_t value)
 {
     return json_create_item(JSON_INT, &value);
 }
 
-static inline json_object *json_create_hex(unsigned int value)
+static inline json_object *json_create_hex(uint32_t value)
 {
     return json_create_item(JSON_HEX, &value);
 }
 
-#if JSON_LONG_LONG_SUPPORT
-static inline json_object *json_create_lint(long long int value)
+static inline json_object *json_create_lint(int64_t value)
 {
     return json_create_item(JSON_LINT, &value);
 }
 
-static inline json_object *json_create_lhex(unsigned long long int value)
+static inline json_object *json_create_lhex(uint64_t value)
 {
     return json_create_item(JSON_LHEX, &value);
 }
-#endif
 
 static inline json_object *json_create_double(double value)
 {
@@ -263,27 +246,25 @@ static inline json_object *json_create_bool_array(bool *values, int count)
     return json_create_item_array(JSON_BOOL, values, count);
 }
 
-static inline json_object *json_create_int_array(int *values, int count)
+static inline json_object *json_create_int_array(int32_t *values, int count)
 {
     return json_create_item_array(JSON_INT, values, count);
 }
 
-static inline json_object *json_create_hex_array(unsigned int *values, int count)
+static inline json_object *json_create_hex_array(uint32_t *values, int count)
 {
     return json_create_item_array(JSON_HEX, values, count);
 }
 
-#if JSON_LONG_LONG_SUPPORT
-static inline json_object *json_create_lint_array(long long int *values, int count)
+static inline json_object *json_create_lint_array(int64_t *values, int count)
 {
     return json_create_item_array(JSON_LINT, values, count);
 }
 
-static inline json_object *json_create_lhex_array(unsigned long long int *values, int count)
+static inline json_object *json_create_lhex_array(uint64_t *values, int count)
 {
     return json_create_item_array(JSON_LHEX, values, count);
 }
-#endif
 
 static inline json_object *json_create_double_array(double *values, int count)
 {
@@ -359,35 +340,33 @@ static inline bool json_get_bool_value(json_object *json)
     return value;
 }
 
-static inline int json_get_int_value(json_object *json)
+static inline int32_t json_get_int_value(json_object *json)
 {
-    int value = 0;
+    int32_t value = 0;
     json_get_number_value(json, JSON_INT, &value);
     return value;
 }
 
-static inline unsigned int json_get_hex_value(json_object *json)
+static inline uint32_t json_get_hex_value(json_object *json)
 {
-    unsigned int value = 0;
+    uint32_t value = 0;
     json_get_number_value(json, JSON_HEX, &value);
     return value;
 }
 
-#if JSON_LONG_LONG_SUPPORT
-static inline long long int json_get_lint_value(json_object *json)
+static inline int64_t json_get_lint_value(json_object *json)
 {
-    long long int value = 0;
+    int64_t value = 0;
     json_get_number_value(json, JSON_LINT, &value);
     return value;
 }
 
-static inline unsigned long long int json_get_lhex_value(json_object *json)
+static inline uint64_t json_get_lhex_value(json_object *json)
 {
-    unsigned long long int value = 0;
+    uint64_t value = 0;
     json_get_number_value(json, JSON_LHEX, &value);
     return value;
 }
-#endif
 
 static inline double json_get_double_value(json_object *json)
 {
@@ -410,27 +389,25 @@ static inline int json_set_bool_value(json_object *json, bool value)
     return json_set_number_value(json, JSON_BOOL, &value);
 }
 
-static inline int json_set_int_value(json_object *json, int value)
+static inline int json_set_int_value(json_object *json, int32_t value)
 {
     return json_set_number_value(json, JSON_INT, &value);
 }
 
-static inline int json_set_hex_value(json_object *json, unsigned int value)
+static inline int json_set_hex_value(json_object *json, uint32_t value)
 {
     return json_set_number_value(json, JSON_HEX, &value);
 }
 
-#if JSON_LONG_LONG_SUPPORT
-static inline int json_set_lint_value(json_object *json, long long int value)
+static inline int json_set_lint_value(json_object *json, int64_t value)
 {
     return json_set_number_value(json, JSON_LINT, &value);
 }
 
-static inline int json_set_lhex_value(json_object *json, unsigned long long int value)
+static inline int json_set_lhex_value(json_object *json, uint64_t value)
 {
     return json_set_number_value(json, JSON_LHEX, &value);
 }
-#endif
 
 static inline int json_set_double_value(json_object *json, double value)
 {
@@ -617,27 +594,25 @@ static inline json_object *json_add_bool_to_array(json_object *array, bool value
     return json_add_new_item_to_array(array, JSON_BOOL, &value);
 }
 
-static inline json_object *json_add_int_to_array(json_object *array, int value)
+static inline json_object *json_add_int_to_array(json_object *array, int32_t value)
 {
     return json_add_new_item_to_array(array, JSON_INT, &value);
 }
 
-static inline json_object *json_add_hex_to_array(json_object *array, unsigned int value)
+static inline json_object *json_add_hex_to_array(json_object *array, uint32_t value)
 {
     return json_add_new_item_to_array(array, JSON_HEX, &value);
 }
 
-#if JSON_LONG_LONG_SUPPORT
-static inline json_object *json_add_lint_to_array(json_object *array, long long int value)
+static inline json_object *json_add_lint_to_array(json_object *array, int64_t value)
 {
     return json_add_new_item_to_array(array, JSON_LINT, &value);
 }
 
-static inline json_object *json_add_lhex_to_array(json_object *array, unsigned long long int value)
+static inline json_object *json_add_lhex_to_array(json_object *array, uint64_t value)
 {
     return json_add_new_item_to_array(array, JSON_LHEX, &value);
 }
-#endif
 
 static inline json_object *json_add_double_to_array(json_object *array, double value)
 {
@@ -680,27 +655,25 @@ static inline json_object *json_add_bool_to_object(json_object *object, json_str
     return json_add_new_item_to_object(object, JSON_BOOL, jkey, &value);
 }
 
-static inline json_object *json_add_int_to_object(json_object *object, json_string_t *jkey, int value)
+static inline json_object *json_add_int_to_object(json_object *object, json_string_t *jkey, int32_t value)
 {
     return json_add_new_item_to_object(object, JSON_INT, jkey, &value);
 }
 
-static inline json_object *json_add_hex_to_object(json_object *object, json_string_t *jkey, unsigned int value)
+static inline json_object *json_add_hex_to_object(json_object *object, json_string_t *jkey, uint32_t value)
 {
     return json_add_new_item_to_object(object, JSON_HEX, jkey, &value);
 }
 
-#if JSON_LONG_LONG_SUPPORT
-static inline json_object *json_add_lint_to_object(json_object *object, json_string_t *jkey, long long int value)
+static inline json_object *json_add_lint_to_object(json_object *object, json_string_t *jkey, int64_t value)
 {
     return json_add_new_item_to_object(object, JSON_LINT, jkey, &value);
 }
 
-static inline json_object *json_add_lhex_to_object(json_object *object, json_string_t *jkey, unsigned long long int value)
+static inline json_object *json_add_lhex_to_object(json_object *object, json_string_t *jkey, uint64_t value)
 {
     return json_add_new_item_to_object(object, JSON_LHEX, jkey, &value);
 }
-#endif
 
 static inline json_object *json_add_double_to_object(json_object *object, json_string_t *jkey, double value)
 {
@@ -836,27 +809,25 @@ static inline json_object *pjson_create_bool(bool value, json_mem_t *mem)
     return pjson_create_item(JSON_BOOL, &value, mem);
 }
 
-static inline json_object *pjson_create_int(int value, json_mem_t *mem)
+static inline json_object *pjson_create_int(int32_t value, json_mem_t *mem)
 {
     return pjson_create_item(JSON_INT, &value, mem);
 }
 
-static inline json_object *pjson_create_hex(unsigned int value, json_mem_t *mem)
+static inline json_object *pjson_create_hex(uint32_t value, json_mem_t *mem)
 {
     return pjson_create_item(JSON_HEX, &value, mem);
 }
 
-#if JSON_LONG_LONG_SUPPORT
-static inline json_object *pjson_create_lint(long long int value, json_mem_t *mem)
+static inline json_object *pjson_create_lint(int64_t value, json_mem_t *mem)
 {
     return pjson_create_item(JSON_LINT, &value, mem);
 }
 
-static inline json_object *pjson_create_lhex(unsigned long long int value, json_mem_t *mem)
+static inline json_object *pjson_create_lhex(uint64_t value, json_mem_t *mem)
 {
     return pjson_create_item(JSON_LHEX, &value, mem);
 }
-#endif
 
 static inline json_object *pjson_create_double(double value, json_mem_t *mem)
 {
@@ -893,27 +864,25 @@ static inline json_object *pjson_create_bool_array(bool *values, int count, json
     return pjson_create_item_array(JSON_BOOL, values, count, mem);
 }
 
-static inline json_object *pjson_create_int_array(int *values, int count, json_mem_t *mem)
+static inline json_object *pjson_create_int_array(int32_t *values, int count, json_mem_t *mem)
 {
     return pjson_create_item_array(JSON_INT, values, count, mem);
 }
 
-static inline json_object *pjson_create_hex_array(unsigned int *values, int count, json_mem_t *mem)
+static inline json_object *pjson_create_hex_array(uint32_t *values, int count, json_mem_t *mem)
 {
     return pjson_create_item_array(JSON_HEX, values, count, mem);
 }
 
-#if JSON_LONG_LONG_SUPPORT
-static inline json_object *pjson_create_lint_array(long long int *values, int count, json_mem_t *mem)
+static inline json_object *pjson_create_lint_array(int64_t *values, int count, json_mem_t *mem)
 {
     return pjson_create_item_array(JSON_LINT, values, count, mem);
 }
 
-static inline json_object *pjson_create_lhex_array(unsigned long long int *values, int count, json_mem_t *mem)
+static inline json_object *pjson_create_lhex_array(uint64_t *values, int count, json_mem_t *mem)
 {
     return pjson_create_item_array(JSON_LHEX, values, count, mem);
 }
-#endif
 
 static inline json_object *pjson_create_double_array(double *values, int count, json_mem_t *mem)
 {
@@ -1027,27 +996,25 @@ static inline json_object *pjson_add_bool_to_array(json_object *array, bool valu
     return pjson_add_new_item_to_array(array, JSON_BOOL, &value, mem);
 }
 
-static inline json_object *pjson_add_int_to_array(json_object *array, int value, json_mem_t *mem)
+static inline json_object *pjson_add_int_to_array(json_object *array, int32_t value, json_mem_t *mem)
 {
     return pjson_add_new_item_to_array(array, JSON_INT, &value, mem);
 }
 
-static inline json_object *pjson_add_hex_to_array(json_object *array, unsigned int value, json_mem_t *mem)
+static inline json_object *pjson_add_hex_to_array(json_object *array, uint32_t value, json_mem_t *mem)
 {
     return pjson_add_new_item_to_array(array, JSON_HEX, &value, mem);
 }
 
-#if JSON_LONG_LONG_SUPPORT
-static inline json_object *pjson_add_lint_to_array(json_object *array, long long int value, json_mem_t *mem)
+static inline json_object *pjson_add_lint_to_array(json_object *array, int64_t value, json_mem_t *mem)
 {
     return pjson_add_new_item_to_array(array, JSON_LINT, &value, mem);
 }
 
-static inline json_object *pjson_add_lhex_to_array(json_object *array, unsigned long long int value, json_mem_t *mem)
+static inline json_object *pjson_add_lhex_to_array(json_object *array, uint64_t value, json_mem_t *mem)
 {
     return pjson_add_new_item_to_array(array, JSON_LHEX, &value, mem);
 }
-#endif
 
 static inline json_object *pjson_add_double_to_array(json_object *array, double value, json_mem_t *mem)
 {
@@ -1090,27 +1057,25 @@ static inline json_object *pjson_add_bool_to_object(json_object *object, json_st
     return pjson_add_new_item_to_object(object, JSON_BOOL, jkey, &value, mem);
 }
 
-static inline json_object *pjson_add_int_to_object(json_object *object, json_string_t *jkey, int value, json_mem_t *mem)
+static inline json_object *pjson_add_int_to_object(json_object *object, json_string_t *jkey, int32_t value, json_mem_t *mem)
 {
     return pjson_add_new_item_to_object(object, JSON_INT, jkey, &value, mem);
 }
 
-static inline json_object *pjson_add_hex_to_object(json_object *object, json_string_t *jkey, unsigned int value, json_mem_t *mem)
+static inline json_object *pjson_add_hex_to_object(json_object *object, json_string_t *jkey, uint32_t value, json_mem_t *mem)
 {
     return pjson_add_new_item_to_object(object, JSON_HEX, jkey, &value, mem);
 }
 
-#if JSON_LONG_LONG_SUPPORT
-static inline json_object *pjson_add_lint_to_object(json_object *object, json_string_t *jkey, long long int value, json_mem_t *mem)
+static inline json_object *pjson_add_lint_to_object(json_object *object, json_string_t *jkey, int64_t value, json_mem_t *mem)
 {
     return pjson_add_new_item_to_object(object, JSON_LINT, jkey, &value, mem);
 }
 
-static inline json_object *pjson_add_lhex_to_object(json_object *object, json_string_t *jkey, unsigned long long int value, json_mem_t *mem)
+static inline json_object *pjson_add_lhex_to_object(json_object *object, json_string_t *jkey, uint64_t value, json_mem_t *mem)
 {
     return pjson_add_new_item_to_object(object, JSON_LHEX, jkey, &value, mem);
 }
-#endif
 
 static inline json_object *pjson_add_double_to_object(json_object *object, json_string_t *jkey, double value, json_mem_t *mem)
 {
@@ -1456,27 +1421,25 @@ static inline int json_sax_print_bool(json_sax_print_hd handle, json_string_t *j
     return json_sax_print_value(handle, JSON_BOOL, jkey, &value);
 }
 
-static inline int json_sax_print_int(json_sax_print_hd handle, json_string_t *jkey, int value)
+static inline int json_sax_print_int(json_sax_print_hd handle, json_string_t *jkey, int32_t value)
 {
     return json_sax_print_value(handle, JSON_INT, jkey, &value);
 }
 
-static inline int json_sax_print_hex(json_sax_print_hd handle, json_string_t *jkey, unsigned int value)
+static inline int json_sax_print_hex(json_sax_print_hd handle, json_string_t *jkey, uint32_t value)
 {
     return json_sax_print_value(handle, JSON_HEX, jkey, &value);
 }
 
-#if JSON_LONG_LONG_SUPPORT
-static inline int json_sax_print_lint(json_sax_print_hd handle, json_string_t *jkey, long long int value)
+static inline int json_sax_print_lint(json_sax_print_hd handle, json_string_t *jkey, int64_t value)
 {
     return json_sax_print_value(handle, JSON_LINT, jkey, &value);
 }
 
-static inline int json_sax_print_lhex(json_sax_print_hd handle, json_string_t *jkey, unsigned long long int value)
+static inline int json_sax_print_lhex(json_sax_print_hd handle, json_string_t *jkey, uint64_t value)
 {
     return json_sax_print_value(handle, JSON_LHEX, jkey, &value);
 }
-#endif
 
 static inline int json_sax_print_double(json_sax_print_hd handle, json_string_t *jkey, double value)
 {
@@ -1594,5 +1557,4 @@ static inline int json_sax_parse_file(const char *path, json_sax_cb_t cb)
     return json_sax_parse_common(&choice);
 }
 
-#endif
 #endif
