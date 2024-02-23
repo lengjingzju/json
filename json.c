@@ -2060,10 +2060,10 @@ static json_type_t _parse_hex(const char **sstr, json_number_t *value)
             c -= '0';
             break;
         case 'a': case 'b': case 'c': case 'd': case 'e': case 'f':
-            c -= 'a';
+            c -= 'a' - 10;
             break;
         case 'A': case 'B': case 'C': case 'D': case 'E': case 'F':
-            c -= 'A';
+            c -= 'A' - 10;
             break;
         default:
             goto end;
@@ -2107,25 +2107,21 @@ static json_type_t _parse_num(const char **sstr, json_number_t *value)
     while (*s == '0')
         ++s;
 
-    while (1) {
-        switch (*s) {
-        case '0': case '1': case '2': case '3': case '4':
-        case '5': case '6': case '7': case '8': case '9':
-            break;
-        case 'e': case 'E':
-            goto end;
-        case '.':
-            goto next2;
-        default:
-            goto next1;
-        }
+    while (*s >= '0' && *s <= '9') {
         m = (m << 3) + (m << 1) + (*s++ - '0');
         ++k;
     }
-
-next1:
     if (unlikely(k >= 20))
         goto end;
+
+    switch (*s) {
+    case 'e': case 'E':
+        goto end;
+    case '.':
+        goto next;
+    default:
+        break;
+    }
 
     if (m <= 2147483647U /*INT_MAX*/) {
         type = JSON_INT;
@@ -2138,33 +2134,29 @@ next1:
             type = JSON_LINT;
             value->vlint = -m;
         } else {
-            goto end;
+            type = JSON_DOUBLE;
+            value->vdbl = sign == 1 ? (double)m : -((double)m);
         }
     }
     *sstr = s;
     return type;
 
-next2:
-    if (unlikely(k >= 20))
-        goto end;
-
+next:
     ++s;
     k = 0;
-    while (1) {
-        switch (*s) {
-        case '0': case '1': case '2': case '3': case '4':
-        case '5': case '6': case '7': case '8': case '9':
-            break;
-        default:
-            goto next3;
-        }
+    while (*s >= '0' && *s <= '9') {
         n = (n << 3) + (n << 1) + (*s++ - '0');
         ++k;
     }
-
-next3:
     if (unlikely(k >= 20))
         goto end;
+
+    switch (*s) {
+    case 'e': case 'E':
+        goto end;
+    default:
+        break;
+    }
 
     d = m + n * div10_lut[k];
     type = JSON_DOUBLE;

@@ -1,10 +1,9 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <unistd.h>
 #include <time.h>
+#include "jnum.h"
 
-extern int jnum_dtoa(double num, char *buffer);
 extern int grisu2_dtoa(double num, char *buffer);
 extern int dragonbox_dtoa(double num, char *buffer);
 
@@ -17,71 +16,107 @@ static unsigned int _system_ms_get(void)
 
 int main(int argc, char *argv[])
 {
+    char buf[64] = {0};
+
     if (argc != 2 && argc != 3) {
         printf("Usage: %s <num>\n", argv[0]);
         printf("Usage: %s <num> <cnt>\n", argv[0]);
+        printf("Usage: %s <i/l/h/L/d> <num>\n", argv[0]);
         return -1;
     }
 
-    char *tmp = NULL;
-    double d = strtod(argv[1], &tmp);
-    char buf[64] = {0};
-
-    if (argc == 2) {
-#if 1
-        printf("original  : %s\nprintf    : %0.15g\n", argv[1], d);
-        jnum_dtoa(d, buf);
-        printf("ldouble   : %s\n", buf);
-        grisu2_dtoa(d, buf);
-        printf("grisu2    : %s\n", buf);
-        dragonbox_dtoa(d, buf);
-        printf("dragonbox : %s\n", buf);
-#else
-        char buf2[64] = {0};
-
-        sprintf(buf2, "%0.15g", d);
-        jnum_dtoa(d, buf);
-        if (strcmp(buf, buf2)) {
-            printf("original  : %s\nprintf    : %0.15g\n", argv[1], d);
-            printf("ldouble   : %s\n", buf);
+    switch (*argv[1]) {
+    case 'i':
+        {
+            int32_t d = jnum_atoi(argv[2]);
+            jnum_itoa(d, buf);
+            printf("original  : %s\nprintf    : %d\njnum      : %s\n", argv[2], d, buf);
+            break;
         }
-#endif
-    } else {
-        int i;
-        int cnt = atoi(argv[2]);
-        unsigned int ms, ms1, ms2, ms3;
-
-        ms1 = _system_ms_get();
-        for (i = 0; i < cnt; ++i) {
-            sprintf(buf, "%0.15g", d);
+    case 'l':
+        {
+            int64_t d = jnum_atol(argv[2]);
+            jnum_ltoa(d, buf);
+            printf("original  : %s\nprintf    : %ld\njnum      : %s\n", argv[2], d, buf);
+            break;
         }
-        ms2 = _system_ms_get();
-        ms = ms2 - ms1;
-        printf("original  : %s\nprintf    : %0.15g\t%ums\n", argv[1], d, ms);
-
-        ms1 = _system_ms_get();
-        for (i = 0; i < cnt; ++i) {
+    case 'h':
+        {
+            uint32_t d = jnum_atoh(argv[2]);
+            jnum_htoa(d, buf);
+            printf("original  : %s\nprintf    : 0x%x\njnum      : %s\n", argv[2], d, buf);
+            break;
+        }
+    case 'L':
+        {
+            uint64_t d = jnum_atolh(argv[2]);
+            jnum_lhtoa(d, buf);
+            printf("original  : %s\nprintf    : 0x%lx\njnum      : %s\n", argv[2], d, buf);
+            break;
+        }
+    case 'd':
+        {
+            double d = jnum_atod(argv[2]);
+            printf("original  : %s\nprintf    : %0.15g\n", argv[2], d);
             jnum_dtoa(d, buf);
-        }
-        ms2 = _system_ms_get();
-        ms3 = ms2 - ms1;
-        printf("ldouble   : %s\t%ums\t%.0lf%%\n", buf, ms3, ms3 ? 100.0 * ms / ms3 : 0);
-
-        ms1 = _system_ms_get();
-        for (i = 0; i < cnt; ++i) {
+            printf("ldouble   : %s\n", buf);
             grisu2_dtoa(d, buf);
-        }
-        ms2 = _system_ms_get();
-        ms3 = ms2 - ms1;
-        printf("grisu2    : %s\t%ums\t%.0lf%%\n", buf, ms3, ms3 ? 100.0 * ms / ms3 : 0);
-
-        ms1 = _system_ms_get();
-        for (i = 0; i < cnt; ++i) {
+            printf("grisu2    : %s\n", buf);
             dragonbox_dtoa(d, buf);
+            printf("dragonbox : %s\n", buf);
+            break;
         }
-        ms2 = _system_ms_get();
-        ms3 = ms2 - ms1;
-        printf("dragonbox : %s\t%ums\t%.0lf%%\n", buf, ms3, ms3 ? 100.0 * ms / ms3 : 0);
+
+    default:
+        if (argc == 2) {
+            double d = jnum_atod(argv[1]);
+            char tmp[64] = {0};
+
+            sprintf(tmp, "%0.15g", d);
+            jnum_dtoa(d, buf);
+            if (strcmp(buf, tmp)) {
+                printf("original  : %s\nprintf    : %s\n", argv[1], tmp);
+                printf("ldouble   : %s\n", buf);
+            }
+        } else {
+            int i;
+            double d = jnum_atod(argv[1]);
+            int cnt = atoi(argv[2]);
+            unsigned int ms, ms1, ms2, ms3;
+
+            ms1 = _system_ms_get();
+            for (i = 0; i < cnt; ++i) {
+                sprintf(buf, "%0.15g", d);
+            }
+            ms2 = _system_ms_get();
+            ms = ms2 - ms1;
+            printf("original  : %s\nprintf    : %0.15g\t%ums\n", argv[1], d, ms);
+
+            ms1 = _system_ms_get();
+            for (i = 0; i < cnt; ++i) {
+                jnum_dtoa(d, buf);
+            }
+            ms2 = _system_ms_get();
+            ms3 = ms2 - ms1;
+            printf("ldouble   : %s\t%ums\t%.0lf%%\n", buf, ms3, ms3 ? 100.0 * ms / ms3 : 0);
+
+            ms1 = _system_ms_get();
+            for (i = 0; i < cnt; ++i) {
+                grisu2_dtoa(d, buf);
+            }
+            ms2 = _system_ms_get();
+            ms3 = ms2 - ms1;
+            printf("grisu2    : %s\t%ums\t%.0lf%%\n", buf, ms3, ms3 ? 100.0 * ms / ms3 : 0);
+
+            ms1 = _system_ms_get();
+            for (i = 0; i < cnt; ++i) {
+                dragonbox_dtoa(d, buf);
+            }
+            ms2 = _system_ms_get();
+            ms3 = ms2 - ms1;
+            printf("dragonbox : %s\t%ums\t%.0lf%%\n", buf, ms3, ms3 ? 100.0 * ms / ms3 : 0);
+        }
+        break;
     }
 
     return 0;

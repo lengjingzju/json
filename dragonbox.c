@@ -1201,7 +1201,7 @@ int dragonbox_dtoa(double num, char *buffer)
         break;
 
     case 0:
-        if (!significand) {
+        if (significand) {
             /* no-normalized double */
             v.f = significand; /* Non-normalized double doesn't have a extra integer bit for Mantissa */
             v.e = 1 - DP_EXPONENT_OFFSET - DP_SIGNIFICAND_SIZE; /* Fixed Exponent: -1022, divisor of Mantissa: pow(2,52) */

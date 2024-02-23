@@ -12,8 +12,8 @@ testedbin       = ljson
 testednum       = jnum_test
 
 INSTALL_HEADERS = json.h jnum.h
+FMUL           ?= 1
 DTOA           ?= 0
-RBIT           ?= 11
 TCMP           ?= 2
 
 libsrcs        := json.c jnum.c
@@ -24,8 +24,8 @@ ifeq ($(DTOA),3)
 libsrcs        += dragonbox.c
 endif
 
+CPFLAGS        += -DUSING_FLOAT_MUL=$(FMUL)
 CPFLAGS        += -DJSON_DTOA_ALGORITHM=$(DTOA) # 0:ldouble 1:sprintf 2:grisu2 3:dragonbox
-CPFLAGS        += -DLSHIFT_RESERVED_BIT=$(RBIT) # 2 <= RBIT <= 11
 CPFLAGS        += -DAPPROX_TAIL_CMP_VAL=$(TCMP) # 0 <= TCMP <= 4
 
 .PHONY: all clean install
@@ -40,7 +40,7 @@ $(eval $(call add-liba-build,$(staticlib),$(libsrcs)))
 $(eval $(call add-libso-build,$(sharedlib),$(libsrcs)))
 $(eval $(call add-bin-build,$(testedbin),json_test.c,-L $(OBJ_PREFIX) $(call set_links,ljson),,$(OBJ_PREFIX)/$(staticlib)))
 
-numsrcs        := json.c jnum.c grisu2.c dragonbox.c jnum_test.c
+numsrcs        := jnum.c grisu2.c dragonbox.c jnum_test.c
 $(eval $(call add-bin-build,$(testednum),$(numsrcs)))
 
 all: $(BIN_TARGETS) $(LIB_TARGETS)
