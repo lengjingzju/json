@@ -20,7 +20,7 @@ LJSON 默认使用个人开发的 ldouble 算法打印浮点数，和标准库�
 * 直接编译
 
 ```sh
-gcc -o ljson json.c jnum.c json_test.c -O2 -ffunction-sections -fdata-sections -W -Wall
+gcc -o ljson json.c jnum.c json_test.c -lm -O2 -ffunction-sections -fdata-sections -W -Wall
 ```
 
 * [IMAKE](https://github.com/lengjingzju/cbuild-ng) 编译

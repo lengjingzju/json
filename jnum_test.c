@@ -18,10 +18,14 @@ int main(int argc, char *argv[])
 {
     char buf[64] = {0};
 
-    if (argc != 2 && argc != 3) {
+    if (argc != 2 && argc != 3 && argc != 4) {
         printf("Usage: %s <num>\n", argv[0]);
-        printf("Usage: %s <num> <cnt>\n", argv[0]);
-        printf("Usage: %s <i/l/h/L/d> <num>\n", argv[0]);
+        printf("       %s <num> <cnt>\n", argv[0]);
+        printf("       %s a <num>\n", argv[0]);
+        printf("       %s a <num> <cnt>\n", argv[0]);
+        printf("       %s <i/l/h/L/d> <num>\n", argv[0]);
+        printf("       %s <i/l/h/L/d> <num>\n", argv[0]);
+        printf("a: atod, i: itoa, l: ltoa, h: htoa, L: lhtoa, d or default: dtoa/grisu2/dragonbox/...\n");
         return -1;
     }
 
@@ -66,6 +70,32 @@ int main(int argc, char *argv[])
             printf("dragonbox : %s\n", buf);
             break;
         }
+
+    case 'a':
+        if (argc == 3) {
+            volatile double d1, d2;
+            d1 = strtod(argv[2], NULL);
+            d2 = jnum_atod(argv[2]);
+            printf("strtod:    %0.15g\njnum_atod: %0.15g\n", d1, d2);
+        } else {
+            int i;
+            int cnt = atoi(argv[3]);
+            volatile double d1, d2;
+            unsigned int ms1, ms2, ms3;
+
+            ms1 = _system_ms_get();
+            for (i = 0; i < cnt; ++i) {
+                d1 = strtod(argv[2], NULL);
+            }
+            ms2 = _system_ms_get();
+            for (i = 0; i < cnt; ++i) {
+                d2 = jnum_atod(argv[2]);
+            }
+            ms3 = _system_ms_get();
+            printf("strtod:    %0.15g %ums\njnum_atod: %0.15g %ums\t%.0lf%%\n", d1, ms2 - ms1, d2, ms3 - ms2,
+                 ms3 - ms2 ? 100.0 * (ms2 - ms1) / (ms3 - ms2) : 0);
+        }
+        break;
 
     default:
         if (argc == 2) {

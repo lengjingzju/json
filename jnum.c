@@ -6,6 +6,7 @@
 *******************************************/
 #include <string.h>
 #include <stdlib.h>
+#include <math.h>
 #include "jnum.h"
 
 #define DIY_SIGNIFICAND_SIZE        64                  /* Symbol: 1 bit, Exponent, 11 bits, Mantissa, 52 bits */
@@ -1345,16 +1346,20 @@ end:
     return s - str;
 }
 
-int jnum_parse_num(const char *str, jnum_type_t *type, jnum_value_t *value)
+static int jnum_parse_num_unit(const char *str, jnum_type_t *type, jnum_value_t *value)
 {
     static const double div10_lut[20] = {
         1    , 1e-1 , 1e-2 , 1e-3 , 1e-4 , 1e-5 , 1e-6 , 1e-7 , 1e-8 , 1e-9 ,
         1e-10, 1e-11, 1e-12, 1e-13, 1e-14, 1e-15, 1e-16, 1e-17, 1e-18, 1e-19,
     };
+    static const double mul10_lut[20] = {
+        1   , 1e1 , 1e2 , 1e3 , 1e4 , 1e5 , 1e6 , 1e7 , 1e8 , 1e9 ,
+        1e10, 1e11, 1e12, 1e13, 1e14, 1e15, 1e16, 1e17, 1e18, 1e19,
+    };
 
     const char *s = str;
     int32_t sign = 1, k = 0;
-    uint64_t m = 0, n = 0;
+    uint64_t m = 0;
     double d = 0;
 
     switch (*s) {
@@ -1370,18 +1375,46 @@ int jnum_parse_num(const char *str, jnum_type_t *type, jnum_value_t *value)
         m = (m << 3) + (m << 1) + (*s++ - '0');
         ++k;
     }
-    if (k >= 20)
-        goto end;
 
-    switch (*s) {
-    case 'e': case 'E':
-        goto end;
-    case '.':
-        goto next;
-    default:
-        break;
+    if (k < 20) {
+        switch (*s) {
+        case 'e': case 'E':
+            d = m;
+            goto next4;
+        case '.':
+            d = m;
+            goto next2;
+        default:
+            goto next1;
+        }
+    } else {
+        s -= k;
+        while (1) {
+            m = 0;
+            k = 0;
+            while (*s >= '0' && *s <= '9') {
+                m = (m << 3) + (m << 1) + (*s++ - '0');
+                ++k;
+                if (k == 19)
+                    break;
+            }
+            d = d * mul10_lut[k] + m;
+
+            switch (*s) {
+            case '0': case '1': case '2': case '3': case '4':
+            case '5': case '6': case '7': case '8': case '9':
+                break;
+            case 'e': case 'E':
+                goto next4;
+            case '.':
+                goto next2;
+            default:
+                goto next3;
+            }
+        }
     }
 
+next1:
     if (m <= 2147483647U /*INT_MAX*/) {
         *type = JNUM_INT;
         value->vint = sign == 1 ? (int32_t)m : -((int32_t)m);
@@ -1399,32 +1432,65 @@ int jnum_parse_num(const char *str, jnum_type_t *type, jnum_value_t *value)
     }
     return s - str;
 
-next:
+next2:
     ++s;
+    m = 0;
     k = 0;
     while (*s >= '0' && *s <= '9') {
-        n = (n << 3) + (n << 1) + (*s++ - '0');
+        m = (m << 3) + (m << 1) + (*s++ - '0');
         ++k;
     }
-    if (k >= 20)
-        goto end;
+    if (k < 20) {
+        d += m * div10_lut[k];
+    } else {
+        s -= k;
+        m = 0;
+        k = 0;
+        while (*s >= '0' && *s <= '9') {
+            m = (m << 3) + (m << 1) + (*s++ - '0');
+            ++k;
+            if (k == 19)
+                break;
+        }
+        d += m * div10_lut[k];
+        while (*s >= '0' && *s <= '9')
+            ++s;
+    }
 
     switch (*s) {
     case 'e': case 'E':
-        goto end;
+        goto next4;
     default:
         break;
     }
 
-    d = m + n * div10_lut[k];
+next3:
     *type = JNUM_DOUBLE;
     value->vdbl = sign == 1 ? d : -d;
     return s - str;
 
-end:
-    *type = JNUM_DOUBLE;
-    value->vdbl = strtod(str, (char **)&s);
+next4:
+    *type = JNUM_BOOL; /* Only used to mark exponential */
+    value->vdbl = sign == 1 ? d : -d;
     return s - str;
+}
+
+int jnum_parse_num(const char *str, jnum_type_t *type, jnum_value_t *value)
+{
+    int len = jnum_parse_num_unit(str, type, value);
+    if (*type == JNUM_BOOL) {
+        jnum_value_t e;
+
+        len += 1 + jnum_parse_num_unit(str + len + 1, type, &e);
+        switch (*type) {
+        case JNUM_INT: value->vdbl *= pow(10, e.vint); break;
+        case JNUM_LINT: value->vdbl *= pow(10, e.vlint); break;
+        default: value->vdbl *= pow(10, e.vdbl); break;
+        }
+        *type = JNUM_DOUBLE;
+    }
+
+    return len;
 }
 
 #define jnum_to_func(rtype, fname)                      \

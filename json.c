@@ -9,6 +9,7 @@
 #include <string.h>
 #include <unistd.h>
 #include <fcntl.h>
+#include <math.h>
 #include "json.h"
 
 #define type_member                     jkey.type
@@ -2085,17 +2086,21 @@ end:
     return type;
 }
 
-static json_type_t _parse_num(const char **sstr, json_number_t *value)
+static int _parse_num_unit(const char **sstr, json_number_t *value)
 {
     static const double div10_lut[20] = {
         1    , 1e-1 , 1e-2 , 1e-3 , 1e-4 , 1e-5 , 1e-6 , 1e-7 , 1e-8 , 1e-9 ,
         1e-10, 1e-11, 1e-12, 1e-13, 1e-14, 1e-15, 1e-16, 1e-17, 1e-18, 1e-19,
     };
+    static const double mul10_lut[20] = {
+        1   , 1e1 , 1e2 , 1e3 , 1e4 , 1e5 , 1e6 , 1e7 , 1e8 , 1e9 ,
+        1e10, 1e11, 1e12, 1e13, 1e14, 1e15, 1e16, 1e17, 1e18, 1e19,
+    };
 
-    json_type_t type = JSON_NULL;
     const char *s = *sstr;
+    json_type_t type;
     int32_t sign = 1, k = 0;
-    uint64_t m = 0, n = 0;
+    uint64_t m = 0;
     double d = 0;
 
     switch (*s) {
@@ -2111,18 +2116,46 @@ static json_type_t _parse_num(const char **sstr, json_number_t *value)
         m = (m << 3) + (m << 1) + (*s++ - '0');
         ++k;
     }
-    if (unlikely(k >= 20))
-        goto end;
 
-    switch (*s) {
-    case 'e': case 'E':
-        goto end;
-    case '.':
-        goto next;
-    default:
-        break;
+    if (k < 20) {
+        switch (*s) {
+        case 'e': case 'E':
+            d = m;
+            goto next4;
+        case '.':
+            d = m;
+            goto next2;
+        default:
+            goto next1;
+        }
+    } else {
+        s -= k;
+        while (1) {
+            m = 0;
+            k = 0;
+            while (*s >= '0' && *s <= '9') {
+                m = (m << 3) + (m << 1) + (*s++ - '0');
+                ++k;
+                if (k == 19)
+                    break;
+            }
+            d = d * mul10_lut[k] + m;
+
+            switch (*s) {
+            case '0': case '1': case '2': case '3': case '4':
+            case '5': case '6': case '7': case '8': case '9':
+                break;
+            case 'e': case 'E':
+                goto next4;
+            case '.':
+                goto next2;
+            default:
+                goto next3;
+            }
+        }
     }
 
+next1:
     if (m <= 2147483647U /*INT_MAX*/) {
         type = JSON_INT;
         value->vint = sign == 1 ? (int32_t)m : -((int32_t)m);
@@ -2141,32 +2174,47 @@ static json_type_t _parse_num(const char **sstr, json_number_t *value)
     *sstr = s;
     return type;
 
-next:
+next2:
     ++s;
+    m = 0;
     k = 0;
     while (*s >= '0' && *s <= '9') {
-        n = (n << 3) + (n << 1) + (*s++ - '0');
+        m = (m << 3) + (m << 1) + (*s++ - '0');
         ++k;
     }
-    if (unlikely(k >= 20))
-        goto end;
+    if (k < 20) {
+        d += m * div10_lut[k];
+    } else {
+        s -= k;
+        m = 0;
+        k = 0;
+        while (*s >= '0' && *s <= '9') {
+            m = (m << 3) + (m << 1) + (*s++ - '0');
+            ++k;
+            if (k == 19)
+                break;
+        }
+        d += m * div10_lut[k];
+        while (*s >= '0' && *s <= '9')
+            ++s;
+    }
 
     switch (*s) {
     case 'e': case 'E':
-        goto end;
+        goto next4;
     default:
         break;
     }
 
-    d = m + n * div10_lut[k];
+next3:
     type = JSON_DOUBLE;
     value->vdbl = sign == 1 ? d : -d;
     *sstr = s;
     return type;
 
-end:
-    type = JSON_DOUBLE;
-    value->vdbl = strtod(*sstr, (char **)&s);
+next4:
+    type = JSON_NULL; /* Only used to mark exponential */
+    value->vdbl = sign == 1 ? d : -d;
     *sstr = s;
     return type;
 }
@@ -2183,7 +2231,23 @@ static inline json_type_t _json_parse_number(const char **sstr, json_number_t *v
         return _parse_hex(sstr, vnum);
 #endif
     }
-    return _parse_num(sstr, vnum);
+
+    json_type_t type = _parse_num_unit(sstr, vnum);
+
+    if (type == JSON_NULL) {
+        json_number_t e;
+
+        ++*sstr;
+        type = _parse_num_unit(sstr, &e);
+        switch (type) {
+        case JSON_INT: vnum->vdbl *= pow(10, e.vint); break;
+        case JSON_LINT: vnum->vdbl *= pow(10, e.vlint); break;
+        default: vnum->vdbl *= pow(10, e.vdbl); break;
+        }
+        type = JSON_DOUBLE;
+    }
+
+    return type;
 }
 
 static inline unsigned int _parse_hex4(const unsigned char *str)

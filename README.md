@@ -20,7 +20,7 @@ By default, LJSON uses the personally developed ldouble algorithm to print doubl
 * Compile directly
 
 ```sh
-gcc -o ljson json.c -jnum.c json_test.c -O2 -ffunction-sections -fdata-sections -W -Wall
+gcc -o ljson json.c -jnum.c json_test.c -lm -O2 -ffunction-sections -fdata-sections -W -Wall
 ```
 
 * Compile with [IMAKE](https://github.com/lengjingzju/cbuild-ng)

@@ -37,11 +37,11 @@ object_byte_size=10240
 include inc.makes
 
 $(eval $(call add-liba-build,$(staticlib),$(libsrcs)))
-$(eval $(call add-libso-build,$(sharedlib),$(libsrcs)))
-$(eval $(call add-bin-build,$(testedbin),json_test.c,-L $(OBJ_PREFIX) $(call set_links,ljson),,$(OBJ_PREFIX)/$(staticlib)))
+$(eval $(call add-libso-build,$(sharedlib),$(libsrcs),-lm))
+$(eval $(call add-bin-build,$(testedbin),json_test.c,-L $(OBJ_PREFIX) $(call set_links,ljson,m),,$(OBJ_PREFIX)/$(staticlib)))
 
 numsrcs        := jnum.c grisu2.c dragonbox.c jnum_test.c
-$(eval $(call add-bin-build,$(testednum),$(numsrcs)))
+$(eval $(call add-bin-build,$(testednum),$(numsrcs),-lm))
 
 all: $(BIN_TARGETS) $(LIB_TARGETS)
 
