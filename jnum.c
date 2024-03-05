@@ -22,11 +22,6 @@
 #define USING_FLOAT_MUL             1                   /* Using floating-point multiplication */
 #endif
 
-#ifndef APPROX_TAIL_CMP_VAL
-#define APPROX_TAIL_CMP_VAL         2                   /* The value should be less than or equal to 4 */
-#endif
-static const uint32_t s_tail_cmp = (APPROX_TAIL_CMP_VAL << 1) + 1;
-
 typedef struct {
     uint64_t f;
     int32_t e;
@@ -686,6 +681,84 @@ static inline diy_fp_t negative_diy_fp(int32_t e)
     return v;
 }
 
+static inline void ldouble_convert(diy_fp_t *v)
+{
+    uint64_t f = v->f;
+    int32_t e = v->e, t = v->e;
+    diy_fp_t x;
+    double d;
+
+    e >>= 2;
+    t -= e << 2;
+    if (t) {
+        f <<= t;
+    }
+    x = e >= 0 ? positive_diy_fp(e) : negative_diy_fp(-e);
+
+    d = (double)f * x.f;
+    if (d < 1e33) {
+        v->f = (uint64_t)((d + 5e17) * 1e-18);
+        v->e = e - x.e + 18;
+    } else if (d < 1e34) {
+        v->f = (uint64_t)((d + 5e18) * 1e-19);
+        v->e = e - x.e + 19;
+    } else {
+        v->f = (uint64_t)((d + 5e19) * 1e-20);
+        v->e = e - x.e + 20;
+    }
+}
+
+static inline int32_t fill_significand(char *buffer, uint64_t digits, int32_t *ptz, int32_t *fixed)
+{
+    char *s = buffer;
+    uint32_t q, r, q1, r1, q2, r2;
+
+    *fixed = 0;
+    q = (uint32_t)(digits / 100000000);
+    r = (uint32_t)(digits - (uint64_t)q * 100000000);
+    q1 = FAST_DIV10000(q);
+    r1 = q - q1 * 10000;
+    q2 = FAST_DIV100(q1);
+    r2 = q1 - q2 * 100;
+
+    if (q2 >= 10) {
+        *ptz = tz_100_lut[q2];
+        memcpy(s, &ch_100_lut[q2<<1], 2);
+        s += 2;
+    } else {
+        *ptz = 0;
+        *s++ = q2 + '0';
+    }
+
+    if (!r2) {
+        *ptz += 2;
+        memset(s, '0', 2);
+        s += 2;
+    } else {
+        *ptz = tz_100_lut[r2];
+        memcpy(s, &ch_100_lut[r2<<1], 2);
+        s += 2;
+    }
+
+    if (!r1) {
+        *ptz += 4;
+        memset(s, '0', 4);
+        s += 4;
+    } else {
+        s += fill_t_4_digits(s, r1, ptz);
+    }
+
+    if (!r) {
+        memset(s + 8, '0', 8);
+        *ptz += 8;
+        s += 8;
+    } else {
+        s += fill_t_8_digits(s, r, ptz);
+    }
+
+    return s - buffer;
+}
+
 #else
 
 /*
@@ -774,6 +847,11 @@ typedef struct {
     uint32_t lo;
     int32_t e;
 } pow9x2_t;
+
+#ifndef APPROX_TAIL_CMP_VAL
+#define APPROX_TAIL_CMP_VAL         2                   /* The value should be less than or equal to 4 */
+#endif
+static const uint32_t s_tail_cmp = (APPROX_TAIL_CMP_VAL << 1) + 1;
 
 static inline pow9x2_t positive_diy_fp(int32_t e)
 {
@@ -960,37 +1038,10 @@ static inline pow9x2_t negative_diy_fp(int32_t e)
     return v;
 }
 
-#endif
-
 static inline void ldouble_convert(diy_fp_t *v)
 {
     uint64_t f = v->f;
     int32_t e = v->e, t = v->e;
-
-#if USING_FLOAT_MUL
-    diy_fp_t x;
-    double d;
-
-    e >>= 2;
-    t -= e << 2;
-    if (t) {
-        ++e;
-        f >>= 4 - t;
-    }
-    x = e >= 0 ? positive_diy_fp(e) : negative_diy_fp(-e);
-
-    d = (double)f * x.f;
-    if (d < 1e32) {
-        v->f = (uint64_t)(d * 1e-17);
-        v->e = e - x.e + 17;
-    } else if (d < 1e34) {
-        v->f = (uint64_t)(d * 1e-18);
-        v->e = e - x.e + 18;
-    } else {
-        v->f = (uint64_t)(d * 1e-19);
-        v->e = e - x.e + 19;
-    }
-#else
     pow9x2_t x;
     uint64_t hi, lo;
 
@@ -1018,7 +1069,6 @@ static inline void ldouble_convert(diy_fp_t *v)
         v->f = f / 10;
         v->e = e - x.e + 19;
     }
-#endif
 }
 
 static inline int32_t fill_a_4_digits(char *buffer, uint32_t digits, int32_t *ptz)
@@ -1155,6 +1205,8 @@ static inline int32_t fill_significand(char *buffer, uint64_t digits, int32_t *p
 
     return s - buffer;
 }
+
+#endif
 
 static inline int32_t fill_exponent(int32_t K, char *buffer)
 {
