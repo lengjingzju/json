@@ -16,6 +16,8 @@
 #define key_member                      jkey.str
 #define str_member                      vstr.str
 
+/**************** configuration ****************/
+
 /*
  * Algorithm to convert double to string
  * 0: ljson dtoa developed by Jing Leng, fastest and best
@@ -42,13 +44,50 @@ extern int dragonbox_dtoa(double num, char *buffer);
 #define json_dtoa                       jnum_dtoa
 #endif
 
-/*
- * JSON_STRICT_PARSE_MODE can be: 0 / 1 / 2
- * 0: not strict mode
- * 1: will enable more checks
- * 2: further turns off some features that are not standard, such as hexadecimal
- */
-#define JSON_STRICT_PARSE_MODE          1
+/* Whether to allow C-like single-line comments and multi-line comments */
+#ifndef JSON_PARSE_SKIP_COMMENT
+#define JSON_PARSE_SKIP_COMMENT         1
+#endif
+
+/* Whether to allow comma in last element of array or object */
+#ifndef JSON_PARSE_LAST_COMMA
+#define JSON_PARSE_LAST_COMMA           1
+#endif
+
+/* Whether to allow empty key */
+#ifndef JSON_PARSE_EMPTY_KEY
+#define JSON_PARSE_EMPTY_KEY            0
+#endif
+
+/* Whether to allow special characters such as newline in the string */
+#ifndef JSON_PARSE_SPECIAL_CHAR
+#define JSON_PARSE_SPECIAL_CHAR         1
+#endif
+
+/* Whether to allow HEX number */
+#ifndef JSON_PARSE_HEX_NUM
+#define JSON_PARSE_HEX_NUM              1
+#endif
+
+/* Whether to allow special number such as starting with '.', '+', '0' */
+#ifndef JSON_PARSE_SPECIAL_NUM
+#define JSON_PARSE_SPECIAL_NUM          1
+#endif
+
+/* Whether to allow special double such as NaN, Infinity, -Infinity */
+#ifndef JSON_PARSE_SPECIAL_DOUBLE
+#define JSON_PARSE_SPECIAL_DOUBLE       1
+#endif
+
+/* Whether to allow json starting with non-array and non-object */
+#ifndef JSON_PARSE_SINGLE_VALUE
+#define JSON_PARSE_SINGLE_VALUE         1
+#endif
+
+/* Whether to allow characters other than spaces after finishing parsing */
+#ifndef JSON_PARSE_FINISHED_CHAR
+#define JSON_PARSE_FINISHED_CHAR        0
+#endif
 
 /**************** debug ****************/
 
@@ -65,7 +104,7 @@ extern int dragonbox_dtoa(double num, char *buffer);
     if (parse_ptr->str) {                                           \
         char ptmp[32] = {0};                                        \
         strncpy(ptmp, parse_ptr->str + parse_ptr->offset, 31);      \
-        JsonErr("%s::%s\n", s, ptmp);                               \
+        JsonErr("====%s====\n%s\n", s, ptmp);                       \
     } else {                                                        \
         JsonErr("%s\n", s);                                         \
     }                                                               \
@@ -80,10 +119,12 @@ extern int dragonbox_dtoa(double num, char *buffer);
 
 #if defined(__GNUC__) || defined(__clang__)
 #define UNUSED_ATTR                     __attribute__((unused))
+#define FALLTHROUGH_ATTR                __attribute__((fallthrough))
 #define likely(cond)                    __builtin_expect(!!(cond), 1)
 #define unlikely(cond)                  __builtin_expect(!!(cond), 0)
 #else
 #define UNUSED_ATTR
+#define FALLTHROUGH_ATTR
 #define likely(cond)                    (cond)
 #define unlikely(cond)                  (cond)
 #endif
@@ -1479,8 +1520,8 @@ next2a:
     if (print_ptr->format_flag) {
         _PRINT_ADDI_FORMAT(print_ptr, item_depth + 1);
         if (unlikely(!json->jkey.len)) {
-#if !JSON_STRICT_PARSE_MODE
-            JsonErr("key is null!\n");
+#if !JSON_PARSE_EMPTY_KEY
+            JsonErr("key is empty!\n");
             goto err;
 #else
             _PRINT_PTR_STRNCAT("\"\":\t", 4);
@@ -1491,8 +1532,8 @@ next2a:
         }
     } else {
         if (unlikely(!json->jkey.len)) {
-#if !JSON_STRICT_PARSE_MODE
-            JsonErr("key is null!\n");
+#if !JSON_PARSE_EMPTY_KEY
+            JsonErr("key is empty!\n");
             goto err;
 #else
             _PRINT_PTR_STRNCAT("\"\":", 3);
@@ -1750,8 +1791,8 @@ int json_sax_print_value(json_sax_print_hd handle, json_type_t type, json_string
         if (print_handle->array[cur_pos].type == JSON_OBJECT) {
             if (print_ptr->format_flag) {
                 if (unlikely(!jkey || !jkey->str || !jkey->str[0])) {
-#if !JSON_STRICT_PARSE_MODE
-                    JsonErr("key is null!\n");
+#if !JSON_PARSE_EMPTY_KEY
+                    JsonErr("key is empty!\n");
                     goto err;
 #else
                     _PRINT_ADDI_FORMAT(print_ptr, print_handle->count);
@@ -1765,8 +1806,8 @@ int json_sax_print_value(json_sax_print_hd handle, json_type_t type, json_string
                 }
             } else {
                 if (unlikely(!jkey || !jkey->str || !jkey->str[0])) {
-#if !JSON_STRICT_PARSE_MODE
-                    JsonErr("key is null!\n");
+#if !JSON_PARSE_EMPTY_KEY
+                    JsonErr("key is empty!\n");
                     goto err;
 #else
                     _PRINT_PTR_STRNCAT("\"\":", 3);
@@ -2046,6 +2087,7 @@ static inline int _get_parse_ptr(json_parse_t *parse_ptr, int read_offset, size_
 }
 #define _UPDATE_PARSE_OFFSET(add_offset)    parse_ptr->offset += add_offset
 
+#if JSON_PARSE_HEX_NUM
 static json_type_t _parse_hex(const char **sstr, json_number_t *value)
 {
     json_type_t type = JSON_NULL;
@@ -2054,7 +2096,7 @@ static json_type_t _parse_hex(const char **sstr, json_number_t *value)
     uint64_t m = 0;
 
     s += 2;
-    while (1) {
+    while ((s - *sstr) < 18) {
         switch ((c = *s)) {
         case '0': case '1': case '2': case '3': case '4':
         case '5': case '6': case '7': case '8': case '9':
@@ -2072,7 +2114,13 @@ static json_type_t _parse_hex(const char **sstr, json_number_t *value)
         m = (m << 4) + c;
         ++s;
     }
+
 end:
+    if (s - *sstr == 2) {
+        value->vhex = 0;
+        JsonErr("Not HEX!\n");
+        return JSON_NULL;
+    }
 
     if (m > 4294967295U /*UINT_MAX*/) {
         type = JSON_LHEX;
@@ -2081,12 +2129,12 @@ end:
         type = JSON_HEX;
         value->vhex = (uint32_t)m;
     }
-
     *sstr = s;
     return type;
 }
+#endif
 
-static int _parse_num_unit(const char **sstr, json_number_t *value)
+static int _parse_num(const char **sstr, json_number_t *value)
 {
     static const double div10_lut[20] = {
         1    , 1e-1 , 1e-2 , 1e-3 , 1e-4 , 1e-5 , 1e-6 , 1e-7 , 1e-8 , 1e-9 ,
@@ -2108,6 +2156,41 @@ static int _parse_num_unit(const char **sstr, json_number_t *value)
     case '+': ++s; break;
     default: break;
     }
+
+#if !JSON_PARSE_SPECIAL_NUM
+    switch (*s) {
+    case '0':
+        switch (*(s + 1)) {
+        case '0': case '1': case '2': case '3': case '4':
+        case '5': case '6': case '7': case '8': case '9':
+        case 'e': case 'E':
+            JsonErr("Leading 0 is not allowed in standard json!\n");
+            return JSON_NULL; /* Just use it to indicate error */
+        default:
+            break;
+        }
+        break;
+    case '1': case '2': case '3': case '4':
+    case '5': case '6': case '7': case '8': case '9':
+        break;
+    case '.':
+        JsonErr("The integer part of double cannot be omitted in standard json!\n");
+        break;
+    default:
+        JsonErr("Not number char (%c)!\n", *s);
+        return JSON_NULL;
+    }
+#else
+    switch (*s) {
+    case '0': case '1': case '2': case '3': case '4':
+    case '5': case '6': case '7': case '8': case '9':
+    case '.':
+        break;
+    default:
+        JsonErr("Not number char (%c)!\n", *s);
+        return JSON_NULL;
+    }
+#endif
 
     while (*s == '0')
         ++s;
@@ -2176,6 +2259,17 @@ next1:
 
 next2:
     ++s;
+#if !JSON_PARSE_SPECIAL_NUM
+    switch (*s) {
+    case '0': case '1': case '2': case '3': case '4':
+    case '5': case '6': case '7': case '8': case '9':
+        break;
+    default:
+        JsonErr("The decimal part of double cannot be omitted in standard json!\n");
+        return JSON_NULL;
+    }
+#endif
+
     m = 0;
     k = 0;
     while (*s >= '0' && *s <= '9') {
@@ -2213,7 +2307,7 @@ next3:
     return type;
 
 next4:
-    type = JSON_NULL; /* Only used to mark exponential */
+    type = JSON_BOOL; /* Only used to mark exponential */
     value->vdbl = sign == 1 ? d : -d;
     *sstr = s;
     return type;
@@ -2224,27 +2318,33 @@ static inline json_type_t _json_parse_number(const char **sstr, json_number_t *v
     const char *s = *sstr;
 
     if (unlikely(*s == '0' && (*(s+1) == 'x' || *(s+1) == 'X'))) {
-#if JSON_STRICT_PARSE_MODE == 2
-        JsonErr("leading zero can't be parsed in strict mode!\n");
+#if !JSON_PARSE_HEX_NUM
+        JsonErr("HEX can't be parsed in standard json!\n");
         return JSON_NULL;
 #else
         return _parse_hex(sstr, vnum);
 #endif
     }
 
-    json_type_t type = _parse_num_unit(sstr, vnum);
+    json_number_t e;
+    json_type_t type = _parse_num(sstr, vnum);
 
-    if (type == JSON_NULL) {
-        json_number_t e;
-
+    switch (type) {
+    case JSON_NULL:
+        return JSON_NULL;
+    case JSON_BOOL:
         ++*sstr;
-        type = _parse_num_unit(sstr, &e);
+        type = _parse_num(sstr, &e);
         switch (type) {
         case JSON_INT: vnum->vdbl *= pow(10, e.vint); break;
         case JSON_LINT: vnum->vdbl *= pow(10, e.vlint); break;
-        default: vnum->vdbl *= pow(10, e.vdbl); break;
+        case JSON_DOUBLE: vnum->vdbl *= pow(10, e.vdbl); break;
+        default: return JSON_NULL;
         }
         type = JSON_DOUBLE;
+        break;
+    default:
+        break;
     }
 
     return type;
@@ -2343,24 +2443,119 @@ fail:
     return 0;
 }
 
-static inline void _skip_blank(json_parse_t *parse_ptr)
+#if JSON_PARSE_SKIP_COMMENT
+static bool _skip_comment(json_parse_t *parse_ptr, int *pcnt)
 {
-    unsigned char *str = NULL;
+    char *str = NULL;
     int cnt = 0;
 
-    while (_get_parse_ptr(parse_ptr, cnt, 64, (char **)&str)) {
-        while (*str <= ' ') {
-            if (likely(*str)) {
+    if (_get_parse_ptr(parse_ptr, *pcnt, 64, &str) == 1)
+        goto end;
+
+    switch (*(str + 1)) {
+    case '/':
+        str += 2;
+        *pcnt += 2;
+        while (1) {
+            switch (*str) {
+            case '\n':
                 ++str;
-                ++cnt;
-            } else {
+                ++*pcnt;
                 goto next;
+            case '\0':
+                if (_get_parse_ptr(parse_ptr, *pcnt, 64, &str) == 0)
+                    goto end;
+                break;
+            default:
+                ++str;
+                ++*pcnt;
+                break;
             }
         }
         break;
-next:
-        continue;
+    case '*':
+        cnt = 2;
+        str += 2;
+        while (1) {
+            switch (*str) {
+            case '*':
+                switch (*(str + 1)) {
+                case '/':
+                    str += 2;
+                    cnt += 2;
+                    *pcnt += cnt;
+                    goto next;
+                case '\0':
+                    if (_get_parse_ptr(parse_ptr, *pcnt + cnt, 64, (char **)&str) == 1)
+                        goto end;
+
+                    if (*(str + 1) == '/') {
+                        str += 2;
+                        cnt += 2;
+                        *pcnt += cnt;
+                        goto next;
+                    } else {
+                        ++str;
+                        ++cnt;
+                    }
+                    break;
+                default:
+                    ++str;
+                    ++cnt;
+                    break;
+                }
+                break;
+            case '\0':
+                if (_get_parse_ptr(parse_ptr, *pcnt + cnt, 64, (char **)&str) == 0)
+                    goto end;
+                break;
+            default:
+                ++str;
+                ++cnt;
+                break;
+            }
+        }
+        break;
+    default:
+        goto end;
     }
+
+next:
+    return false;
+end:
+    return true;
+}
+#endif
+
+static inline void _skip_blank(json_parse_t *parse_ptr)
+{
+    char *str = NULL;
+    int cnt = 0;
+
+    _get_parse_ptr(parse_ptr, cnt, 64, &str);
+    while (1) {
+        switch (*str) {
+        case '\b': case '\f': case '\n': case '\r': case '\t': case '\v': case ' ':
+            ++str;
+            ++cnt;
+            break;
+        case '\0':
+            if (_get_parse_ptr(parse_ptr, cnt, 64, &str) == 0)
+                goto end;
+            break;
+#if JSON_PARSE_SKIP_COMMENT
+        case '/':
+            if (_skip_comment(parse_ptr, &cnt))
+                goto end;
+            _get_parse_ptr(parse_ptr, cnt, 64, &str);
+            break;
+#endif
+        default:
+            goto end;
+        }
+    }
+
+end:
     _UPDATE_PARSE_OFFSET(cnt);
 }
 
@@ -2389,6 +2584,7 @@ static int _parse_strcpy(char *ptr, const char *str, int nsize)
             case 't':  ch = '\t'; break;
             case 'v':  ch = '\v'; break;
             case '\"': ch = '\"'; break;
+            case '\'': ch = '\''; break;
             case '\\': ch = '\\'; break;
             case '/' : ch = '/' ; break;
             case 'u':
@@ -2461,9 +2657,9 @@ static int _parse_strlen(json_parse_t *parse_ptr, bool *escaped)
             }
             bak = str;
             break;
-#if JSON_STRICT_PARSE_MODE == 2
+#if !JSON_PARSE_SPECIAL_CHAR
         case '\b': case '\f': case '\n': case '\r': case '\t': case '\v':
-            JsonErr("tab and linebreak can't be existed in string in strict mode!\n");
+            JsonErr("tab and linebreak can't be existed in string in standard json!\n");
             goto err;
 #endif
         default:
@@ -2551,8 +2747,8 @@ next2:
     }
 
     if (unlikely(str[1] == '\"')) {
-#if !JSON_STRICT_PARSE_MODE
-        JsonPareseErr("key is space!");
+#if !JSON_PARSE_EMPTY_KEY
+        JsonPareseErr("key is empty!");
         goto err;
 #else
         _UPDATE_PARSE_OFFSET(2);
@@ -2595,7 +2791,22 @@ next3:
         }
         break;
 
-    case '-': case '+':
+#if JSON_PARSE_SPECIAL_NUM
+    case '+':
+#endif
+    case '-':
+#if JSON_PARSE_SPECIAL_DOUBLE
+        if (strncmp("Infinity", str + 1, 8) == 0) {
+            item->type_member = JSON_DOUBLE;
+            item->value.vnum.vlhex = (*str == '-' ? 0xFFF0000000000000 : 0x7FF0000000000000);
+            _UPDATE_PARSE_OFFSET(9);
+            break;
+        }
+        FALLTHROUGH_ATTR;
+#endif
+#if JSON_PARSE_SPECIAL_NUM
+    case '.':
+#endif
     case '0': case '1': case '2': case '3': case '4':
     case '5': case '6': case '7': case '8': case '9':
         bak = str;
@@ -2668,6 +2879,28 @@ next3:
             goto err;
         }
         break;
+#if JSON_PARSE_SPECIAL_DOUBLE
+    case 'N':
+        if (likely(parse_ptr->size - parse_ptr->offset >= 3 && memcmp("NaN", str, 3) == 0)) {
+            item->type_member = JSON_DOUBLE;
+            item->value.vnum.vlhex = 0x7FF0000000000001;
+            _UPDATE_PARSE_OFFSET(3);
+        } else {
+            JsonPareseErr("invalid next ptr!");
+            goto err;
+        }
+        break;
+    case 'I':
+        if (likely(parse_ptr->size - parse_ptr->offset >= 8 && memcmp("Infinity", str, 8) == 0)) {
+            item->type_member = JSON_DOUBLE;
+            item->value.vnum.vlhex = 0x7FF0000000000000;
+            _UPDATE_PARSE_OFFSET(8);
+        } else {
+            JsonPareseErr("invalid next ptr!");
+            goto err;
+        }
+        break;
+#endif
     default:
         JsonPareseErr("invalid next ptr!");
         goto err;
@@ -2686,7 +2919,15 @@ next4:
             switch (*str) {
             case ',':
                 _UPDATE_PARSE_OFFSET(1);
+#if !JSON_PARSE_LAST_COMMA
                 goto next2;
+#else
+                _skip_blank(parse_ptr);
+                _get_parse_ptr(parse_ptr, 0, 1, &str);
+                if (*str != '}')
+                    goto next2;
+                FALLTHROUGH_ATTR;
+#endif
             case '}':
                 _UPDATE_PARSE_OFFSET(1);
                 if (likely(item_depth > 0)) {
@@ -2702,7 +2943,15 @@ next4:
             switch (*str) {
             case ',':
                 _UPDATE_PARSE_OFFSET(1);
+#if !JSON_PARSE_LAST_COMMA
                 goto next3;
+#else
+                _skip_blank(parse_ptr);
+                _get_parse_ptr(parse_ptr, 0, 1, &str);
+                if (*str != ']')
+                    goto next3;
+                FALLTHROUGH_ATTR;
+#endif
             case ']':
                 _UPDATE_PARSE_OFFSET(1);
                 if (likely(item_depth > 0)) {
@@ -2746,15 +2995,91 @@ err:
     return -1;
 }
 
-static inline void _skip_blank_rapid(json_parse_t *parse_ptr)
+#if JSON_PARSE_SKIP_COMMENT
+static bool _skip_comment_rapid(json_parse_t *parse_ptr, int *pcnt)
 {
-    unsigned char *str = (unsigned char *)(parse_ptr->str + parse_ptr->offset);
+    char *str = parse_ptr->str + parse_ptr->offset + *pcnt;
     int cnt = 0;
 
-    while (*str <= ' ' && *str) {
-        ++str;
-        ++cnt;
+    switch (*(str + 1)) {
+    case '/':
+        str += 2;
+        *pcnt += 2;
+        while (1) {
+            switch (*str) {
+            case '\n':
+                ++str;
+                ++*pcnt;
+                goto next;
+            case '\0':
+                goto end;
+            default:
+                ++str;
+                ++*pcnt;
+                break;
+            }
+        }
+        break;
+    case '*':
+        cnt = 2;
+        str += 2;
+        while (1) {
+            switch (*str) {
+            case '*':
+                if (*(str + 1) == '/') {
+                    str += 2;
+                    cnt += 2;
+                    *pcnt += cnt;
+                    goto next;
+                } else {
+                    ++str;
+                    ++cnt;
+                }
+                break;
+            case '\0':
+                goto end;
+            default:
+                ++str;
+                ++cnt;
+                break;
+            }
+        }
+        break;
+    default:
+        goto end;
     }
+next:
+    return false;
+end:
+    return true;
+
+}
+#endif
+
+static inline void _skip_blank_rapid(json_parse_t *parse_ptr)
+{
+    char *str = parse_ptr->str + parse_ptr->offset;
+    int cnt = 0;
+
+    while (1) {
+        switch (*str) {
+        case '\b': case '\f': case '\n': case '\r': case '\t': case '\v': case ' ':
+            ++str;
+            ++cnt;
+            break;
+#if JSON_PARSE_SKIP_COMMENT
+        case '/':
+            if (_skip_comment_rapid(parse_ptr, &cnt))
+                goto end;
+            str = parse_ptr->str + parse_ptr->offset + cnt;
+            break;
+#endif
+        default:
+            goto end;
+        }
+    }
+
+end:
     _UPDATE_PARSE_OFFSET(cnt);
 }
 
@@ -2788,9 +3113,9 @@ static int _json_parse_string_reuse(json_parse_t *parse_ptr, json_string_t *jstr
             last = str;
             ptr += str - bak;
             goto next;
-#if JSON_STRICT_PARSE_MODE == 2
+#if !JSON_PARSE_SPECIAL_CHAR
         case '\b': case '\f': case '\n': case '\r': case '\t': case '\v':
-            JsonErr("tab and linebreak can't be existed in string in strict mode!\n");
+            JsonErr("tab and linebreak can't be existed in string in standard json!\n");
             goto err;
 #endif
         default:
@@ -2823,6 +3148,7 @@ next:
             case 't':  ch = '\t'; break;
             case 'v':  ch = '\v'; break;
             case '\"': ch = '\"'; break;
+            case '\'': ch = '\''; break;
             case '\\': ch = '\\'; break;
             case '/' : ch = '/' ; break;
             case 'u':
@@ -2881,9 +3207,9 @@ static int _json_parse_string_rapid(json_parse_t *parse_ptr, json_string_t *jstr
             ++str;
             escaped = true;
             break;
-#if JSON_STRICT_PARSE_MODE == 2
+#if !JSON_PARSE_SPECIAL_CHAR
         case '\b': case '\f': case '\n': case '\r': case '\t': case '\v':
-            JsonErr("tab and linebreak can't be existed in string in strict mode!\n");
+            JsonErr("tab and linebreak can't be existed in string in standard json!\n");
             goto err;
 #endif
         default:
@@ -2954,8 +3280,8 @@ next2:
     }
 
     if (unlikely(str[1] == '\"')) {
-#if !JSON_STRICT_PARSE_MODE
-        JsonPareseErr("key is space!");
+#if !JSON_PARSE_EMPTY_KEY
+        JsonPareseErr("key is empty!");
         goto err;
 #else
         _UPDATE_PARSE_OFFSET(2);
@@ -2998,7 +3324,22 @@ next3:
         }
         break;
 
-    case '-': case '+':
+#if JSON_PARSE_SPECIAL_NUM
+    case '+':
+#endif
+    case '-':
+#if JSON_PARSE_SPECIAL_DOUBLE
+        if (strncmp("Infinity", str + 1, 8) == 0) {
+            item->type_member = JSON_DOUBLE;
+            item->value.vnum.vlhex = (*str == '-' ? 0xFFF0000000000000 : 0x7FF0000000000000);
+            _UPDATE_PARSE_OFFSET(9);
+            break;
+        }
+        FALLTHROUGH_ATTR;
+#endif
+#if JSON_PARSE_SPECIAL_NUM
+    case '.':
+#endif
     case '0': case '1': case '2': case '3': case '4':
     case '5': case '6': case '7': case '8': case '9':
         bak = str;
@@ -3071,6 +3412,28 @@ next3:
             goto err;
         }
         break;
+#if JSON_PARSE_SPECIAL_DOUBLE
+    case 'N':
+        if (likely(parse_ptr->size - parse_ptr->offset >= 3 && memcmp("NaN", str, 3) == 0)) {
+            item->type_member = JSON_DOUBLE;
+            item->value.vnum.vlhex = 0x7FF0000000000001;
+            _UPDATE_PARSE_OFFSET(3);
+        } else {
+            JsonPareseErr("invalid next ptr!");
+            goto err;
+        }
+        break;
+    case 'I':
+        if (likely(parse_ptr->size - parse_ptr->offset >= 8 && memcmp("Infinity", str, 8) == 0)) {
+            item->type_member = JSON_DOUBLE;
+            item->value.vnum.vlhex = 0x7FF0000000000000;
+            _UPDATE_PARSE_OFFSET(8);
+        } else {
+            JsonPareseErr("invalid next ptr!");
+            goto err;
+        }
+        break;
+#endif
     default:
         JsonPareseErr("invalid next ptr!");
         goto err;
@@ -3089,7 +3452,15 @@ next4:
             switch (*str) {
             case ',':
                 _UPDATE_PARSE_OFFSET(1);
+#if !JSON_PARSE_LAST_COMMA
                 goto next2;
+#else
+                _skip_blank_rapid(parse_ptr);
+                str = parse_ptr->str + parse_ptr->offset;
+                if (*str != '}')
+                    goto next2;
+                FALLTHROUGH_ATTR;
+#endif
             case '}':
                 _UPDATE_PARSE_OFFSET(1);
                 if (likely(item_depth > 0)) {
@@ -3105,7 +3476,15 @@ next4:
             switch (*str) {
             case ',':
                 _UPDATE_PARSE_OFFSET(1);
+#if !JSON_PARSE_LAST_COMMA
                 goto next3;
+#else
+                _skip_blank_rapid(parse_ptr);
+                str = parse_ptr->str + parse_ptr->offset;
+                if (*str != ']')
+                    goto next3;
+                FALLTHROUGH_ATTR;
+#endif
             case ']':
                 _UPDATE_PARSE_OFFSET(1);
                 if (likely(item_depth > 0)) {
@@ -3196,7 +3575,7 @@ json_object *json_parse_common(json_parse_choice_t *choice)
         choice->mem->str_mgr.mem_size = mem_size;
     }
 
-#if JSON_STRICT_PARSE_MODE == 2
+#if !JSON_PARSE_SINGLE_VALUE
     _skip_blank(&parse_val);
     if (parse_val.str[parse_val.offset] != '{' && parse_val.str[parse_val.offset] != '[') {
         JsonErr("The first object isn't object or array\n");
@@ -3214,7 +3593,7 @@ json_object *json_parse_common(json_parse_choice_t *choice)
         goto end;
     }
 
-#if JSON_STRICT_PARSE_MODE
+#if !JSON_PARSE_FINISHED_CHAR
     _skip_blank(&parse_val);
     if (parse_val.str[parse_val.offset]) {
         JsonErr("Extra trailing characters!\n%s\n", parse_val.str + parse_val.offset);
@@ -3342,8 +3721,8 @@ next2:
     }
 
     if (unlikely(str[1] == '\"')) {
-#if !JSON_STRICT_PARSE_MODE
-        JsonPareseErr("key is space!");
+#if !JSON_PARSE_EMPTY_KEY
+        JsonPareseErr("key is empty!");
         goto err;
 #else
         _UPDATE_PARSE_OFFSET(2);
@@ -3380,7 +3759,22 @@ next3:
         }
         break;
 
-    case '-': case '+':
+#if JSON_PARSE_SPECIAL_NUM
+    case '+':
+#endif
+    case '-':
+#if JSON_PARSE_SPECIAL_DOUBLE
+        if (strncmp("Infinity", str + 1, 8) == 0) {
+            jkey->type = JSON_DOUBLE;
+            value->vnum.vlhex = (*str == '-' ? 0xFFF0000000000000 : 0x7FF0000000000000);
+            _UPDATE_PARSE_OFFSET(9);
+            break;
+        }
+        FALLTHROUGH_ATTR;
+#endif
+#if JSON_PARSE_SPECIAL_NUM
+    case '.':
+#endif
     case '0': case '1': case '2': case '3': case '4':
     case '5': case '6': case '7': case '8': case '9':
         bak = str;
@@ -3461,6 +3855,28 @@ next3:
             goto err;
         }
         break;
+#if JSON_PARSE_SPECIAL_DOUBLE
+    case 'N':
+        if (likely(parse_ptr->size - parse_ptr->offset >= 3 && memcmp("NaN", str, 3) == 0)) {
+            jkey->type = JSON_DOUBLE;
+            value->vnum.vlhex = 0x7FF0000000000001;
+            _UPDATE_PARSE_OFFSET(3);
+        } else {
+            JsonPareseErr("invalid next ptr!");
+            goto err;
+        }
+        break;
+    case 'I':
+        if (likely(parse_ptr->size - parse_ptr->offset >= 8 && memcmp("Infinity", str, 8) == 0)) {
+            jkey->type = JSON_DOUBLE;
+            value->vnum.vlhex = 0x7FF0000000000000;
+            _UPDATE_PARSE_OFFSET(8);
+        } else {
+            JsonPareseErr("invalid next ptr!");
+            goto err;
+        }
+        break;
+#endif
     default:
         JsonPareseErr("invalid next ptr!");
         goto err;
@@ -3488,7 +3904,15 @@ next4:
             switch (*str) {
             case ',':
                 _UPDATE_PARSE_OFFSET(1);
+#if !JSON_PARSE_LAST_COMMA
                 goto next2;
+#else
+                _skip_blank(parse_ptr);
+                _get_parse_ptr(parse_ptr, 0, 1, &str);
+                if (*str != '}')
+                    goto next2;
+                FALLTHROUGH_ATTR;
+#endif
             case '}':
                 _UPDATE_PARSE_OFFSET(1);
                 --parse_ptr->parser.index;
@@ -3518,7 +3942,15 @@ next4:
             switch (*str) {
             case ',':
                 _UPDATE_PARSE_OFFSET(1);
+#if !JSON_PARSE_LAST_COMMA
                 goto next3;
+#else
+                _skip_blank(parse_ptr);
+                _get_parse_ptr(parse_ptr, 0, 1, &str);
+                if (*str != ']')
+                    goto next3;
+                FALLTHROUGH_ATTR;
+#endif
             case ']':
                 _UPDATE_PARSE_OFFSET(1);
                 --parse_ptr->parser.index;
@@ -3592,7 +4024,7 @@ int json_sax_parse_common(json_sax_parse_choice_t *choice)
     }
     parse_val.cb = choice->cb;
 
-#if JSON_STRICT_PARSE_MODE == 2
+#if !JSON_PARSE_SINGLE_VALUE
     _skip_blank(&parse_val);
     if (parse_val.str[parse_val.offset] != '{' && parse_val.str[parse_val.offset] != '[') {
         JsonErr("The first object isn't object or array!\n");
@@ -3601,7 +4033,7 @@ int json_sax_parse_common(json_sax_parse_choice_t *choice)
 #endif
 
     ret = _json_sax_parse_value(&parse_val);
-#if JSON_STRICT_PARSE_MODE
+#if !JSON_PARSE_FINISHED_CHAR
     if (ret == 0) {
         _skip_blank(&parse_val);
         if (parse_val.str[parse_val.offset]) {
@@ -3611,7 +4043,7 @@ int json_sax_parse_common(json_sax_parse_choice_t *choice)
     }
 #endif
 
-#if JSON_STRICT_PARSE_MODE == 2
+#if !JSON_PARSE_SINGLE_VALUE
 end:
 #endif
     if (choice->path) {

@@ -1312,11 +1312,11 @@ int jnum_dtoa(double num, char *buffer)
     switch (exponent) {
     case DP_EXPONENT_MAX:
         if (significand) {
-            memcpy(buffer, "nan", 4);
+            memcpy(buffer, "NaN", 4);
             return 3;
         } else {
-            memcpy(s, "inf", 4);
-            return signbit + 3;
+            memcpy(s, "Infinity", 9);
+            return signbit + 8;
         }
         break;
 
@@ -1360,14 +1360,14 @@ int jnum_dtoa(double num, char *buffer)
     return s - buffer;
 }
 
-int jnum_parse_hex(const char *str, jnum_type_t *type, jnum_value_t *value)
+static int jnum_parse_hex(const char *str, jnum_type_t *type, jnum_value_t *value)
 {
     const char *s = str;
     char c;
     uint64_t m = 0;
 
     s += 2;
-    while (1) {
+    while ((s - str) < 18) {
         switch ((c = *s)) {
         case '0': case '1': case '2': case '3': case '4':
         case '5': case '6': case '7': case '8': case '9':
@@ -1398,7 +1398,7 @@ end:
     return s - str;
 }
 
-static int jnum_parse_num_unit(const char *str, jnum_type_t *type, jnum_value_t *value)
+static int jnum_parse_num(const char *str, jnum_type_t *type, jnum_value_t *value)
 {
     static const double div10_lut[20] = {
         1    , 1e-1 , 1e-2 , 1e-3 , 1e-4 , 1e-5 , 1e-6 , 1e-7 , 1e-8 , 1e-9 ,
@@ -1420,6 +1420,17 @@ static int jnum_parse_num_unit(const char *str, jnum_type_t *type, jnum_value_t 
     default: break;
     }
 
+    switch (*s) {
+    case '0': case '1': case '2': case '3': case '4':
+    case '5': case '6': case '7': case '8': case '9':
+    case '.':
+        break;
+    default:
+        *type = JNUM_NULL;
+        value->vint = 0;
+        return 0;
+    }
+
     while (*s == '0')
         ++s;
 
@@ -1430,9 +1441,6 @@ static int jnum_parse_num_unit(const char *str, jnum_type_t *type, jnum_value_t 
 
     if (k < 20) {
         switch (*s) {
-        case 'e': case 'E':
-            d = m;
-            goto next4;
         case '.':
             d = m;
             goto next2;
@@ -1456,8 +1464,6 @@ static int jnum_parse_num_unit(const char *str, jnum_type_t *type, jnum_value_t 
             case '0': case '1': case '2': case '3': case '4':
             case '5': case '6': case '7': case '8': case '9':
                 break;
-            case 'e': case 'E':
-                goto next4;
             case '.':
                 goto next2;
             default:
@@ -1509,37 +1515,70 @@ next2:
             ++s;
     }
 
-    switch (*s) {
-    case 'e': case 'E':
-        goto next4;
-    default:
-        break;
-    }
-
 next3:
     *type = JNUM_DOUBLE;
     value->vdbl = sign == 1 ? d : -d;
     return s - str;
-
-next4:
-    *type = JNUM_BOOL; /* Only used to mark exponential */
-    value->vdbl = sign == 1 ? d : -d;
-    return s - str;
 }
 
-int jnum_parse_num(const char *str, jnum_type_t *type, jnum_value_t *value)
+int jnum_parse(const char *str, jnum_type_t *type, jnum_value_t *value)
 {
-    int len = jnum_parse_num_unit(str, type, value);
-    if (*type == JNUM_BOOL) {
-        jnum_value_t e;
+    const char *s = str;
+    int len = 0, len2 = 0;
+    jnum_type_t t;
+    jnum_value_t v;
 
-        len += 1 + jnum_parse_num_unit(str + len + 1, type, &e);
-        switch (*type) {
-        case JNUM_INT: value->vdbl *= pow(10, e.vint); break;
-        case JNUM_LINT: value->vdbl *= pow(10, e.vlint); break;
-        default: value->vdbl *= pow(10, e.vdbl); break;
+    while (1) {
+        switch (*s) {
+        case '\b': case '\f': case '\n': case '\r': case '\t': case '\v': case ' ':
+            ++s;
+            break;
+        default:
+            goto next;
         }
+    }
+
+next:
+    len = s - str;
+    if (*s == '0' && (*(s + 1) == 'x' || *(s + 1) == 'X')) {
+        len2 = jnum_parse_hex(s, type, value);
+        if (len2 == 2) {
+            *type = JNUM_INT;
+            value->vint = 0;
+            return len + 1;
+        }
+        return len + len2;
+    }
+
+    len += jnum_parse_num(s, type, value);
+    if (*type == JNUM_NULL)
+        return 0;
+
+    switch (*(str + len)) {
+    case 'e': case 'E':
+        len2 = jnum_parse_num(str + len + 1, &t, &v);
+        if (t == JNUM_NULL)
+            return len;
+
+        switch (*type) {
+        case JNUM_INT: value->vdbl = value->vint; break;
+        case JNUM_LINT: value->vdbl = value->vlint; break;
+        default: break;
+        }
+
         *type = JNUM_DOUBLE;
+        len += len2 + 1;
+
+        switch (t) {
+        case JNUM_INT: value->vdbl *= pow(10, v.vint); break;
+        case JNUM_LINT: value->vdbl *= pow(10, v.vlint); break;
+        case JNUM_DOUBLE: value->vdbl *= pow(10, v.vdbl); break;
+        default: break;
+        }
+        break;
+
+    default:
+        break;
     }
 
     return len;
@@ -1551,9 +1590,6 @@ rtype fname(const char *str)                            \
     jnum_type_t type;                                   \
     jnum_value_t value;                                 \
     rtype val = 0;                                      \
-    unsigned char c = *(unsigned char *)str;            \
-                                                        \
-    while (c <= ' ' && c) c = *(unsigned char *)++str;  \
     jnum_parse(str, &type, &value);                     \
     switch (type) {                                     \
     case JNUM_BOOL:   val = (rtype)value.vbool;break;   \
@@ -1562,7 +1598,7 @@ rtype fname(const char *str)                            \
     case JNUM_LINT:   val = (rtype)value.vlint;break;   \
     case JNUM_LHEX:   val = (rtype)value.vlhex;break;   \
     case JNUM_DOUBLE: val = (rtype)value.vdbl; break;   \
-    default: break;                                     \
+    default:          val = 0;                 break;   \
     }                                                   \
     return val;                                         \
 }

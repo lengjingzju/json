@@ -2,7 +2,7 @@
 
 [English Edition](./README.md)
 
-LJSON 是一个远远快于 cJSON、大幅度快于 RapidJSON 的 C 实现的 JSON 库，他是目前最快的通用 JSON 库。
+LJSON 是一个远远快于 cJSON、大幅度快于 RapidJSON 的 C 实现的 JSON 库，他是目前最快的通用 JSON 库，也支持JSON5的大多数特性。
 LJSON 支持 JSON 的解析、打印、编辑，提供 DOM 和 SAX 接口，I/O 支持字符串和文件，且完全支持 nativejson-benchmark 的测试用例。
 LJSON 默认使用个人开发的 ldouble 算法打印浮点数，和标准库对比可能只有第15位小数的区别，是目前最快的浮点数转字符串算法；也可选择个人优化过的 grisu2 算法或 dragonbox 算法。
 
@@ -12,6 +12,7 @@ LJSON 默认使用个人开发的 ldouble 算法打印浮点数，和标准库�
 * 更省：提供多种省内存的手段，例如内存池、文件边读边解析、边打印边写文件、SAX方式的接口，可做到内存占用是个常数
 * 更强：支持DOM和SAX风格的API，提供普通模式和内存池模式JSON的接口，支持字符串和文件作为输入输出(可扩展支持其它流)，扩展支持长长整形和十六进制数字
 * 更友好：C语言实现，不依赖任何库，不含平台相关代码，只有一个头文件和库文件，和cJSON对应一致的接口，代码逻辑比任何JSON库都更清晰
+* JSON5：支持绝大多数JSON5特性，例如十六进制数字、注释、数组和对象的尾元素逗号等，不支持无双引号的字符串
 
 ## 编译运行
 
@@ -51,13 +52,19 @@ make O=<编译输出目录> CROSS_COMPILE=<交叉编译器前缀> && make O=<编
 
 * 设置 json.c 中的变量 `JSON_ERROR_PRINT_ENABLE` 的值为 `1` 后重新编译
 
-### 错误检测
+### 解析配置
 
-* 设置 json.c 中的变量 `JSON_STRICT_PARSE_MODE` 的值为 `0` / `1` / `2` 后重新编译
-    * 0: 关闭不是常见的错误检测，例如解析完成后还剩尾后字符
-    * 1: 检测更多的错误，且允许 key 为空字符串
-    * 2: 除去 1 开启的错误检测之外，还关闭某些不是标准的特性，例如十六进制数字，第一个json对象不是array或object
-        * 设置为2时 100% 符合 [nativejson-benchmark](https://github.com/miloyip/nativejson-benchmark) 的测试用例
+* `#define JSON_PARSE_SKIP_COMMENT         1` : 是否允许类似C语言的单行注释和多行注释(JSON5特性)
+* `#define JSON_PARSE_LAST_COMMA           1` : 是否允许JSON_ARRAY或JSON_OBJECT的最后一个元素的末尾有逗号(JSON5特性)
+* `#define JSON_PARSE_EMPTY_KEY            0` : 是否允许键为空字符串
+* `#define JSON_PARSE_SPECIAL_CHAR         1` : 是否允许字符串中有特殊的字符，例如换行符(JSON5特性)
+* `#define JSON_PARSE_HEX_NUM              1` : 是否允许十六进制的解析(JSON5特性)
+* `#define JSON_PARSE_SPECIAL_NUM          1` : 是否允许特殊的数字，例如前导0，加号，无整数的浮点数等，例如 `+99` `.1234` `10.` `001` 等(JSON5特性)
+* `#define JSON_PARSE_SPECIAL_DOUBLE       1` : 是否允许特殊的double值 `NaN` `Infinity` `-Infinity`(JSON5特性)
+* `#define JSON_PARSE_SINGLE_VALUE         1` : 是否允许不是JSON_ARRAY或JSON_OBJECT开头的JSON值
+* `#define JSON_PARSE_FINISHED_CHAR        0` : 是否解析完成后忽略检查字符串尾部的合法性
+
+注：如果需要100%符合 [nativejson-benchmark](https://github.com/miloyip/nativejson-benchmark)，需要将 `JSON_PARSE_EMPTY_KEY` 置为1，其它值全部置为0。
 
 ## 性能测试
 

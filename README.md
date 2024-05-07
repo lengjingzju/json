@@ -2,7 +2,7 @@
 
 [中文版](./README_zh-cn.md)
 
-LJSON is a C implemented JSON library that is much faster than cJSON and substantially faster than RapidJSON, it is currently the fastest general-purpose JSON library.
+LJSON is a C implemented JSON library that is much faster than cJSON and substantially faster than RapidJSON, it is currently the fastest general-purpose JSON library and supports the vast majority of JSON5 features.
 LJSON supports JSON parsing, printing and editing, provides DOM and SAX APIs, and I/O supports string and file, it fully supports the test cases of nativejson-benchmark.
 By default, LJSON uses the personally developed ldouble algorithm to print double to string. Compared with the standard library, it may only be the 15th decimal place difference. It is currently the fastest double to string algorithm; users can also choose the personally optimized grisu2 algorithm or dragonbox algorithm.
 
@@ -12,6 +12,7 @@ By default, LJSON uses the personally developed ldouble algorithm to print doubl
 * Lighter: Provide a variety of methods to save memory, such as pool memory, file parsing while reading, file writing while printing, and SAX APIs. It can make memory usage a constant
 * Stronger: Support DOM and SAX-style APIs, provide APIs for JSON in classic mode and memory pool mode, support string and file as input and output, is extended to support long long integer and hexadecimal number
 * More friendly: C language implementation, does not depend on any other library, does not contain platform-related code, only one header file and source file, and the interface corresponding to cJSON. the code logic is clearer than any other JSON libraries
+* JSON5: Supports the vast majority of JSON5 features, such as hexadecimal digits, comments, array and object tail element comma, but does not support strings without double quotes
 
 ## Compile and Run
 
@@ -51,13 +52,19 @@ make O=<output path> CROSS_COMPILE=<tool prefix> && make O=<output path> DESTDIR
 
 * Set the value of the variable `JSON_ERROR_PRINT_ENABLE` in `json.c` to `1` and then re-compile
 
-### Error detection
+### Parse Config
 
-* Set the value of the variable `JSON_STRICT_PARSE_MODE` in `json.c` to `0` / `1` / `2` and then re-compile
-    * 0: Turn off not common error detection, such as trailing characters left after parsing
-    * 1: Detect more errors and allow key to be empty string
-    * 2: In addition to error detection enabled by 1, some non-standard features are also turned off, such as hexadecimal numbers, the first json object is not an array or object
-        * It 100% matches the test cases of  [nativejson-benchmark](https://github.com/miloyip/nativejson-benchmark) when set to 2
+* `#define JSON_PARSE_SKIP_COMMENT         1` : Whether to allow C-like single-line comments and multi-line comments(JSON5 feature)
+* `#define JSON_PARSE_LAST_COMMA           1` : Whether to allow comma in last element of array or object(JSON5 feature)
+* `#define JSON_PARSE_EMPTY_KEY            0` : Whether to allow empty key
+* `#define JSON_PARSE_SPECIAL_CHAR         1` : Whether to allow special characters such as newline in the string(JSON5 feature)
+* `#define JSON_PARSE_HEX_NUM              1` : Whether to allow HEX number(JSON5 feature)
+* `#define JSON_PARSE_SPECIAL_NUM          1` :Whether to allow special number such as starting with '.', '+', '0', for example: `+99` `.1234` `10.` `001`(JSON5 feature)
+* `#define JSON_PARSE_SPECIAL_DOUBLE       1` : Whether to allow special double such as `NaN`, `Infinity`, `-Infinity`(JSON5 feature)
+* `#define JSON_PARSE_SINGLE_VALUE         1` : Whether to allow json starting with non-array and non-object
+* `#define JSON_PARSE_FINISHED_CHAR        0` : Whether to allow characters other than spaces after finishing parsing
+
+Note: It 100% matches the test cases of [nativejson-benchmark](https://github.com/miloyip/nativejson-benchmark) when only `JSON_PARSE_EMPTY_KEY` is set to 1, all others are set to 0.
 
 ## Speed Test
 

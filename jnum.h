@@ -13,6 +13,7 @@ extern "C" {
 #endif
 
 typedef enum {
+    JNUM_NULL,
     JNUM_BOOL,
     JNUM_INT,
     JNUM_HEX,
@@ -41,18 +42,7 @@ int64_t jnum_atol(const char *str);
 uint32_t jnum_atoh(const char *str);
 uint64_t jnum_atolh(const char *str);
 double jnum_atod(const char *str);
-
-int jnum_parse_hex(const char *str, jnum_type_t *type, jnum_value_t *value);
-int jnum_parse_num(const char *str, jnum_type_t *type, jnum_value_t *value);
-
-static inline int jnum_parse(const char *str, jnum_type_t *type, jnum_value_t *value)
-{
-    const char *s = str;
-
-    if (*s == '0' && (*(s+1) == 'x' || *(s+1) == 'X'))
-        return jnum_parse_hex(str, type, value);
-    return jnum_parse_num(str, type, value);
-}
+int jnum_parse(const char *str, jnum_type_t *type, jnum_value_t *value);
 
 #ifdef __cplusplus
 }

@@ -7,7 +7,7 @@
 PACKAGE_NAME    = ljson
 
 staticlib       = libljson.a
-sharedlib       = libljson.so 2 0 0
+sharedlib       = libljson.so 2 1 0
 testedbin       = ljson
 testednum       = jnum_test
 
