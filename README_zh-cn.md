@@ -2,7 +2,7 @@
 
 [English Edition](./README.md)
 
-LJSON 是一个远远快于 cJSON、大幅度快于 RapidJSON 的 C 实现的 JSON 库，他是目前最快的通用 JSON 库，也支持JSON5的大多数特性。
+LJSON 是一个远远快于 cJSON、大幅度快于 RapidJSON 的 C 实现的 JSON 库，他是目前最快的通用 JSON 库，也支持JSON5的全部特性。
 LJSON 支持 JSON 的解析、打印、编辑，提供 DOM 和 SAX 接口，I/O 支持字符串和文件，且完全支持 nativejson-benchmark 的测试用例。
 LJSON 默认使用个人开发的 ldouble 算法打印浮点数，和标准库对比可能只有第15位小数的区别，是目前最快的浮点数转字符串算法；也可选择个人优化过的 grisu2 算法或 dragonbox 算法。
 
@@ -12,7 +12,7 @@ LJSON 默认使用个人开发的 ldouble 算法打印浮点数，和标准库�
 * 更省：提供多种省内存的手段，例如内存池、文件边读边解析、边打印边写文件、SAX方式的接口，可做到内存占用是个常数
 * 更强：支持DOM和SAX风格的API，提供普通模式和内存池模式JSON的接口，支持字符串和文件作为输入输出(可扩展支持其它流)，扩展支持长长整形和十六进制数字
 * 更友好：C语言实现，不依赖任何库，不含平台相关代码，只有一个头文件和库文件，和cJSON对应一致的接口，代码逻辑比任何JSON库都更清晰
-* JSON5：支持绝大多数JSON5特性，例如十六进制数字、注释、数组和对象的尾元素逗号等，不支持无双引号的字符串
+* JSON5：支持全部JSON5特性，例如十六进制数字、注释、数组和对象的尾元素逗号、字符串值可以使用单引号，键值可以使用单引号或无引号等
 
 ## 编译运行
 
@@ -36,7 +36,7 @@ make O=<编译输出目录> && make O=<编译输出目录> DESTDIR=<安装目录
 make O=<编译输出目录> CROSS_COMPILE=<交叉编译器前缀> && make O=<编译输出目录> DESTDIR=<安装目录>
 ```
 
-* 选择浮点数转字符串算法 `gcc -DJSON_DTOA_ALGORITHM=n`， n可能为 0 / 1 / 2 / 3 
+* 选择浮点数转字符串算法 `gcc -DJSON_DTOA_ALGORITHM=n`， n可能为 0 / 1 / 2 / 3
     * 0: 个人实现的 ldouble 算法: 比谷歌的 grisu2 的默认实现快 **129%** ，比腾讯优化的 grisu2 实现快 **33%** ，比 sprintf 快 **14.6** 倍
     * 1: C标准库的 sprintf
     * 2: 个人优化的 grisu2 算法: 谷歌的 grisu2 的默认实现比 sprintf 快 **5.7** 倍，腾讯优化的 grisu2 实现比 sprintf 快 **9.1** 倍，LJSON 的优化实现比 sprintf 快 **11.4** 倍
@@ -58,6 +58,7 @@ make O=<编译输出目录> CROSS_COMPILE=<交叉编译器前缀> && make O=<编
 * `#define JSON_PARSE_LAST_COMMA           1` : 是否允许JSON_ARRAY或JSON_OBJECT的最后一个元素的末尾有逗号(JSON5特性)
 * `#define JSON_PARSE_EMPTY_KEY            0` : 是否允许键为空字符串
 * `#define JSON_PARSE_SPECIAL_CHAR         1` : 是否允许字符串中有特殊的字符，例如换行符(JSON5特性)
+* `#define JSON_PARSE_SPECIAL_QUOTES       1` : 是否允许字符串值可以使用单引号，键值可以使用单引号或无引号(JSON5特性)
 * `#define JSON_PARSE_HEX_NUM              1` : 是否允许十六进制的解析(JSON5特性)
 * `#define JSON_PARSE_SPECIAL_NUM          1` : 是否允许特殊的数字，例如前导0，加号，无整数的浮点数等，例如 `+99` `.1234` `10.` `001` 等(JSON5特性)
 * `#define JSON_PARSE_SPECIAL_DOUBLE       1` : 是否允许特殊的double值 `NaN` `Infinity` `-Infinity`(JSON5特性)
