@@ -178,14 +178,12 @@ json_sax_ret_t _sax_parser_cb(json_sax_parser_t *parser)
     case JSON_HEX:
         json_sax_print_hex(handle, jkey, parser->value.vnum.vhex);
         break;
-#if JSON_LONG_LONG_SUPPORT
     case JSON_LINT:
         json_sax_print_lint(handle, jkey, parser->value.vnum.vlint);
         break;
     case JSON_LHEX:
         json_sax_print_lhex(handle, jkey, parser->value.vnum.vlhex);
         break;
-#endif
     case JSON_DOUBLE:
         json_sax_print_double(handle, jkey, parser->value.vnum.vdbl);
         break;

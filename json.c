@@ -1424,10 +1424,11 @@ static int _json_print_string(json_print_t *print_ptr, json_string_t *jstr)
 
     char ch = '\0';
     size_t len = 0, size = 0, alloced = 0;
-    const char *str = NULL, *bak = NULL;
+    const char *str = NULL, *bak = NULL, *end = NULL;
 
     str = jstr->str;
     len = jstr->len;
+    end = str + len;
     if (likely(!jstr->escaped)) {
         alloced = len + 3;
         _PRINT_PTR_REALLOC(alloced);
@@ -1447,7 +1448,7 @@ static int _json_print_string(json_print_t *print_ptr, json_string_t *jstr)
     *print_ptr->cur++ = '\"';
 
     bak = str;
-    while (1) {
+    while (str < end) {
         switch ((*str++)) {
         case '\"': ch = '\"'; break;
         case '\\': ch = '\\'; break;
@@ -1457,10 +1458,6 @@ static int _json_print_string(json_print_t *print_ptr, json_string_t *jstr)
         case '\r': ch = 'r' ; break;
         case '\t': ch = 't' ; break;
         case '\v': ch = 'v' ; break;
-        case '\0':
-            _JSON_PRINT_SEGMENT();
-            *print_ptr->cur++ = '\"';
-            return 0;
         default:
 #if JSON_PRINT_UTF16_SUPPORT
             {
@@ -1484,6 +1481,10 @@ static int _json_print_string(json_print_t *print_ptr, json_string_t *jstr)
         *print_ptr->cur++ = ch;
     }
 
+    ++str;
+    _JSON_PRINT_SEGMENT();
+    *print_ptr->cur++ = '\"';
+    return 0;
 err:
     JsonErr("malloc failed!\n");
     return -1;
@@ -3175,6 +3176,11 @@ next:
             *ptr++ = ch;
             last = str;
             break;
+#if !JSON_PARSE_SPECIAL_CHAR
+        case '\b': case '\f': case '\n': case '\r': case '\t': case '\v':
+            JsonErr("tab and linebreak can't be existed in string in standard json!\n");
+            goto err;
+#endif
         default:
             break;
         }
