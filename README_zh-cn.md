@@ -116,11 +116,11 @@ typedef enum {
 } json_type_t;                          // json对象类型
 
 typedef struct {
-    unsigned int type:4;                // json_type_t，json_string_t作为key时才有type
-    unsigned int escaped:1;             // str是否包含需要转义的字符
-    unsigned int alloced:1;             // str是否是malloc的，只用于SAX APIs
-    unsigned int reserved:2;
-    unsigned int len:24;                // str的长度
+    uint32_t type:4;                    // json_type_t，json_string_t作为key时才有type
+    uint32_t escaped:1;                 // str是否包含需要转义的字符
+    uint32_t alloced:1;                 // str是否是malloc的，只用于SAX APIs
+    uint32_t reserved:2;
+    uint32_t len:24;                    // str的长度
     char *str;
 } json_string_t;                        // json string 对象或 type+key
 
@@ -156,15 +156,15 @@ typedef struct {
 } json_object;                          // json对象
 
 typedef struct {
-    unsigned int hash;                  // json key的hash，只有JSON_OBJECT的子项才有key
+    uint32_t hash;                      // json key的hash，只有JSON_OBJECT的子项才有key
     json_object *json;                  // json对象的指针
 } json_item_t;
 
 typedef struct {
-    unsigned int conflicted:1;          // key的hash是否有冲突
-    unsigned int reserved:31;
-    unsigned int total;                 // items分配的内存数目
-    unsigned int count;                 // items中子项的个数
+    uint32_t conflicted:1;              // key的hash是否有冲突
+    uint32_t reserved:31;
+    uint32_t total;                     // items分配的内存数目
+    uint32_t count;                     // items中子项的个数
     json_item_t *items;                 // 存储子项的数组
 } json_items_t;                         // 存储JSON_ARRAY或JSON_OBJECT的所有子项
 ```
@@ -218,7 +218,7 @@ static inline json_object *json_create_string_array(json_string_t *values, int c
 
 ```c
 void json_string_info_update(json_string_t *jstr);
-unsigned int json_string_hash_code(json_string_t *jstr);
+uint32_t json_string_hash_code(json_string_t *jstr);
 int json_string_strdup(json_string_t *src, json_string_t *dst);
 static inline int json_set_key(json_object *json, json_string_t *jkey);
 static inline int json_set_string_value(json_object *json, json_string_t *jstr);
@@ -266,7 +266,7 @@ json_object *json_get_object_item(json_object *json, const char *key, json_objec
 
 
 ```c
-json_object *json_search_object_item(json_items_t *items, json_string_t *jkey, unsigned int hash);
+json_object *json_search_object_item(json_items_t *items, json_string_t *jkey, uint32_t hash);
 void json_free_items(json_items_t *items);
 int json_get_items(json_object *json, json_items_t *items);
 ```

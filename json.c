@@ -411,9 +411,9 @@ void json_string_info_update(json_string_t *jstr)
     jstr->len = i;
 }
 
-unsigned int json_string_hash_code(json_string_t *jstr)
+uint32_t json_string_hash_code(json_string_t *jstr)
 {
-    unsigned int i = 0, hash = 0;
+    uint32_t i = 0, hash = 0;
 
     json_string_info_update(jstr);
     if (!jstr->len)
@@ -587,7 +587,7 @@ json_object *json_get_object_item(json_object *json, const char *key, json_objec
     return NULL;
 }
 
-json_object *json_search_object_item(json_items_t *items, json_string_t *jkey, unsigned int hash)
+json_object *json_search_object_item(json_items_t *items, json_string_t *jkey, uint32_t hash)
 {
     int left = 0, right = 0, middle = 0, i = 0, count = 0;
     json_object *json = NULL;
@@ -650,8 +650,8 @@ json_object *json_search_object_item(json_items_t *items, json_string_t *jkey, u
 
 static int _json_hash_cmp(const void *a, const void *b)
 {
-    unsigned int ha = ((const json_item_t *)a)->hash;
-    unsigned int hb = ((const json_item_t *)b)->hash;
+    uint32_t ha = ((const json_item_t *)a)->hash;
+    uint32_t hb = ((const json_item_t *)b)->hash;
     return (int)(ha - hb);
 }
 
@@ -659,7 +659,7 @@ static inline void json_object_items_sort(json_items_t *items)
 {
     items->conflicted = 0;
     if (items->count > 1) {
-        unsigned int i = 0;
+        uint32_t i = 0;
         qsort(items->items, items->count, sizeof(json_item_t), _json_hash_cmp);
         for (i = 1; i < items->count; ++i) {
             if (items->items[i-1].hash == items->items[i].hash) {
@@ -2364,10 +2364,10 @@ static inline json_type_t _json_parse_number(const char **sstr, json_number_t *v
     return type;
 }
 
-static inline unsigned int _parse_hex4(const unsigned char *str)
+static inline uint32_t _parse_hex4(const unsigned char *str)
 {
     int i = 0;
-    unsigned int val = 0;
+    uint32_t val = 0;
 
     for (i = 0; i < 4; ++i) {
         switch (str[i]) {
@@ -3820,7 +3820,7 @@ static inline int _json_sax_parse_string(json_parse_t *parse_ptr, char end_ch, j
 
     if (likely(escaped != 1)) {
         if (!(parse_ptr->fd >= 0 && mgr == &parse_ptr->mem->key_mgr)) {
-            jstr->escaped =  escaped != 0;
+            jstr->escaped = escaped != 0;
             jstr->alloced = 0;
             jstr->len = len;
             jstr->str = str;

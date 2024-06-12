@@ -433,7 +433,7 @@ imake_cpflags  += -Wlarger-than=$(if $(object_byte_size),$(object_byte_size),102
 imake_cpflags  += -Wframe-larger-than=$(if $(frame_byte_size),$(frame_byte_size),8192) # Warn if the size of a function frame exceeds frame_byte_size.
 #imake_cpflags += -Wdate-time #Warn when macros __TIME__, __DATE__ or __TIMESTAMP__ are encountered as they might prevent bit-wise-identical reproducible compilations.
 
-# Use https://github.com/slimm609/checksec.sh/ to check the secture
+# Use https://github.com/slimm609/checksec.sh/ to check the secure
 ifeq ($(ENV_SECURITY),y)
 # NX(No-eXecute) or DEP(Data Execution Prevention)
 #-z execstack # the default value is execstack, close it with noexecstack

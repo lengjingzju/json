@@ -41,7 +41,7 @@ int main(int argc, char *argv[])
         {
             int64_t d = jnum_atol(argv[2]);
             jnum_ltoa(d, buf);
-            printf("original  : %s\nprintf    : %ld\njnum      : %s\n", argv[2], d, buf);
+            printf("original  : %s\nprintf    : %lld\njnum      : %s\n", argv[2], (long long)d, buf);
             break;
         }
     case 'h':
@@ -55,7 +55,7 @@ int main(int argc, char *argv[])
         {
             uint64_t d = jnum_atolh(argv[2]);
             jnum_lhtoa(d, buf);
-            printf("original  : %s\nprintf    : 0x%lx\njnum      : %s\n", argv[2], d, buf);
+            printf("original  : %s\nprintf    : 0x%llx\njnum      : %s\n", argv[2], (unsigned long long)d, buf);
             break;
         }
     case 'd':

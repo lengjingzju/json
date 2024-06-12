@@ -58,11 +58,11 @@ typedef enum {
  * @description: LJSON uses string with information to accelerate printing.
  */
 typedef struct {
-    unsigned int type:4;
-    unsigned int escaped:1;
-    unsigned int alloced:1;
-    unsigned int reserved:2;
-    unsigned int len:24;
+    uint32_t type:4;
+    uint32_t escaped:1;
+    uint32_t alloced:1;
+    uint32_t reserved:2;
+    uint32_t len:24;
     char *str;
 } json_string_t;
 
@@ -122,7 +122,7 @@ typedef struct {
  * @description: LJSON uses hash code to accelerate access to member of JSON_OBJECT.
  */
 typedef struct {
-    unsigned int hash;
+    uint32_t hash;
     json_object *json;
 } json_item_t;
 
@@ -135,10 +135,10 @@ typedef struct {
  * @description: LJSON uses it to store all members of JSON_ARRAY or JSON_OBJECT.
  */
 typedef struct {
-    unsigned int conflicted:1;
-    unsigned int reserved:31;
-    unsigned int total;
-    unsigned int count;
+    uint32_t conflicted:1;
+    uint32_t reserved:31;
+    uint32_t total;
+    uint32_t count;
     json_item_t *items;
 } json_items_t;
 
@@ -289,7 +289,7 @@ void json_string_info_update(json_string_t *jstr);
  * @jstr: IN, the LJSON string
  * @return: the hash value
  */
-unsigned int json_string_hash_code(json_string_t *jstr);
+uint32_t json_string_hash_code(json_string_t *jstr);
 
 /*
  * json_string_strdup - Strdup the LJSON string src to dst
@@ -454,7 +454,7 @@ json_object *json_get_object_item(json_object *json, const char *key, json_objec
  * @return: NULL on failure, a pointer on success
  * @description: LJSON uses dichotomy to search the specific json object.
  */
-json_object *json_search_object_item(json_items_t *items, json_string_t *jkey, unsigned int hash);
+json_object *json_search_object_item(json_items_t *items, json_string_t *jkey, uint32_t hash);
 
 /*
  * json_free_items - Free alloced memory in json_items_t
@@ -989,7 +989,8 @@ json_object *pjson_add_new_item_to_array(json_object *array, json_type_t type, v
 
 static inline json_object *pjson_add_null_to_array(json_object *array, json_mem_t *mem)
 {
-    return pjson_add_new_item_to_array(array, JSON_NULL, NULL, mem); }
+    return pjson_add_new_item_to_array(array, JSON_NULL, NULL, mem);
+}
 
 static inline json_object *pjson_add_bool_to_array(json_object *array, bool value, json_mem_t *mem)
 {
@@ -1050,7 +1051,8 @@ json_object *pjson_add_new_item_to_object(json_object *object, json_type_t type,
 
 static inline json_object *pjson_add_null_to_object(json_object *object, json_string_t *jkey, json_mem_t *mem)
 {
-    return pjson_add_new_item_to_object(object, JSON_NULL, jkey, NULL, mem); }
+    return pjson_add_new_item_to_object(object, JSON_NULL, jkey, NULL, mem);
+}
 
 static inline json_object *pjson_add_bool_to_object(json_object *object, json_string_t *jkey, bool value, json_mem_t *mem)
 {
