@@ -5,16 +5,14 @@
 #include <time.h>
 #include "json.h"
 
-/*
- * Compile Method:
- * gcc -o ljson json.c json_test.c -O0 -g -W -Wall
- * gcc -o ljson json.c json_test.c -O2 -ffunction-sections -fdata-sections -W -Wall
- */
-
 #define _fmalloc       malloc
 #define _ffree         free
 #define _fclose_fp(fp) do {if (fp) fclose(fp); fp = NULL; } while(0)
 #define _free_ptr(ptr) do {if (ptr) _ffree(ptr); ptr = NULL; } while(0)
+
+static char s_dst_json_path[256] = {0};
+static char *s_print_str = NULL;
+static size_t s_print_size = 0;
 
 static unsigned int _system_ms_get(void)
 {
@@ -85,7 +83,6 @@ int read_file_data_free(char **data, size_t *size)
     return 0;
 }
 
-static char s_dst_json_path[256] = {0};
 static void usage_print(const char *func)
 {
 #define ANY_JSON_NAME "x.json"
@@ -106,7 +103,6 @@ static void usage_print(const char *func)
 int test_json_sax_print(void)
 {
     json_sax_print_hd handle = NULL;
-    char *print_str = NULL;
     json_string_t jkey = {0}, jstr = {0};
 
     handle = json_sax_print_format_start(10);
@@ -130,9 +126,9 @@ int test_json_sax_print(void)
     json_sax_print_array(handle, NULL, JSON_SAX_FINISH);
     json_sax_print_object(handle, NULL, JSON_SAX_FINISH);
 
-    print_str = json_sax_print_finish(handle, NULL);
-    printf("%s\n", print_str);
-    json_memory_free(print_str);
+    s_print_str = json_sax_print_finish(handle, NULL);
+    printf("%s\n", s_print_str);
+    json_memory_free(s_print_str);
 
     return 0;
 }
@@ -141,8 +137,6 @@ static bool s_sax_for_file = false;
 json_sax_ret_t _sax_parser_cb(json_sax_parser_t *parser)
 {
     static json_sax_print_hd handle = NULL;
-    char *print_str = NULL;
-    size_t print_size = 0;
     json_string_t *jkey = &parser->array[parser->index];
 
     if (parser->index == 0) {
@@ -208,12 +202,7 @@ json_sax_ret_t _sax_parser_cb(json_sax_parser_t *parser)
                 if (s_sax_for_file) {
                     json_sax_print_finish(handle, NULL);
                 } else {
-                    print_str = json_sax_print_finish(handle, &print_size);
-                    if (print_str) {
-                        copy_data_to_file(print_str, print_size, s_dst_json_path);
-                        json_memory_free(print_str);
-                        print_str = NULL;
-                    }
+                    s_print_str = json_sax_print_finish(handle, &s_print_size);
                 }
             }
             break;
@@ -221,12 +210,7 @@ json_sax_ret_t _sax_parser_cb(json_sax_parser_t *parser)
             if (s_sax_for_file) {
                 json_sax_print_finish(handle, NULL);
             } else {
-                print_str = json_sax_print_finish(handle, &print_size);
-                if (print_str) {
-                    copy_data_to_file(print_str, print_size, s_dst_json_path);
-                    json_memory_free(print_str);
-                    print_str = NULL;
-                }
+                s_print_str = json_sax_print_finish(handle, &s_print_size);
             }
             break;
         }
@@ -238,16 +222,15 @@ json_sax_ret_t _sax_parser_cb(json_sax_parser_t *parser)
 
 int main(int argc, char *argv[])
 {
+    int ret = 0;
+    size_t size = 0;
+    int nitem = 0, nflag = 0;
     int choice = 0;
     char *file = NULL;
-    char *orig_data = NULL;
-    char *print_str = NULL;
-    size_t orig_size = 0, print_size = 0;
-    json_mem_t mem;
+    char *data = NULL;
     json_object *json = NULL;
-    unsigned int ms1 = 0, ms2 = 0, ms3 = 0, ms4 = 0, ms5 = 0;
-    int fast_flag = 0;
-    int item_total = 0;
+    json_mem_t mem;
+    unsigned int ms[8] = {0};
 
     pjson_memory_init(&mem);
 
@@ -258,183 +241,160 @@ int main(int argc, char *argv[])
             test_json_sax_print();
             return 0;
         } else {
-            usage_print(argv[0]);
-            return -1;
+            goto err;
         }
     }
 #endif
-
-    if (argc != 3) {
-        usage_print(argv[0]);
-        return -1;
-    }
+    if (argc != 3)
+        goto err;
 
     file = argv[1];
     if (strlen(file) == 0 || access(file, F_OK) != 0) {
         printf("%s is not exist!\n", file);
-        return -1;
+        goto err;
     }
-
-    ms1 = _system_ms_get();
     choice = atoi(argv[2]);
+    if (choice < 1 || choice > 7)
+        goto err;
+
+    ms[0] = _system_ms_get();
     switch(choice)
     {
-    case 1:
-    case 2:
-    case 3:
+    case 1: case 2: case 3:
 #if JSON_SAX_APIS_SUPPORT
     case 6:
 #endif
-        if (read_file_to_data(file, &orig_data, &orig_size) < 0) {
+        if (read_file_to_data(file, &data, &size) < 0) {
             printf("read file %s failed!\n", file);
-            return -1;
+            goto err;
         }
-        break;
-    case 4:
-    case 5:
-#if JSON_SAX_APIS_SUPPORT
-    case 7:
-#endif
         break;
     default:
-        usage_print(argv[0]);
-        return -1;
+        break;
     }
 
+    ms[1] = _system_ms_get();
     switch(choice)
     {
-    case 1:
-        json = json_parse_str(orig_data, orig_size);
-        break;
-    case 2:
-        json = json_fast_parse_str(orig_data, orig_size, &mem);
-        fast_flag = 1;
-        break;
-    case 3:
-        json = json_reuse_parse_str(orig_data, orig_size, &mem);
-        fast_flag = 1;
-        break;
-    case 4:
-        json = json_parse_file(file);
-        break;
-    case 5:
-        json = json_fast_parse_file(file, &mem);
-        fast_flag = 1;
-        break;
+    case 1: json = json_parse_str(data, size); break;
+    case 2: json = json_fast_parse_str(data, size, &mem); nflag = 1; break;
+    case 3: json = json_reuse_parse_str(data, size, &mem); nflag = 1; break;
+    case 4: json = json_parse_file(file); break;
+    case 5: json = json_fast_parse_file(file, &mem); nflag = 1; break;
+
 #if JSON_SAX_APIS_SUPPORT
     case 6:
-        snprintf(s_dst_json_path, sizeof(s_dst_json_path), "%s-%d.format.json", file, choice);
-        if (json_sax_parse_str(orig_data, orig_size, _sax_parser_cb) < 0) {
+        if (json_sax_parse_str(data, size, _sax_parser_cb) < 0) {
             printf("json_sax_parse_str failed!\n");
-            read_file_data_free(&orig_data, &orig_size);
-            return -1;
+            ret = -1;
+            goto end;
         }
-        ms2 = _system_ms_get();
+
+        ms[2] = _system_ms_get();
+        if (s_print_str) {
+            snprintf(s_dst_json_path, sizeof(s_dst_json_path), "%s-%d.format.json", file, choice);
+            copy_data_to_file(s_print_str, s_print_size, s_dst_json_path);
+            json_memory_free(s_print_str);
+            s_print_str = NULL;
+        }
+
+        ms[3] = _system_ms_get();
+        printf("[sax] %d. read=%-5d parse+format=%-5d       write=%-5d\n", choice, ms[1]-ms[0], ms[2]-ms[1], ms[3]-ms[2]);
         goto end;
     case 7:
         s_sax_for_file = true;
         snprintf(s_dst_json_path, sizeof(s_dst_json_path), "%s-%d.format.json", file, choice);
         if (json_sax_parse_file(file, _sax_parser_cb) < 0) {
             printf("json_sax_parse_file failed!\n");
-            return -1;
+            ret = -1;
+            goto end;
         }
-        ms2 = _system_ms_get();
+
+        ms[2] = _system_ms_get();
+        printf("[sax] %d. read+parse+format+write=%-5d\n", choice, ms[2]-ms[1]);
         goto end;
 #endif
     default:
         break;
     }
 
-    if (json == NULL) {
+    if (!json) {
         printf("json parse failed!\n");
-
-        if (orig_data)
-            read_file_data_free(&orig_data, &orig_size);
-        return -1;
+        ret = -1;
+        goto end;
     }
 
-    ms2 = _system_ms_get();
-    switch(choice)
-    {
-    case 2:
-    case 3:
-    case 5:
-        item_total = pjson_memory_statistics(&mem.obj_mgr) >> 6;
-        break;
-    default:
-        break;
-    }
-
+    ms[2] = _system_ms_get();
     snprintf(s_dst_json_path, sizeof(s_dst_json_path), "%s-%d.format.json", file, choice);
+    if (nflag)
+        nitem = pjson_memory_statistics(&mem.obj_mgr) / sizeof(json_object);
     switch(choice)
     {
-    case 1:
-        print_str = json_print_format(json, item_total, &print_size);
+    case 1: case 2: case 3:
+        s_print_str = json_print_format(json, nitem, &s_print_size);
         break;
-    case 2:
-        print_str = json_print_format(json, item_total, &print_size);
-        break;
-    case 3:
-        print_str = json_print_format(json, item_total, &print_size);
-        break;
-    case 4:
-        json_fprint_format(json, item_total, s_dst_json_path);
-        break;
-    case 5:
-        json_fprint_format(json, item_total, s_dst_json_path);
+    case 4: case 5:
+        json_fprint_format(json, nitem, s_dst_json_path);
         break;
     default:
         break;
     }
-    if (print_str) {
-        copy_data_to_file(print_str, print_size, s_dst_json_path);
-        json_memory_free(print_str);
-        print_str = NULL;
-    }
-    ms3 = _system_ms_get();
 
-    sleep(1);
-    ms4 = _system_ms_get();
+    ms[3] = _system_ms_get();
+    if (s_print_str) {
+        copy_data_to_file(s_print_str, s_print_size, s_dst_json_path);
+        json_memory_free(s_print_str);
+        s_print_str = NULL;
+    }
+    ms[4] = _system_ms_get();
+
+    //sleep(1);
+
+    ms[5] = _system_ms_get();
     snprintf(s_dst_json_path, sizeof(s_dst_json_path), "%s-%d.unformat.json", file, choice);
     switch(choice)
     {
-    case 1:
-        print_str = json_print_unformat(json, item_total, &print_size);
+    case 1: case 2: case 3:
+        s_print_str = json_print_unformat(json, nitem, &s_print_size);
         break;
-    case 2:
-        print_str = json_print_unformat(json, item_total, &print_size);
-        break;
-    case 3:
-        print_str = json_print_unformat(json, item_total, &print_size);
-        break;
-    case 4:
-        json_fprint_unformat(json, item_total, s_dst_json_path);
-        break;
-    case 5:
-        json_fprint_unformat(json, item_total, s_dst_json_path);
+    case 4: case 5:
+        json_fprint_unformat(json, nitem, s_dst_json_path);
         break;
     default:
         break;
     }
-    if (print_str) {
-        copy_data_to_file(print_str, print_size, s_dst_json_path);
-        json_memory_free(print_str);
-        print_str = NULL;
-    }
-    ms5 = _system_ms_get();
 
-#if JSON_SAX_APIS_SUPPORT
-end:
-#endif
-    if (!fast_flag && json)
+    ms[6] = _system_ms_get();
+    if (s_print_str) {
+        copy_data_to_file(s_print_str, s_print_size, s_dst_json_path);
+        json_memory_free(s_print_str);
+        s_print_str = NULL;
+    }
+    ms[7] = _system_ms_get();
+
+    switch(choice)
+    {
+    case 1: case 2: case 3:
+        printf("[dom] %d. read=%-5d parse=%-5d format=%-5d write=%-5d unformat=%-5d write=%-5d\n",
+            choice, ms[1]-ms[0], ms[2]-ms[1], ms[3]-ms[2], ms[4]-ms[3], ms[6]-ms[5], ms[7]-ms[6]);
+        break;
+    case 4: case 5:
+        printf("[dom] %d. read+parse=%-5d       format+write=%-5d       unformat+write=%-5d\n",
+            choice, ms[2]-ms[1], ms[3]-ms[2], ms[6]-ms[5]);
+        break;
+    default:
+        break;
+    }
+
+    if (!nflag && json)
         json_del_object(json);
     pjson_memory_free(&mem);
-    if (orig_data)
-        read_file_data_free(&orig_data, &orig_size);
+end:
+    if (data)
+        read_file_data_free(&data, &size);
+    return ret;
 
-    if (choice < 6)
-        printf("parse ms=%d, format print_ms=%d, unformat print_ms=%d\n", ms2-ms1, ms3-ms2, ms5-ms4);
-    else
-        printf("sax parse+print ms=%d\n", ms2-ms1);
-    return 0;
+err:
+    usage_print(argv[0]);
+    return -1;
 }

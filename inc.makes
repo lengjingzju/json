@@ -5,7 +5,7 @@
 # https://github.com/lengjingzju/cbuild-ng #
 ############################################
 
-############# Date: 2024-01-31 #############
+############# Date: 2024-08-18 #############
 
 # The default behavior only includes inc.env.mk and inc.ins.mk.
 # INC_MAKES can be set to a combination of `disenv` `conf` `app` `mod` `disins`.
@@ -30,11 +30,13 @@ else
 PACKAGE_ID     := $(PACKAGE_NAME)-native
 endif
 
-ENV_OPTIMIZER  ?= release
-ifeq ($(ENV_OPTIMIZER),debug)
+ENV_BUILD_TYPE ?= optimized
+ifeq ($(ENV_BUILD_TYPE),debug)
 OPTIMIZER_FLAG ?= -O0 -g -ggdb
-else ifeq ($(ENV_OPTIMIZER),speed)
+else ifeq ($(ENV_BUILD_TYPE),release)
 OPTIMIZER_FLAG ?= -O3
+else ifeq ($(ENV_BUILD_TYPE),minsize)
+OPTIMIZER_FLAG ?= -Os
 else
 OPTIMIZER_FLAG ?= -O2
 endif
@@ -150,6 +152,21 @@ endif
 # yocto envs should be exported by yocto recipe.
 
 ifneq ($(ENV_BUILD_MODE),yocto)
+
+define ft-config
+ifneq ($(NATIVE_BUILD),y)
+FT_CONFIG       += $$(if $$(filter y,$$($1)),$2,$3)
+$(if $(filter y,$(CACHE_BUILD)),CACHE_APPENDS   += $1=$$($1))
+else
+FT_CONFIG       += $$(if $$(filter y,$$($1_NATIVE)),$2,$3)
+$(if $(filter y,$(CACHE_BUILD)),CACHE_APPENDS   += $1_NATIVE=$$($1_NATIVE))
+endif
+endef
+
+define FT-CONFIG
+FT_CONFIG       += $$(if $$(filter y,$$($1)),$2,$3)
+$(if $(filter y,$(CACHE_BUILD)),CACHE_APPENDS   += $1=$$($1))
+endef
 
 PREPARE_SYSROOT := -s CROSS_DESTDIR=$(WORKDIR)/sysroot NATIVE_DESTDIR=$(WORKDIR)/sysroot-native \
                   NATIVE_BUILD= INSTALL_OPTION=link -C $(ENV_TOP_DIR) $(PACKAGE_ID)_psysroot
@@ -420,10 +437,11 @@ imake_cpflags  += $(call link_hdrs)
 imake_ldflags  += $(call link_libs)
 
 imake_cpflags  += $(OPTIMIZER_FLAG)
-imake_ldflags  += -Wl,-O1
-ifeq ($(ENV_OPTIMIZER),release)
+ifneq ($(ENV_BUILD_TYPE),debug)
 imake_cpflags  += -ffunction-sections -fdata-sections
 imake_ldflags  += -Wl,--gc-sections
+else
+imake_ldflags  += -Wl,-O1
 endif
 #imake_ldflags += -static
 
@@ -503,7 +521,7 @@ imake_cpflags  += $(IMAKE_CPFLAGS)
 imake_ldflags  += $(IMAKE_LDFLAGS)
 prior_ldflags  += $(PRIOR_LDFLAGS)
 
-CHECK_INFO     += ENV_OPTIMIZER=$(ENV_OPTIMIZER)        \
+CHECK_INFO     += ENV_BUILD_TYPE=$(ENV_BUILD_TYPE)      \
                   ENV_SECURITY=$(ENV_SECURITY)          \
                   ENV_SANITIZER=$(ENV_SANITIZER)        \
                   ENV_ANALYZER=$(ENV_ANALYZER)          \
