@@ -45,7 +45,7 @@ make O=<编译输出目录> CROSS_COMPILE=<交叉编译器前缀> && make O=<编
 ### 运行方法
 
 ```sh
-./json <json文件名> <测试序号0-7>
+./ljson <json文件名> <测试序号0-7>
 ```
 
 ### 调试方法
@@ -72,19 +72,79 @@ make O=<编译输出目录> CROSS_COMPILE=<交叉编译器前缀> && make O=<编
 
 ## 性能测试
 
+### 测试代码
+
+其它json的测试代码位于benchmark目录，将对应的文件放在对应json工程的根目录即可
+
+```sh
+gcc -o cjson cjson_test.c cJSON.c -O2               # cJSON
+g++ -o rapidjson rapidjson_test.c -Iinclude -O2     # RapidJSON
+gcc -o yyjson yyjson_test.c src/yyjson.c -Isrc -O2  # yyjson
+gcc -o strdup strdup_test.c -O2                     # strdup和strlen
+```
+
+测试脚本
+
+```sh
+#!/bin/bash
+
+src=$1
+
+if [ -z $src ] || [ ! -e $src ]; then
+	echo "Usage: $0 <json file>"
+	exit 1
+fi
+
+run_cmd() {
+	printf "%-15s " $1
+	eval $@
+	sync
+	sleep 0.1
+}
+
+for i in `seq 1 7`; do
+	run_cmd ./ljson $src $i
+done
+
+run_cmd ./cjson $src
+run_cmd ./rapidjson $src
+run_cmd ./yyjson $src
+run_cmd ./yyjson $src 1
+run_cmd ./strdup $src
+```
+
+测试模式
+
+* ljson提供7种测试模式
+    * 1: 普通DOM模式，使用malloc申请内存，解析和打印都为字符串
+    * 2: 快速DOM模式，申请大内存，然后内存从大内存分配(无法单独释放小内存)，解析和打印都为字符串
+    * 3: 重用DOM模式，申请大内存，然后内存从大内存分配(无法单独释放小内存)，且键和字符串值重用原始解析字符串，解析和打印都为字符串
+    * 4: 文件DOM模式，无需读完文件再解析或打印完再写入，使用malloc申请内存，边读文件边解析，边打印边写入文件
+    * 5: 快速文件DOM模式，无需读完文件再解析或打印完再写入，申请大内存，然后内存从大内存分配(无法单独释放小内存)，边读文件边解析，边打印边写入文件
+    * 6: 普通SAX模式，解析和打印都为字符串
+    * 7: 文件SAX模式，无需读完文件再解析，边读文件边解析
+* yyjson提供两种测试模式：unmutable 和 mutable 模式
+
+### 测试结果
+
 注：主要是测试速度，`O2` 优化等级且默认选项编译，测试文件来自 [nativejson-benchmark](https://github.com/miloyip/nativejson-benchmark) 项目
 
-> 测试平台: Ambarella CV25M Board | CPU: ARM CortexA53 | OS: Linux-5.15<br>
-> 测试结果: LJSON 比cJSON 解析最快可达 475%，打印最快可达 2836%，LJSON 比 RapidJSON 解析最快可达 131%，打印最快可达 147%
+> 测试平台: ARM64开发板 | CPU: ARM CortexA53 | OS: Linux-5.15<br>
+> 测试结果: LJSON 比cJSON 解析最快可达 475%，打印最快可达 2836%，LJSON 比 RapidJSON 解析最快可达 131%，打印最快可达 147% (耗时含文件读写时间)
 
 ![AARCH64-Linux测试结果](image/test_for_aarch64.png)
 
 > 测试平台: PC | CPU: Intel i7-10700 | OS: Ubuntu 18.04 (VirtualBox)<br>
-> 测试结果: LJSON 比cJSON 解析最快可达 560%，打印最快可达 3184%，LJSON 比 RapidJSON 解析最快可达 75%，打印最快可达 133%
+> 测试结果: LJSON 比cJSON 解析最快可达 560%，打印最快可达 3184%，LJSON 比 RapidJSON 解析最快可达 75%，打印最快可达 133% (耗时含文件读写时间)
 
 ![x86_64-Linux测试结果](image/test_for_x86_64.png)
 
 ![ldouble-x86_64测试结果](image/ldb_for_x86_64.png)
+
+> 测试平台: PC | CPU: Intel i7-1260P | OS: Ubuntu 20.04 (VMWare)<br>
+> 测试结果: LJSON 比cJSON 解析最快可达 510%，打印最快可达 2273%，LJSON 比 RapidJSON 解析最快可达 76%，打印最快可达 144% (耗时不含文件读写时间)
+
+![x86_64-Linux测试结果2](image/test_for_x86_64-2.png)
 
 > 测试平台: Nationalchip STB | CPU: CSKY | DDR3: 128MB, 533MHz | OS: ECOS<br>
 > 注: 老版本测试结果，新版本删除了临时buffer，且解析速度提升了两倍

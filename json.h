@@ -7,7 +7,7 @@
 #pragma once
 #include "jnum.h"
 
-#define JSON_VERSION                    0x020101
+#define JSON_VERSION                    0x020102
 #define JSON_SAX_APIS_SUPPORT           1
 
 /**************** json object structure ****************/

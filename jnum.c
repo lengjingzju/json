@@ -1400,13 +1400,14 @@ end:
 
 static int jnum_parse_num(const char *str, jnum_type_t *type, jnum_value_t *value)
 {
-    static const double div10_lut[20] = {
-        1    , 1e-1 , 1e-2 , 1e-3 , 1e-4 , 1e-5 , 1e-6 , 1e-7 , 1e-8 , 1e-9 ,
-        1e-10, 1e-11, 1e-12, 1e-13, 1e-14, 1e-15, 1e-16, 1e-17, 1e-18, 1e-19,
-    };
+#define IS_DIGIT(c)      ((c) >= '0' && (c) <= '9')
     static const double mul10_lut[20] = {
         1   , 1e1 , 1e2 , 1e3 , 1e4 , 1e5 , 1e6 , 1e7 , 1e8 , 1e9 ,
         1e10, 1e11, 1e12, 1e13, 1e14, 1e15, 1e16, 1e17, 1e18, 1e19,
+    };
+    static const double div10_lut[20] = {
+        1    , 1e-1 , 1e-2 , 1e-3 , 1e-4 , 1e-5 , 1e-6 , 1e-7 , 1e-8 , 1e-9 ,
+        1e-10, 1e-11, 1e-12, 1e-13, 1e-14, 1e-15, 1e-16, 1e-17, 1e-18, 1e-19,
     };
 
     const char *s = str;
@@ -1434,7 +1435,7 @@ static int jnum_parse_num(const char *str, jnum_type_t *type, jnum_value_t *valu
     while (*s == '0')
         ++s;
 
-    while (*s >= '0' && *s <= '9') {
+    while (IS_DIGIT(*s)) {
         m = (m << 3) + (m << 1) + (*s++ - '0');
         ++k;
     }
@@ -1452,7 +1453,7 @@ static int jnum_parse_num(const char *str, jnum_type_t *type, jnum_value_t *valu
         while (1) {
             m = 0;
             k = 0;
-            while (*s >= '0' && *s <= '9') {
+            while (IS_DIGIT(*s)) {
                 m = (m << 3) + (m << 1) + (*s++ - '0');
                 ++k;
                 if (k == 19)
@@ -1494,7 +1495,7 @@ next2:
     ++s;
     m = 0;
     k = 0;
-    while (*s >= '0' && *s <= '9') {
+    while (IS_DIGIT(*s)) {
         m = (m << 3) + (m << 1) + (*s++ - '0');
         ++k;
     }
@@ -1504,14 +1505,14 @@ next2:
         s -= k;
         m = 0;
         k = 0;
-        while (*s >= '0' && *s <= '9') {
+        while (IS_DIGIT(*s)) {
             m = (m << 3) + (m << 1) + (*s++ - '0');
             ++k;
             if (k == 19)
                 break;
         }
         d += m * div10_lut[k];
-        while (*s >= '0' && *s <= '9')
+        while (IS_DIGIT(*s))
             ++s;
     }
 

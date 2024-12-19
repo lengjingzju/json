@@ -7,7 +7,10 @@
 PACKAGE_NAME    = ljson
 
 staticlib       = libljson.a
-sharedlib       = libljson.so 2 1 1
+majorver        = $(shell cat json.h | grep JSON_VERSION | sed 's/.*0x//g' | cut -b 1-2 | sed 's/^0//g')
+minorver        = $(shell cat json.h | grep JSON_VERSION | sed 's/.*0x//g' | cut -b 3-4 | sed 's/^0//g')
+patchver        = $(shell cat json.h | grep JSON_VERSION | sed 's/.*0x//g' | cut -b 5-6 | sed 's/^0//g')
+sharedlib       = libljson.so $(majorver) $(minorver) $(patchver)
 testedbin       = ljson
 testednum       = jnum_test
 
@@ -54,4 +57,5 @@ INSTALL_PKGCONFIGS := pcfiles/*
 $(eval $(call install_obj,pkgconfig))
 
 install: install_hdrs install_libs install_bins install_pkgconfigs
+	@sed -i "s/@Version@/$(majorver).$(minorver).$(patchver)/g" $(INS_PREFIX)$(pkgconfigdir)/ljson.pc
 	@echo "Install $(PACKAGE_NAME) to $(INS_PREFIX) Done!"

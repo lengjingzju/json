@@ -45,7 +45,7 @@ make O=<output path> CROSS_COMPILE=<tool prefix> && make O=<output path> DESTDIR
 ### Run Method
 
 ```sh
-./json <json filename> <test index:0-7>
+./ljson <json filename> <test index:0-7>
 ```
 
 ### Debug Method
@@ -71,19 +71,81 @@ Note:
 
 ## Speed Test
 
-Note: 'O2' optimization level and default option compilation, the test files come from the [nativejson-benchmark](https://github.com/miloyip/nativejson-benchmark) project
+### Test Code
 
-> Test Platform: Ambarella CV25M Board | CPU: ARM CortexA53 | OS: Linux-5.15<br>
-> Test Result: LJSON parses 475% faster and prints 2836% faster than cJSON, LJSON parses 131% faster and prints 147% faster than RapidJSON
+Other json test codes are located in the benchmark directory. Just put the corresponding source file in the root directory of the corresponding json project.
+
+```sh
+gcc -o cjson cjson_test.c cJSON.c -O2               # cJSON
+g++ -o rapidjson rapidjson_test.c -Iinclude -O2     # RapidJSON
+gcc -o yyjson yyjson_test.c src/yyjson.c -Isrc -O2  # yyjson
+gcc -o strdup strdup_test.c -O2                     # strdup和strlen
+```
+
+Test Script
+
+```sh
+#!/bin/bash
+
+src=$1
+
+if [ -z $src ] || [ ! -e $src ]; then
+	echo "Usage: $0 <json file>"
+	exit 1
+fi
+
+run_cmd() {
+	printf "%-15s " $1
+	eval $@
+	sync
+	sleep 0.1
+}
+
+for i in `seq 1 7`; do
+	run_cmd ./ljson $src $i
+done
+
+run_cmd ./cjson $src
+run_cmd ./rapidjson $src
+run_cmd ./yyjson $src
+run_cmd ./yyjson $src 1
+run_cmd ./strdup $src
+```
+
+Test Mode
+
+* ljson provides 7 test modes
+    * 1: Normal DOM mode, use malloc to apply for memory, parse and print string
+    * 2: Fast DOM mode, apply for large memory, then allocate memory from large memory (cannot free small memory alone), parse and print string
+    * 3: Reuse DOM mode, apply for large memory, then allocate memory from large memory (cannot free small memory alone), and reuse the original parsed string for key and string value, parse and print string
+    * 4: File DOM mode, no need to read the file before parsing or print before writing, use malloc to apply for memory, read file and parse json at the same time, and print json and write file at the same time
+    * 5: Fast file DOM mode, no need to read the file before parsing or print before writing, apply for large memory, then allocate memory from large memory (cannot free small memory alone), read file and parse json at the same time, and print json and write file at the same time
+    * 6: Normal SAX mode, parse and print string
+    * 7: File SAX mode, no need to read the file before parsing, read file and parse json at the same time
+* yyjson provides two test modes: unmutable and mutable
+
+### Test Result
+
+Note: 'O2' optimization level and default option compilation, the test files come from the [nativejson-benchmark](https://github.com/miloyip/nativejson-benchmark) project.
+
+> Test Platform: ARM64 Development Board | CPU: ARM CortexA53 | OS: Linux-5.15<br>
+> Test Result: LJSON parses 475% faster and prints 2836% faster than cJSON, LJSON parses 131% faster and prints 147% faster than RapidJSON (include file reading and writing)
 
 ![AARCH64-Linux Test Result](image/test_for_aarch64.png)
 
 > Test Platform: PC | CPU: Intel i7-10700 | OS: Ubuntu 18.04 (VirtualBox)<br>
 > Test Result: LJSON parses 560% faster and prints 3184% faster than cJSON, LJSON parses 75% faster and prints 133% faster than RapidJSON
+(include file reading and writing)
 
 ![x86_64-Linux Test Result](image/test_for_x86_64.png)
 
 ![ldouble-x86_64 Test Result](image/ldb_for_x86_64.png)
+
+> Test Platform: PC | CPU: Intel i7-1260P | OS: Ubuntu 20.04 (VMWare)<br>
+> Test Result: LJSON parses 510% faster and prints 2273% faster than cJSON, LJSON parses 76% faster and prints 144% faster than RapidJSON
+(not include file reading and writing)
+
+![x86_64-Linux Test Result2](image/test_for_x86_64-2.png)
 
 ## Contact
 
