@@ -155,7 +155,7 @@ if len(sys.argv) != 3:
     print_div_table()
 else:
     get_fast_div(int(sys.argv[1]), int(sys.argv[2]))
-print('#define FAST_DIV(N) (((type)((N) >> S) * M) >> K)')
+print('#define FAST_DIV(N) ((((type)(N) >> S) * M) >> K)')
 ```
 
 运行 `python3 fastdiv.py` 或 `python3 fastdiv.py <D> <maxN>`

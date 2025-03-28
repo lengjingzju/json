@@ -6,10 +6,10 @@
 *******************************************/
 #include <stdio.h>
 #include <stdlib.h>
-#include <string.h>
 #include <unistd.h>
 #include <fcntl.h>
 #include <math.h>
+#include "jnum.h"
 #include "json.h"
 
 #define type_member                     jkey.type
@@ -150,7 +150,7 @@ extern int dragonbox_dtoa(double num, char *buffer);
 #define json_free                       free
 
 #define JSON_ITEM_NUM_PLUS_DEF          16
-#define JSON_POOL_MEM_SIZE_DEF          8096
+#define JSON_POOL_MEM_SIZE_DEF          8192
 
 /* print choice size */
 #define JSON_PRINT_UTF16_SUPPORT        0
@@ -163,7 +163,7 @@ extern int dragonbox_dtoa(double num, char *buffer);
 
 /* file parse choice size */
 #define JSON_PARSE_ERROR_STR            "Z"
-#define JSON_PARSE_READ_SIZE_DEF        8096
+#define JSON_PARSE_READ_SIZE_DEF        8192
 #define JSON_PARSE_NUM_DIV_DEF          8
 
 /**************** json list ****************/
@@ -685,26 +685,37 @@ int json_get_items(json_object *json, json_items_t *items)
     json_object *pos = NULL;
 
     items->count = 0;
-    if (json->type_member != JSON_ARRAY && json->type_member != JSON_OBJECT)
-        return -1;
-
-    json_list_for_each_entry(pos, &json->value.head, list) {
-        if (items->count == items->total) {
-            items->total += JSON_ITEM_NUM_PLUS_DEF;
-            if ((items->items = json_realloc(items->items, items->total * sizeof(json_item_t))) == NULL) {
-                JsonErr("malloc failed!\n");
-                goto err;
+    if (json->type_member == JSON_ARRAY) {
+        json_list_for_each_entry(pos, &json->value.head, list) {
+            if (items->count == items->total) {
+                items->total += JSON_ITEM_NUM_PLUS_DEF;
+                if ((items->items = json_realloc(items->items, items->total * sizeof(json_item_t))) == NULL) {
+                    JsonErr("malloc failed!\n");
+                    goto err;
+                }
             }
+            items->items[items->count++].json = pos;
         }
-
-        if (json->type_member == JSON_OBJECT)
-            items->items[items->count].hash = json_string_hash_code(&pos->jkey);
-        items->items[items->count++].json = pos;
+        return 0;
     }
 
-    if (json->type_member == JSON_OBJECT)
+    if (json->type_member == JSON_OBJECT) {
+        json_list_for_each_entry(pos, &json->value.head, list) {
+            if (items->count == items->total) {
+                items->total += JSON_ITEM_NUM_PLUS_DEF;
+                if ((items->items = json_realloc(items->items, items->total * sizeof(json_item_t))) == NULL) {
+                    JsonErr("malloc failed!\n");
+                    goto err;
+                }
+            }
+            items->items[items->count].hash = json_string_hash_code(&pos->jkey);
+            items->items[items->count++].json = pos;
+        }
         json_object_items_sort(items);
-    return 0;
+        return 0;
+    }
+
+    return -1;
 err:
     json_free_items(items);
     return -1;
@@ -973,6 +984,23 @@ static void _json_mem_free(json_mem_mgr_t *mgr)
     mgr->cur_node = &s_invalid_json_mem_node;
 }
 
+static void _json_mem_refresh(json_mem_mgr_t *mgr)
+{
+    json_mem_node_t *p = NULL, *pos = NULL, *n = NULL;
+    int i = 0;
+    json_list_for_each_entry_safe(p, pos, n, &mgr->head, list) {
+        if (++i == 1) {
+            pos->cur = pos->ptr;
+            mgr->cur_node = pos;
+        } else {
+            json_list_del(&pos->list, &p->list, &mgr->head);
+            json_free(pos->ptr);
+            json_free(pos);
+            pos = p;
+        }
+    }
+}
+
 static void *_json_mem_new(size_t size, json_mem_mgr_t *mgr)
 {
     json_mem_node_t *node = NULL;
@@ -1021,6 +1049,13 @@ void pjson_memory_free(json_mem_t *mem)
     _json_mem_free(&mem->obj_mgr);
     _json_mem_free(&mem->key_mgr);
     _json_mem_free(&mem->str_mgr);
+}
+
+void pjson_memory_refresh(json_mem_t *mem)
+{
+    _json_mem_refresh(&mem->obj_mgr);
+    _json_mem_refresh(&mem->key_mgr);
+    _json_mem_refresh(&mem->str_mgr);
 }
 
 int pjson_memory_statistics(json_mem_mgr_t *mgr)
@@ -1671,7 +1706,7 @@ err:
     return -1;
 }
 
-static int _print_val_release(json_print_t *print_ptr, bool free_all_flag, size_t *length)
+static int _print_val_release(json_print_t *print_ptr, bool free_all_flag, size_t *length, json_print_ptr_t *ptr)
 {
 #define _clear_free_ptr(ptr)    do { if (ptr) json_free(ptr); ptr = NULL; } while(0)
 #define _clear_close_fd(fd)     do { if (fd >= 0) close(fd); fd = -1; } while(0)
@@ -1686,8 +1721,12 @@ static int _print_val_release(json_print_t *print_ptr, bool free_all_flag, size_
             }
         }
         _clear_close_fd(print_ptr->fd);
-        _clear_free_ptr(print_ptr->ptr);
-
+        if (ptr) {
+            ptr->size = print_ptr->size;
+            ptr->p = print_ptr->ptr;
+        } else {
+            _clear_free_ptr(print_ptr->ptr);
+        }
     } else {
         if (free_all_flag) {
             _clear_free_ptr(print_ptr->ptr);
@@ -1695,7 +1734,14 @@ static int _print_val_release(json_print_t *print_ptr, bool free_all_flag, size_
             if (length)
                 *length = print_ptr->cur - print_ptr->ptr;
             *print_ptr->cur = '\0';
-            print_ptr->ptr = json_realloc(print_ptr->ptr, used + 1);
+
+
+            if (ptr) {
+                ptr->size = print_ptr->size;
+                ptr->p = print_ptr->ptr;
+            } else {
+                print_ptr->ptr = json_realloc(print_ptr->ptr, used + 1);
+            }
         }
     }
 
@@ -1730,15 +1776,21 @@ static int _print_val_init(json_print_t *print_ptr, json_print_choice_t *choice)
         print_ptr->size = total_size;
     }
 
-    if ((print_ptr->ptr = json_malloc(print_ptr->size)) == NULL) {
-        JsonErr("malloc failed!\n");
-        goto err;
+    if (choice->ptr && choice->ptr->p) {
+        print_ptr->size = choice->ptr->size;
+        print_ptr->ptr = choice->ptr->p;
+        choice->ptr->p = NULL;
+    } else {
+        if ((print_ptr->ptr = json_malloc(print_ptr->size)) == NULL) {
+            JsonErr("malloc failed!\n");
+            goto err;
+        }
     }
     print_ptr->cur = print_ptr->ptr;
 
     return 0;
 err:
-    _print_val_release(print_ptr, true, NULL);
+    _print_val_release(print_ptr, true, NULL, NULL);
     return -1;
 }
 
@@ -1757,12 +1809,12 @@ char *json_print_common(json_object *json, json_print_choice_t *choice)
         JsonErr("print failed!\n");
         goto err;
     }
-    if (_print_val_release(&print_val, false, &choice->str_len) < 0)
+    if (_print_val_release(&print_val, false, &choice->str_len, choice->ptr) < 0)
         goto err;
 
     return choice->path ? "ok" : print_val.ptr;
 err:
-    _print_val_release(&print_val, true, NULL);
+    _print_val_release(&print_val, true, NULL, NULL);
     return NULL;
 }
 
@@ -1973,7 +2025,7 @@ json_sax_print_hd json_sax_print_start(json_print_choice_t *choice)
 
     print_handle->total = JSON_PRINT_DEPTH_DEF;
     if ((print_handle->array = json_malloc(print_handle->total * sizeof(json_sax_print_depth_t))) == NULL) {
-        _print_val_release(&print_handle->print_val, true, NULL);
+        _print_val_release(&print_handle->print_val, true, NULL, NULL);
         json_free(print_handle);
         JsonErr("malloc failed!\n");
         return NULL;
@@ -1982,7 +2034,7 @@ json_sax_print_hd json_sax_print_start(json_print_choice_t *choice)
     return print_handle;
 }
 
-char *json_sax_print_finish(json_sax_print_hd handle, size_t *length)
+char *json_sax_print_finish(json_sax_print_hd handle, size_t *length, json_print_ptr_t *ptr)
 {
     char *ret = NULL;
 
@@ -1992,13 +2044,13 @@ char *json_sax_print_finish(json_sax_print_hd handle, size_t *length)
     if (print_handle->array)
         json_free(print_handle->array);
     if (print_handle->error_flag) {
-        _print_val_release(&print_handle->print_val, true, NULL);
+        _print_val_release(&print_handle->print_val, true, NULL, NULL);
         json_free(print_handle);
         return NULL;
     }
 
     ret = (print_handle->print_val.fd >= 0) ? "ok" : print_handle->print_val.ptr;
-    if (_print_val_release(&print_handle->print_val, false, length) < 0) {
+    if (_print_val_release(&print_handle->print_val, false, length, ptr) < 0) {
         json_free(print_handle);
         return NULL;
     }
@@ -3753,7 +3805,7 @@ json_object *json_parse_common(json_parse_choice_t *choice)
         parse_val.parse_value = _json_parse_value_rapid;
     }
 
-    if (choice->mem) {
+    if (choice->mem && !choice->mem->valid) {
         pjson_memory_init(choice->mem);
         mem_size = total_size / JSON_PARSE_NUM_DIV_DEF;
         if (mem_size < choice->mem_size)

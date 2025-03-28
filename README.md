@@ -13,6 +13,7 @@ By default, LJSON uses the personally developed ldouble algorithm to print doubl
 * Stronger: Support DOM and SAX-style APIs, provide APIs for JSON in classic mode and memory pool mode, support string and file as input and output, is extended to support long long integer and hexadecimal number
 * More friendly: C language implementation, does not depend on any other library, does not contain platform-related code, only one header file and source file, and the interface corresponding to cJSON. the code logic is clearer than any other JSON libraries
 * JSON5: Supports all JSON5 features, such as hexadecimal digits, comments, array and object tail element comma, single quoted string/key and unquoted key
+Buffer: If JSON is parsed and printed multiple times, the allocated memory can be reused, and there is basically no heap memory request inside the library; You can save all sub objects under a certain collection type as data and use hash and binary methods to speed up the search
 
 ## Compile and Run
 
@@ -146,6 +147,10 @@ Note: 'O2' optimization level and default option compilation, the test files com
 (not include file reading and writing)
 
 ![x86_64-Linux Test Result2](image/test_for_x86_64-2.png)
+
+## APIs
+
+Refer to `json.h` .
 
 ## Contact
 

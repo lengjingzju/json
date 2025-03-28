@@ -5,7 +5,7 @@
 # https://github.com/lengjingzju/cbuild-ng #
 ############################################
 
-############# Date: 2024-08-18 #############
+############# Date: 2025-03-25 #############
 
 # The default behavior only includes inc.env.mk and inc.ins.mk.
 # INC_MAKES can be set to a combination of `disenv` `conf` `app` `mod` `disins`.
@@ -418,8 +418,10 @@ IGNORE_PATH    ?= .git .pc scripts output
 REG_SUFFIX     ?= c cpp S
 ifeq ($(USING_CXX_BUILD_C),y)
 CXX_SUFFIX     ?= c cc cp cxx cpp CPP c++ C
+CCC            := $(CXX)
 else
 CXX_SUFFIX     ?= cc cp cxx cpp CPP c++ C
+CCC            := $(CC)
 endif
 ASM_SUFFIX     ?= S s asm
 
@@ -450,6 +452,22 @@ imake_cpflags  += -Wextra # This enables some extra warning flags that are not e
 imake_cpflags  += -Wlarger-than=$(if $(object_byte_size),$(object_byte_size),1024) # Warn whenever an object is defined whose size exceeds object_byte_size.
 imake_cpflags  += -Wframe-larger-than=$(if $(frame_byte_size),$(frame_byte_size),8192) # Warn if the size of a function frame exceeds frame_byte_size.
 #imake_cpflags += -Wdate-time #Warn when macros __TIME__, __DATE__ or __TIMESTAMP__ are encountered as they might prevent bit-wise-identical reproducible compilations.
+
+# Set SIMD acceleration for ARM and X86/AMD64 for cross build
+ifneq ($(NATIVE_BUILD),y)
+ifeq ($(ENV_SIMD_TYPE),neon)
+imake_cpflags  += -DUSING_NEON
+else ifeq ($(ENV_SIMD_TYPE),sse4)
+imake_cpflags  += -DUSING_SSE128 -msse4
+imake_ldflags  += -msse4
+else ifeq ($(ENV_SIMD_TYPE),avx2)
+imake_cpflags  += -DUSING_AVX256 -mavx2
+imake_ldflags  += -mavx2
+else ifeq ($(ENV_SIMD_TYPE),avx512)
+imake_cpflags  += -DUSING_AVX512 -mavx512bw
+imake_ldflags  += -mavx512bw
+endif
+endif
 
 # Use https://github.com/slimm609/checksec.sh/ to check the secure
 ifeq ($(ENV_SECURITY),y)
@@ -566,30 +584,40 @@ define compile_tool
 $(if $(filter $(patsubst %,\%.%,$(CXX_SUFFIX)),$(1)),$(CXX),$(CC))
 endef
 
-define compile_obj
-ifeq ($(filter $(1),$(REG_SUFFIX)),$(1))
-ifneq ($(filter %.$(1),$(SRCS)), )
-$$(patsubst %.$(1),$$(OBJ_PREFIX)/%.o,$$(filter %.$(1),$$(SRCS))): $$(OBJ_PREFIX)/%.o: %.$(1)
+define compile_cmd
 	@mkdir -p $$(dir $$@)
 ifeq ($(filter $(1),$(ASM_SUFFIX)), )
-	@$(2) -c $(if $(filter $(1),$(CXX_SUFFIX)),$$(CXXFLAGS),$$(CFLAGS)) $$(imake_cpflags) $$(CPFLAGS) $$(CFLAGS_$$(patsubst %.$(1),%.o,$$<)) $$(PRIVATE_CPFLAGS) -MM -MT $$@ -MF $$(patsubst %.o,%.d,$$@) $$<
+	@$(2) -c $(if $(filter $(1),$(CXX_SUFFIX)),$$(CXXFLAGS),$$(CFLAGS)) $$(imake_cpflags) $$(CPFLAGS) $$(CFLAGS_$$(patsubst $$(OBJ_PREFIX)/%,%,$$@)) $$(PRIVATE_CPFLAGS) -MM -MT $$@ -MF $$(patsubst %.o,%.d,$$@) $$<
 	@cat $$(patsubst %.o,%.d,$$@) | sed -e 's/#.*//' -e 's/^[^:]*:\s*//' -e 's/\s*\\$$$$//' -e 's/[ \t\v][ \t\v]*/\n/g' | sed -e '/^$$$$/ d' -e 's/$$$$/:/g' >> $$(patsubst %.o,%.d,$$@)
 endif
 	@$(COLORECHO) "\033[032m$(2)\033[0m	$$<" $(TOLOG)
 ifneq ($(2),$(AS))
-	@$(2) -c $(if $(filter $(1),$(CXX_SUFFIX)),$$(CXXFLAGS),$$(CFLAGS)) $$(imake_cpflags) $$(CPFLAGS) $$(CFLAGS_$$(patsubst %.$(1),%.o,$$<)) $$(PRIVATE_CPFLAGS) -o $$@ $$<
+	@$(2) -c $(if $(filter $(1),$(CXX_SUFFIX)),$$(CXXFLAGS),$$(CFLAGS)) $$(imake_cpflags) $$(CPFLAGS) $$(CFLAGS_$$(patsubst $$(OBJ_PREFIX)/%,%,$$@)) $$(PRIVATE_CPFLAGS) -o $$@ $$<
 else
 	@$(2) $$(AFLAGS) $$(AFLAGS_$$(patsubst %.$(1),%.o,$$<)) -o $$@ $$<
 endif
+endef
+
+define compile_obj
+ifeq ($(filter $(1),$(REG_SUFFIX)),$(1))
+ifneq ($(filter %.$(1),$(SRCS)), )
+$$(patsubst %.$(1),$$(OBJ_PREFIX)/%.o,$$(filter %.$(1),$$(SRCS))): $$(OBJ_PREFIX)/%.o: %.$(1)
+$(call compile_cmd,$(1),$(2))
 endif
 endif
 endef
 
-ifeq ($(USING_CXX_BUILD_C),y)
-$(eval $(call compile_obj,c,$$(CXX)))
-else
-$(eval $(call compile_obj,c,$$(CC)))
-endif
+define compile_vobj
+$(call translate_obj,$(3)): $(4)
+$(call compile_cmd,$(1),$(2))
+endef
+
+define compile_oobj
+$$(call translate_obj,$(3)): %.o: %.$(1)
+$(call compile_cmd,$(1),$(2))
+endef
+
+$(eval $(call compile_obj,c,$$(CCC)))
 $(eval $(call compile_obj,cc,$$(CXX)))
 $(eval $(call compile_obj,cp,$$(CXX)))
 $(eval $(call compile_obj,cxx,$$(CXX)))
@@ -601,7 +629,7 @@ $(eval $(call compile_obj,S,$$(CC)))
 $(eval $(call compile_obj,s,$$(AS)))
 $(eval $(call compile_obj,asm,$$(AS)))
 
-OBJS           := $(call translate_obj,$(SRCS))
+OBJS           := $(call translate_obj,$(SRCS)$(if $(VSRCS), $(VSRCS)))
 DEPS           := $(patsubst %.o,%.d,$(OBJS))
 CHECK_FILE     := $(OBJ_PREFIX)/checkinfo
 

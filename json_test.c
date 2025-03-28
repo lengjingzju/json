@@ -105,7 +105,7 @@ int test_json_sax_print(void)
     json_sax_print_hd handle = NULL;
     json_string_t jkey = {0}, jstr = {0};
 
-    handle = json_sax_print_format_start(10);
+    handle = json_sax_print_format_start(10, NULL);
     json_sax_print_object(handle, NULL, JSON_SAX_START);
     jkey.str = "Name", jkey.len = 4;
     jstr.str = "LengJing", jstr.len = 8;
@@ -126,7 +126,7 @@ int test_json_sax_print(void)
     json_sax_print_array(handle, NULL, JSON_SAX_FINISH);
     json_sax_print_object(handle, NULL, JSON_SAX_FINISH);
 
-    s_print_str = json_sax_print_finish(handle, NULL);
+    s_print_str = json_sax_print_finish(handle, NULL, NULL);
     printf("%s\n", s_print_str);
     json_memory_free(s_print_str);
 
@@ -145,16 +145,16 @@ json_sax_ret_t _sax_parser_cb(json_sax_parser_t *parser)
         case JSON_OBJECT:
             if (parser->value.vcmd == JSON_SAX_START) {
                 if (s_sax_for_file)
-                    handle = json_sax_fprint_format_start(0, s_dst_json_path);
+                    handle = json_sax_fprint_format_start(0, s_dst_json_path, NULL);
                 else
-                    handle = json_sax_print_format_start(0);
+                    handle = json_sax_print_format_start(0, NULL);
             }
             break;
         default:
             if (s_sax_for_file)
-                handle = json_sax_fprint_format_start(0, s_dst_json_path);
+                handle = json_sax_fprint_format_start(0, s_dst_json_path, NULL);
             else
-                handle = json_sax_print_format_start(0);
+                handle = json_sax_print_format_start(0, NULL);
             break;
         }
     }
@@ -200,17 +200,17 @@ json_sax_ret_t _sax_parser_cb(json_sax_parser_t *parser)
         case JSON_OBJECT:
             if (parser->value.vcmd == JSON_SAX_FINISH) {
                 if (s_sax_for_file) {
-                    json_sax_print_finish(handle, NULL);
+                    json_sax_print_finish(handle, NULL, NULL);
                 } else {
-                    s_print_str = json_sax_print_finish(handle, &s_print_size);
+                    s_print_str = json_sax_print_finish(handle, &s_print_size, NULL);
                 }
             }
             break;
         default:
             if (s_sax_for_file) {
-                json_sax_print_finish(handle, NULL);
+                json_sax_print_finish(handle, NULL, NULL);
             } else {
-                s_print_str = json_sax_print_finish(handle, &s_print_size);
+                s_print_str = json_sax_print_finish(handle, &s_print_size, NULL);
             }
             break;
         }
@@ -229,7 +229,7 @@ int main(int argc, char *argv[])
     char *file = NULL;
     char *data = NULL;
     json_object *json = NULL;
-    json_mem_t mem;
+    json_mem_t mem = {0};
     unsigned int ms[8] = {0};
 
     pjson_memory_init(&mem);
@@ -328,13 +328,15 @@ int main(int argc, char *argv[])
     snprintf(s_dst_json_path, sizeof(s_dst_json_path), "%s-%d.format.json", file, choice);
     if (nflag)
         nitem = pjson_memory_statistics(&mem.obj_mgr) / sizeof(json_object);
+    else
+        nitem = size >> 5;
     switch(choice)
     {
     case 1: case 2: case 3:
-        s_print_str = json_print_format(json, nitem, &s_print_size);
+        s_print_str = json_print_format(json, nitem, &s_print_size, NULL);
         break;
     case 4: case 5:
-        json_fprint_format(json, nitem, s_dst_json_path);
+        json_fprint_format(json, nitem, s_dst_json_path, NULL);
         break;
     default:
         break;
@@ -355,10 +357,10 @@ int main(int argc, char *argv[])
     switch(choice)
     {
     case 1: case 2: case 3:
-        s_print_str = json_print_unformat(json, nitem, &s_print_size);
+        s_print_str = json_print_unformat(json, nitem, &s_print_size, NULL);
         break;
     case 4: case 5:
-        json_fprint_unformat(json, nitem, s_dst_json_path);
+        json_fprint_unformat(json, nitem, s_dst_json_path, NULL);
         break;
     default:
         break;

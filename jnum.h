@@ -5,6 +5,7 @@
 * URL: https://github.com/lengjingzju/json *
 *******************************************/
 #pragma once
+#include <stddef.h>
 #include <stdint.h>
 #include <stdbool.h>
 
