@@ -99,6 +99,8 @@ int main(int argc, char *argv[])
         printf("[mut] read=%-5d parse=%-5d format=%-5d unformat=%-5d\n",
             ms[1]-ms[0], ms[2]-ms[1], ms[3]-ms[2], ms[4]-ms[3]);
 
+        if (doc)
+            yyjson_doc_free(doc);
         if (mdoc)
             yyjson_mut_doc_free(mdoc);
     } else {

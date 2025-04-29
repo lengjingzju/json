@@ -1051,18 +1051,21 @@ static inline void dragonbox_convert(diy_fp_t *v)
             goto end;
         }
     }
-    q = (q << 1) + (q << 3);
 
-    const uint32_t dist = r - (delta >> 1) + (SMALL_DIVISOR >> 1);
-    const uint32_t dist_q = dist / 100;
-    q += dist_q;
-
-    if (dist == dist_q * 100)
     {
-        if (compute_parity(two_fc, pow10, minus_1) != ((dist & 1) != 0)) {
-            --q;
-        } else if ((q & (uint64_t)1) && is_integral_mid_point(two_fc, e, minus_k)) {
-            --q;
+        q = (q << 1) + (q << 3);
+
+        const uint32_t dist = r - (delta >> 1) + (SMALL_DIVISOR >> 1);
+        const uint32_t dist_q = dist / 100;
+        q += dist_q;
+
+        if (dist == dist_q * 100)
+        {
+            if (compute_parity(two_fc, pow10, minus_1) != ((dist & 1) != 0)) {
+                --q;
+            } else if ((q & (uint64_t)1) && is_integral_mid_point(two_fc, e, minus_k)) {
+                --q;
+            }
         }
     }
 

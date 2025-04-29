@@ -59,7 +59,7 @@ int read_file_to_data(const char *src, char **data, size_t *size)
     if (*size == 0)
         goto err;
 
-    if ((*data = _fmalloc(*size + 1)) == NULL)
+    if ((*data = (char *)_fmalloc(*size + 1)) == NULL)
         goto err;
     if (*size != fread(*data, 1, *size, rfp))
         goto err;
@@ -106,25 +106,25 @@ int test_json_sax_print(void)
     json_string_t jkey = {0}, jstr = {0};
 
     handle = json_sax_print_format_start(10, NULL);
-    json_sax_print_object(handle, NULL, JSON_SAX_START);
+    json_sax_print_object_start(handle, NULL);
     jkey.str = "Name", jkey.len = 4;
     jstr.str = "LengJing", jstr.len = 8;
-    json_sax_print_string(handle, &jkey, &jstr);
+    json_sax_print_object_item(handle, &jkey, &jstr);
     jkey.str = "Age", jkey.len = 3;
-    json_sax_print_int(handle, &jkey, 30);
+    json_sax_print_object_item(handle, &jkey, 30);
     jkey.str = "Phone", jkey.len = 5;
     jstr.str = "18368887550", jstr.len = 11;
-    json_sax_print_string(handle, &jkey, &jstr);
+    json_sax_print_object_item(handle, &jkey, &jstr);
     jkey.str = "Hobby", jkey.len = 5;
-    json_sax_print_array(handle, &jkey, JSON_SAX_START);
+    json_sax_print_array_start(handle, &jkey);
     jstr.str = "Reading", jstr.len = 7;
-    json_sax_print_string(handle, NULL, &jstr);
+    json_sax_print_array_item(handle, &jstr);
     jstr.str = "Walking", jstr.len = 7;
-    json_sax_print_string(handle, NULL, &jstr);
+    json_sax_print_array_item(handle, &jstr);
     jstr.str = "Thinking", jstr.len = 8;
-    json_sax_print_string(handle, NULL, &jstr);
-    json_sax_print_array(handle, NULL, JSON_SAX_FINISH);
-    json_sax_print_object(handle, NULL, JSON_SAX_FINISH);
+    json_sax_print_array_item(handle, &jstr);
+    json_sax_print_array_finish(handle);
+    json_sax_print_object_finish(handle);
 
     s_print_str = json_sax_print_finish(handle, NULL, NULL);
     printf("%s\n", s_print_str);

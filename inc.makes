@@ -5,7 +5,7 @@
 # https://github.com/lengjingzju/cbuild-ng #
 ############################################
 
-############# Date: 2025-03-25 #############
+############# Date: 2025-04-16 #############
 
 # The default behavior only includes inc.env.mk and inc.ins.mk.
 # INC_MAKES can be set to a combination of `disenv` `conf` `app` `mod` `disins`.
@@ -414,8 +414,8 @@ ifeq ($(KERNELRELEASE), )
 
 COLORECHO      := $(if $(findstring dash,$(shell readlink /bin/sh)),echo,echo -e)
 SRC_PATH       ?= .
-IGNORE_PATH    ?= .git .pc scripts output
-REG_SUFFIX     ?= c cpp S
+IGNORE_PATH    ?= .git .pc scripts output obj objects
+REG_SUFFIX     ?= c cc cxx cpp S
 ifeq ($(USING_CXX_BUILD_C),y)
 CXX_SUFFIX     ?= c cc cp cxx cpp CPP c++ C
 CCC            := $(CXX)
@@ -428,7 +428,7 @@ ASM_SUFFIX     ?= S s asm
 ifeq ($(SRCS), )
 SRCS           := $(shell find $(SRC_PATH) $(patsubst %,-path '*/%' -prune -o,$(IGNORE_PATH)) \
                       $(shell echo '$(patsubst %,-o -name "*.%" -print,$(REG_SUFFIX))' | sed 's/^...//') \
-                  | sed "s/^\(\.\/\)\(.*\)/\2/g" | xargs)
+                  | sed "s/^\(\.\/\)\(.*\)/\2/g" | xargs) $(ASRCS)
 endif
 
 imake_cpflags  := -I. -I./include $(patsubst %,-I%,$(filter-out .,$(SRC_PATH))) $(patsubst %,-I%/include,$(filter-out .,$(SRC_PATH))) -I$(OBJ_PREFIX)
@@ -788,7 +788,7 @@ ifneq ($(filter $(OBJ_PREFIX),. $(MOD_PATH)), )
 MOD_MAKES      += M=$(MOD_PATH)
 else
 
-MOD_MAKES      += M=$(OBJ_PREFIX) src=$(MOD_PATH)
+MOD_MAKES      += M=$(shell realpath -m $(OBJ_PREFIX)) src=$(MOD_PATH)
 KBUILD_MK      := $(if $(wildcard $(MOD_PATH)/Kbuild),Kbuild,Makefile)
 
 modules modules_clean modules_install: $(OBJ_PREFIX)/$(KBUILD_MK)

@@ -6,13 +6,14 @@
 
 PACKAGE_NAME    = ljson
 
-staticlib       = libljson.a
-majorver        = $(shell cat json.h | grep JSON_VERSION | sed 's/.*0x//g' | cut -b 1-2 | sed 's/^0//g')
-minorver        = $(shell cat json.h | grep JSON_VERSION | sed 's/.*0x//g' | cut -b 3-4 | sed 's/^0//g')
-patchver        = $(shell cat json.h | grep JSON_VERSION | sed 's/.*0x//g' | cut -b 5-6 | sed 's/^0//g')
-sharedlib       = libljson.so $(majorver) $(minorver) $(patchver)
-testedbin       = ljson
-testednum       = jnum_test
+majorver       := $(shell cat json.h | grep JSON_VERSION | sed 's/.*0x//g' | cut -b 1-2 | sed 's/^0//g')
+minorver       := $(shell cat json.h | grep JSON_VERSION | sed 's/.*0x//g' | cut -b 3-4 | sed 's/^0//g')
+patchver       := $(shell cat json.h | grep JSON_VERSION | sed 's/.*0x//g' | cut -b 5-6 | sed 's/^0//g')
+
+staticlib      := libljson.a
+sharedlib      := libljson.so $(majorver) $(minorver) $(patchver)
+testedbin      := ljson
+testednum      := jnum_test
 
 INSTALL_HEADERS = json.h jnum.h
 FMUL           ?= 1
@@ -30,6 +31,7 @@ endif
 CPFLAGS        += -DUSING_FLOAT_MUL=$(FMUL)
 CPFLAGS        += -DJSON_DTOA_ALGORITHM=$(DTOA) # 0:ldouble 1:sprintf 2:grisu2 3:dragonbox
 CPFLAGS        += -DAPPROX_TAIL_CMP_VAL=$(TCMP) # 0 <= TCMP <= 4
+CXXFLAGS       += -Wno-missing-field-initializers -Wno-write-strings
 
 .PHONY: all clean install
 all:
@@ -58,4 +60,4 @@ $(eval $(call install_obj,pkgconfig))
 
 install: install_hdrs install_libs install_bins install_pkgconfigs
 	@sed -i "s/@Version@/$(majorver).$(minorver).$(patchver)/g" $(INS_PREFIX)$(pkgconfigdir)/ljson.pc
-	@echo "Install $(PACKAGE_NAME) to $(INS_PREFIX) Done!"
+	@echo "Install $(PACKAGE_NAME) to $(INS_PREFIX) Done."
