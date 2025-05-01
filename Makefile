@@ -16,9 +16,9 @@ testedbin      := ljson
 testednum      := jnum_test
 
 INSTALL_HEADERS = json.h jnum.h
-FMUL           ?= 1
+FMUL           ?= 0
+HIGH           ?= 1
 DTOA           ?= 0
-TCMP           ?= 2
 
 libsrcs        := json.c jnum.c
 ifeq ($(DTOA),2)
@@ -29,8 +29,8 @@ libsrcs        += dragonbox.c
 endif
 
 CPFLAGS        += -DUSING_FLOAT_MUL=$(FMUL)
+CPFLAGS        += -DUSING_HIGH_RESOLUTION=$(HIGH) # resolutions is: 0, 14~15bits; 1, 15~16bits
 CPFLAGS        += -DJSON_DTOA_ALGORITHM=$(DTOA) # 0:ldouble 1:sprintf 2:grisu2 3:dragonbox
-CPFLAGS        += -DAPPROX_TAIL_CMP_VAL=$(TCMP) # 0 <= TCMP <= 4
 CXXFLAGS       += -Wno-missing-field-initializers -Wno-write-strings
 
 .PHONY: all clean install
