@@ -29,9 +29,14 @@
 #define USING_U128_MUL              0
 #endif
 
-/* When set to 1, use one more precision when using large number multiplying, and it will slows down the speed. */
+/* When set to 1, use one more precision when using large number multiplying, and it will slow down the speed. */
 #ifndef USING_HIGH_RESOLUTION
 #define USING_HIGH_RESOLUTION       1
+#endif
+
+/* When set to 1, use a lookup table with only half of the original size, and it will slightly slow down the speed. */
+#ifndef USING_SMALL_LUT
+#define USING_SMALL_LUT             0
 #endif
 
 typedef struct {
@@ -432,6 +437,286 @@ static inline int32_t u64_pz_get(uint64_t f)
 #endif
 }
 
+#if USING_SMALL_LUT
+
+/*
+# python to get lut
+
+def print_pow_array(unit, index, end, positive):
+    cmp_value = 1<<64 # ULONG_MAX = 18446744073709551615
+    base_lut = []
+    index_lut = []
+    for i in range(end + 1):
+        a = unit ** i
+        b = a
+        j = 0
+        if a < cmp_value:
+            while b < cmp_value:
+                j += 1
+                b = a * (10 ** j)
+            j -= 1
+            b = a * (10 ** j)
+            j = i * index + j
+
+        else:
+            while b >= cmp_value:
+                j += 1
+                b = a // (10 ** j)
+            b = a // (10 ** j)
+            if b != cmp_value:
+                b += 1;
+            j = i * index - j
+
+        #print('%-3d: %d 0x%016x %d' % (i, j, b, b))
+        base_lut.append(b)
+        index_lut.append(j)
+
+    print('static const uint64_t %s_base_lut[%d] = {' % ('positive' if positive else 'negative', end + 1), end='')
+    for i in range(end + 1):
+        if i % 4 == 0:
+            print()
+            print('    ', end='')
+        print('0x%x' % (base_lut[i]), end='')
+        if i != end:
+            print(', ', end='');
+        else:
+            print()
+            print('};')
+
+    print()
+    print('static const uint8_t %s_index_lut[%d] = {' % ('positive' if positive else 'negative', end + 1), end='')
+    for i in range(end + 1):
+        if i % 20 == 0:
+            print()
+            print('    ', end='')
+
+        if positive:
+            print('%-3d' % (index_lut[i] + 200), end='')
+        else:
+            print('%-3d' % (index_lut[i]), end='')
+
+        if i != end:
+            print(', ', end='');
+        else:
+            print()
+            print('};')
+
+def print_positive_array():
+    # 1 * (2 ** 8) = 25.6 * (10 ** 1)
+    # 256 = 25.6 * (10 ** 1)
+    # 122 = (1023 - 52 - (11 - x)) / 8 + 1
+    print_pow_array(256, 1, 122, True)
+
+def print_negative_array():
+    # 1 * (2 ** -8) = 0.0390625 * (10 ** -1)
+    # 390625 = 0.0390625 * (10 ** 7)
+    # 143 = (1022 + 52 + (63 - (11 - x))) / 8 + 1
+    print_pow_array(390625, 7, 143, False)
+
+print_positive_array()
+print()
+print_negative_array()
+*/
+
+static inline diy_fp_t positive_diy_fp(int32_t e)
+{
+    static const uint64_t positive_base_lut[123] = {
+        0x8ac7230489e80000, 0x2386f26fc1000000, 0x5af3107a40000000, 0xe8d4a51000000000,
+        0x3b9aca0000000000, 0x9896800000000000, 0x2710000000000000, 0x6400000000000000,
+        0x199999999999999a, 0x4189374bc6a7ef9e, 0xa7c5ac471b478424, 0x2af31dc4611873c0,
+        0x6df37f675ef6eae0, 0x1c25c268497681c3, 0x480ebe7b9d58566d, 0xb877aa3236a4b44a,
+        0x2f394219248446bb, 0x78e480405d7b9659, 0x1ef2d0f5da7dd8ab, 0x4f3a68dbc8f03f25,
+        0xcad2f7f5359a3b3f, 0x33ec47ab514e652f, 0x84ec3c97da624ab5, 0x22073a8515171d5e,
+        0x571cbec554b60dbc, 0xdf01e85f912e37a4, 0x391704310a8acec2, 0x9226712162ab070e,
+        0x256a18dd89e626ac, 0x5fc7edbc424d2fcc, 0xf53304714d9265e0, 0x3ec56164af81a34c,
+        0xa0b19d2ab70e6ed7, 0x29233aaaadd6a38b, 0x694ff258c7443208, 0x1af5bf109550f22f,
+        0x4504787c5f878ab6, 0xb0af48ec79ace838, 0x2d3b357c0692aa0b, 0x73cac65c39c96162,
+        0x1da48ce468e7c703, 0x4be2b05d35848cd3, 0xc24452da229b021c, 0x31bb798fe8174c51,
+        0x7f50935bebc0c35f, 0x2097b309321cde0c, 0x536fdecfdc72dc48, 0xd59944a37c0752a3,
+        0x36ae679665622172, 0x8bfbea76c619ef37, 0x23d5fe9530aa7aae, 0x5bbd6d030bf1dde6,
+        0xeadab0aba3b2dbe6, 0x3c1f689ea0b0dc23, 0x99ea0196163fa42f, 0x2766e9e0ca4dbb71,
+        0x64de7fb01a60982a, 0x19d28f47b4d524e8, 0x421b0865a5f8b066, 0xa93af6c6c79b5d2e,
+        0x2b52adc44bace4a8, 0x6ee8233e325e7251, 0x1c6463225ab7ec1d, 0x48af1243779966b1,
+        0xba121a4650e4ddec, 0x2fa2548ce182451a, 0x79f17c49ef61f894, 0x1f37ad21436d0c70,
+        0x4feab0f8fe87cdea, 0xcc963fee10b7d1b4, 0x345fced47f28e9e9, 0x8613fd0145877586,
+        0x2252f0e5b39769dd, 0x57de91a832277568, 0xe0f218b8d25088b9, 0x39960a6cc11ac2bf,
+        0x936b9fcebb25c996, 0x25bd5803c569edfa, 0x609d0a4718196b74, 0xf7549530e188c129,
+        0x3f510b91a22f4c13, 0xa21727db38cb0030, 0x297ec285f1ddf3c3, 0x6a3a43e642383296,
+        0x1b31bb5dc320d18f, 0x459e089e1c7cf9c0, 0xb23867fb2a35b28e, 0x2d9fd9154a4b2fc3,
+        0x74cc692c434fd66c, 0x1de6815302e5559d, 0x4c8b888296c5f9e3, 0xc3f490aa77bd60fd,
+        0x322a20f03f6bdf7d, 0x806bd9714632dff7, 0x20e037aa4f692f19, 0x542984435aa6def6,
+        0xd77485cb25823ac8, 0x372811ddfd50715a, 0x8d3360f09cf6e4be, 0x2425ba9bce122614,
+        0x5c898bcc4cfb42c3, 0xece53cec4a314ebe, 0x3ca52e50f85e8af2, 0x9b407691d7fc44f9,
+        0x27be952349b969b9, 0x65beee6ed136d135, 0x1a0c03b1df8af612, 0x42ae1df050bfe694,
+        0xaab37fd7d8f58179, 0x2bb31264501e14dc, 0x6fdee76733803565, 0x1ca38f350b22de91,
+        0x4950cac53b3a8bb0, 0xbbb01b9283253ca3, 0x300c50c958de864f, 0x7b00ced03faa4d96,
+        0x1f7d228322baf525, 0x509c814fb511cfba, 0xce5d73ff402d98e4, 0x34d4570a0c5566a1,
+        0x873e4f75e2224e69, 0x229f4fbbdfc73f15, 0x58a213cc7a4ffda6
+    };
+
+    static const uint8_t positive_index_lut[123] = {
+        219, 217, 216, 215, 213, 212, 210, 209, 207, 206, 205, 203, 202, 200, 199, 198, 196, 195, 193, 192,
+        191, 189, 188, 186, 185, 184, 182, 181, 179, 178, 177, 175, 174, 172, 171, 169, 168, 167, 165, 164,
+        162, 161, 160, 158, 157, 155, 154, 153, 151, 150, 148, 147, 146, 144, 143, 141, 140, 138, 137, 136,
+        134, 133, 131, 130, 129, 127, 126, 124, 123, 122, 120, 119, 117, 116, 115, 113, 112, 110, 109, 108,
+        106, 105, 103, 102, 100, 99 , 98 , 96 , 95 , 93 , 92 , 91 , 89 , 88 , 86 , 85 , 84 , 82 , 81 , 79 ,
+        78 , 77 , 75 , 74 , 72 , 71 , 69 , 68 , 67 , 65 , 64 , 62 , 61 , 60 , 58 , 57 , 55 , 54 , 53 , 51 ,
+        50 , 48 , 47
+    };
+
+    const diy_fp_t v = { .f = positive_base_lut[e], .e = positive_index_lut[e] - 200 };
+    return v;
+}
+
+static inline diy_fp_t negative_diy_fp(int32_t e)
+{
+    static const uint64_t negative_base_lut[144] = {
+        0x8ac7230489e80000, 0x3635c9adc5dea000, 0xd3c21bcecceda100, 0x52b7d2dcc80cd2e4,
+        0x204fce5e3e250262, 0x7e37be2022c0914c, 0x314dc6448d9338c2, 0xc097ce7bc90715b4,
+        0x4b3b4ca85a86c47b, 0x1d6329f1c35ca4c0, 0x72cb5bd86321e38d, 0x2cd76fe086b93ce3,
+        0xaf298d050e4395d7, 0x446c3b15f9926688, 0x1aba4714957d300e, 0x6867a5a867f103b3,
+        0x28c87cb5c89a2572, 0x9f4f2726179a2246, 0x3e3aeb4ae1383563, 0xf316271c7fc3908b,
+        0x5ef4a74721e86477, 0x25179157c93ec73f, 0x90e40fbeea1d3a4b, 0x3899162693736ac6,
+        0xdd15fe86affad913, 0x565c976c9cbdfccc, 0x21bc2b266d3a36c0, 0x83c7088e1aab65dc,
+        0x3379bf57826af3ca, 0xc913936dd571c84d, 0x4e8ba596e760723e, 0x1eae8caef261aca1,
+        0x77d9d58b62cd8a52, 0x2ed1176a72984a08, 0xb6e0c377cfa2e12f, 0x476fcc5acd1b9ff7,
+        0x1be7abd3781eca7d, 0x6d00f7320d3846f5, 0x2a94608f8d29fbb8, 0xa6539930bf6bff46,
+        0x40f8a7d70ac62fb8, 0xfdcb4fa002162a64, 0x63236b1a80d0a88f, 0x26b9d5d65a5181d8,
+        0x9745eb4d50ce6333, 0x3b174fea33909ec0, 0xe6d3102ad96cec1e, 0x5a2a7250bcee8c3c,
+        0x233894a789cd2ec8, 0x899504ae72497ebb, 0x35be35d424a4b581, 0xd1ef0244af236500,
+        0x52015ce2d469d374, 0x200888489af9569a, 0x7d21545b9d5dfa47, 0x30e104f3c978b5c4,
+        0xbeeefb584aff8604, 0x4a955a2e7d4bd05a, 0x1d22573a28f19d63, 0x71ce24bb2fefcecb,
+        0x2c7486591eb9acc8, 0xada72ccc20054aea, 0x43d54d7fbc821144, 0x1a7f5245e5a2cebf,
+        0x678159610903f798, 0x286e86e9e7858cb8, 0x9defbf01b061adac, 0x3db1a69ca8e627d7,
+        0xf0fdf2d3f3c30ba0, 0x5e2332dacb38308b, 0x24c5bfdd7761f2f7, 0x8fa475791a569d11,
+        0x381c3de34e49d55b, 0xdb2e51bfe9d0696b, 0x559e17eef755692e, 0x2171c159589d5d16,
+        0x82a45b450226b39d, 0x330833a6f4d71e2a, 0xc75809c42c684dd2, 0x4dde63d0a158be66,
+        0x1e6adefd7f06aa60, 0x76d1770e38320987, 0x2e69d2818df38bb9, 0xb54d5e4a127f59c9,
+        0x46d238d4ef39bf13, 0x1baa1e332d728ea4, 0x6c1085f7e9877d2e, 0x2a367454d738ece6,
+        0xa4e4b66b68b65d61, 0x40695741f4e73c7a, 0xfb9b7cd9a4a7443d, 0x6248bcc5045156a8,
+        0x266469bcf5afc5da, 0x95f83d0a1fb69cda, 0x3a94f7d7f4635545, 0xe4d5e82392a40516,
+        0x59638eade54811fd, 0x22eae3bbed902707, 0x8865899617fb1872, 0x3547a9bea15e158d,
+        0xd01fef10a657842d, 0x514c796280fa2fa2, 0x1fc1df6a7a61ba9b, 0x7c0d50b7ee0dc0ee,
+        0x30753387d8fd5f5d, 0xbd49d14aa79dbc83, 0x49f0d5c129799da3, 0x1ce2137f74338194,
+        0x70d31c29dde93229, 0x2c1277005aaf1798, 0xac2820d9623bf42a, 0x433facd4ea5f6b61,
+        0x1a44df832b8d45f2, 0x669d0918621fd938, 0x2815578d865470da, 0x9c935e00d4b9d8d3,
+        0x3d2990b8531898b3, 0xeeea5d5004981479, 0x5d538c7341cb67ff, 0x2474a2dd05b374a0,
+        0x8e679c2f5e44ff90, 0x37a0790280d2f3d4, 0xd94ad8b1c7380875, 0x54e13ca571d1e34e,
+        0x2127fbb0a075fccb, 0x81842f29f2cce376, 0x3297a26c62d808db, 0xc5a05277621be294,
+        0x4d32a036a252e482, 0x1e27c69557686143, 0x75cb5fb75d6fbbed, 0x2e037163a07fa569,
+        0xb3bd72ed2af29e20, 0x463600e4a4c6c5c5, 0x1b6d1859505da541, 0x6b22271ce1edcd85,
+        0x29d957474840e448, 0xa378fcee723d7bb9, 0x3fdb42cd24a00455, 0xf9707cf1571110e9,
+        0x616ff0ce4602aa9b, 0x260fba1093590aa5, 0x94ad6ed0bf93d193, 0x3a13bf498ad5bdde
+    };
+
+    static const uint8_t negative_index_lut[144] = {
+        19 , 20 , 22 , 23 , 24 , 26 , 27 , 29 , 30 , 31 , 33 , 34 , 36 , 37 , 38 , 40 , 41 , 43 , 44 , 46 ,
+        47 , 48 , 50 , 51 , 53 , 54 , 55 , 57 , 58 , 60 , 61 , 62 , 64 , 65 , 67 , 68 , 69 , 71 , 72 , 74 ,
+        75 , 77 , 78 , 79 , 81 , 82 , 84 , 85 , 86 , 88 , 89 , 91 , 92 , 93 , 95 , 96 , 98 , 99 , 100, 102,
+        103, 105, 106, 107, 109, 110, 112, 113, 115, 116, 117, 119, 120, 122, 123, 124, 126, 127, 129, 130,
+        131, 133, 134, 136, 137, 138, 140, 141, 143, 144, 146, 147, 148, 150, 151, 153, 154, 155, 157, 158,
+        160, 161, 162, 164, 165, 167, 168, 169, 171, 172, 174, 175, 176, 178, 179, 181, 182, 184, 185, 186,
+        188, 189, 191, 192, 193, 195, 196, 198, 199, 200, 202, 203, 205, 206, 207, 209, 210, 212, 213, 215,
+        216, 217, 219, 220
+    };
+
+    const diy_fp_t v = { .f = negative_base_lut[e], .e = negative_index_lut[e] };
+    return v;
+}
+
+static inline void ldouble_convert(diy_fp_t *v)
+{
+    uint64_t f = v->f << (v->e & 7);
+    int32_t e = v->e >> 3;
+    diy_fp_t x = e >= 0 ? positive_diy_fp(e) : negative_diy_fp(-e);
+
+#if USING_U128_MUL
+    __extension__ typedef unsigned __int128 u128;
+    const u128 m = (u128)f * x.f;
+    uint64_t ho = (uint64_t)(m >> 64);
+
+#if !USING_HIGH_RESOLUTION
+    if (ho < 5421010862427519) { // (1e35 - 5e19) >> 64
+        static const u128 magich = (u128)10 * 5000000000000000000llu;
+        static const u128 magicn = (u128)10 * 10000000000000000000llu;
+        v->f = (uint64_t)((m + magich) / magicn);
+        v->e = e - x.e + 20;
+    } if (ho < 54210108624275194) { // (1e36 - 5e20) >> 64
+        static const u128 magich = (u128)100 * 5000000000000000000llu;
+        static const u128 magicn = (u128)100 * 10000000000000000000llu;
+        v->f = (uint64_t)((m + magich) / magicn);
+        v->e = e - x.e + 21;
+    } else if (ho < 542101086242751945) { // (1e37 - 5e21) >> 64
+        static const u128 magich = (u128)1000 * 5000000000000000000llu;
+        static const u128 magicn = (u128)1000 * 10000000000000000000llu;
+        v->f = (uint64_t)((m + magich) / magicn);
+        v->e = e - x.e + 22;
+    } else {
+        static const u128 magich = (u128)10000 * 5000000000000000000llu;
+        static const u128 magicn = (u128)10000 * 10000000000000000000llu;
+        v->f = (uint64_t)((m + magich) / magicn);
+        v->e = e - x.e + 23;
+    }
+#else
+    if (ho < 5421010862427521) { // (1e35 - 5e18) >> 64
+        v->f = (uint64_t)((m + 5000000000000000000llu) / 10000000000000000000llu);
+        v->e = e - x.e + 19;
+    } else if (ho < 54210108624275218) { // (1e36 - 5e19) >> 64
+        static const u128 magich = (u128)10 * 5000000000000000000llu;
+        static const u128 magicn = (u128)10 * 10000000000000000000llu;
+        v->f = (uint64_t)((m + magich) / magicn);
+        v->e = e - x.e + 20;
+    } else if (ho < 542101086242752189) { // (1e37 - 5e20) >> 64
+        static const u128 magich = (u128)100 * 5000000000000000000llu;
+        static const u128 magicn = (u128)100 * 10000000000000000000llu;
+        v->f = (uint64_t)((m + magich) / magicn);
+        v->e = e - x.e + 21;
+    } else {
+        static const u128 magich = (u128)1000 * 5000000000000000000llu;
+        static const u128 magicn = (u128)1000 * 10000000000000000000llu;
+        v->f = (uint64_t)((m + magich) / magicn);
+        v->e = e - x.e + 22;
+    }
+#endif
+
+#else
+
+#if !USING_HIGH_RESOLUTION
+    double d = (double)f * x.f;
+    if (d + 5e19 < 1e35) {
+        v->f = (uint64_t)((d + 5e19) * 1e-20);
+        v->e = e - x.e + 20;
+    } else if (d + 5e20 < 1e36) {
+        v->f = (uint64_t)((d + 5e20) * 1e-21);
+        v->e = e - x.e + 21;
+    } else if (d + 5e21 < 1e37) {
+        v->f = (uint64_t)((d + 5e21) * 1e-22);
+        v->e = e - x.e + 22;
+    } else {
+        v->f = (uint64_t)((d + 5e22) * 1e-23);
+        v->e = e - x.e + 23;
+    }
+#else
+    double d = (double)f * x.f;
+    if (d + 5e18 < 1e35) {
+        v->f = (uint64_t)((d + 5e18) * 1e-19);
+        v->e = e - x.e + 19;
+    } else if (d + 5e19 < 1e36) {
+        v->f = (uint64_t)((d + 5e19) * 1e-20);
+        v->e = e - x.e + 20;
+    } else if (d + 5e20 < 1e37) {
+        v->f = (uint64_t)((d + 5e20) * 1e-21);
+        v->e = e - x.e + 21;
+    } else {
+        v->f = (uint64_t)((d + 5e21) * 1e-22);
+        v->e = e - x.e + 22;
+    }
+#endif
+#endif
+}
+
+#else
+
 /*
 # python to get lut
 
@@ -693,16 +978,9 @@ static inline diy_fp_t negative_diy_fp(int32_t e)
 
 static inline void ldouble_convert(diy_fp_t *v)
 {
-    uint64_t f = v->f;
-    int32_t e = v->e, t = v->e;
-    diy_fp_t x;
-
-    e >>= 2;
-    t -= e << 2;
-    if (t) {
-        f <<= t;
-    }
-    x = e >= 0 ? positive_diy_fp(e) : negative_diy_fp(-e);
+    uint64_t f = v->f << (v->e & 3);
+    int32_t e = v->e >> 2;
+    diy_fp_t x = e >= 0 ? positive_diy_fp(e) : negative_diy_fp(-e);
 
 #if USING_U128_MUL
     __extension__ typedef unsigned __int128 u128;
@@ -764,6 +1042,7 @@ static inline void ldouble_convert(diy_fp_t *v)
 #endif
 #endif
 }
+#endif
 
 #if !USING_HIGH_RESOLUTION
 static inline int32_t fill_significand(char *buffer, uint64_t digits, int32_t *ptz, int32_t *fixed)

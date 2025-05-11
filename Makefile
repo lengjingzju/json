@@ -18,6 +18,7 @@ testednum      := jnum_test
 INSTALL_HEADERS = json.h jnum.h
 FMUL           ?= 0
 HIGH           ?= 1
+SMALL          ?= 0
 DTOA           ?= 0
 
 libsrcs        := json.c jnum.c
@@ -30,6 +31,7 @@ endif
 
 CPFLAGS        += -DUSING_FLOAT_MUL=$(FMUL)
 CPFLAGS        += -DUSING_HIGH_RESOLUTION=$(HIGH) # resolutions is: 0, 14~15bits; 1, 15~16bits
+CPFLAGS        += -DUSING_SMALL_LUT=$(SMALL) # When set to 1, use a lut of half size
 CPFLAGS        += -DJSON_DTOA_ALGORITHM=$(DTOA) # 0:ldouble 1:sprintf 2:grisu2 3:dragonbox
 CXXFLAGS       += -Wno-missing-field-initializers -Wno-write-strings
 
