@@ -1443,18 +1443,21 @@ end:
 
 static int jnum_parse_num(const char *str, jnum_type_t *type, jnum_value_t *value)
 {
-#define IS_DIGIT(c)      ((c) >= '0' && (c) <= '9')
+#define IS_DIGIT(c)     ((c) >= '0' && (c) <= '9')
+#define MIN_NEG_EXP     40
     static const double mul10_lut[20] = {
         1   , 1e1 , 1e2 , 1e3 , 1e4 , 1e5 , 1e6 , 1e7 , 1e8 , 1e9 ,
         1e10, 1e11, 1e12, 1e13, 1e14, 1e15, 1e16, 1e17, 1e18, 1e19,
     };
-    static const double div10_lut[20] = {
+    static const double div10_lut[MIN_NEG_EXP] = {
         1    , 1e-1 , 1e-2 , 1e-3 , 1e-4 , 1e-5 , 1e-6 , 1e-7 , 1e-8 , 1e-9 ,
         1e-10, 1e-11, 1e-12, 1e-13, 1e-14, 1e-15, 1e-16, 1e-17, 1e-18, 1e-19,
+        1e-20, 1e-21, 1e-22, 1e-23, 1e-24, 1e-25, 1e-26, 1e-27, 1e-28, 1e-29,
+        1e-30, 1e-31, 1e-32, 1e-33, 1e-34, 1e-35, 1e-36, 1e-37, 1e-38, 1e-39,
     };
 
     const char *s = str;
-    int32_t sign = 1, k = 0;
+    int32_t sign = 1, k = 0, z = 0;
     uint64_t m = 0;
     double d = 0;
 
@@ -1536,14 +1539,21 @@ next1:
 
 next2:
     ++s;
+    while (*s == '0') {
+        ++s;
+        ++z;
+    }
+    if (z >= MIN_NEG_EXP)
+        goto next3;
+
     m = 0;
     k = 0;
     while (IS_DIGIT(*s)) {
         m = (m << 3) + (m << 1) + (*s++ - '0');
         ++k;
     }
-    if (k < 20) {
-        d += m * div10_lut[k];
+    if (k < 20 && k + z < MIN_NEG_EXP) {
+        d += m * div10_lut[k + z];
     } else {
         s -= k;
         m = 0;
@@ -1551,10 +1561,10 @@ next2:
         while (IS_DIGIT(*s)) {
             m = (m << 3) + (m << 1) + (*s++ - '0');
             ++k;
-            if (k == 19)
+            if (k == 19 || k + z == MIN_NEG_EXP - 1)
                 break;
         }
-        d += m * div10_lut[k];
+        d += m * div10_lut[k + z];
         while (IS_DIGIT(*s))
             ++s;
     }

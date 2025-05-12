@@ -5,7 +5,7 @@
 # https://github.com/lengjingzju/cbuild-ng #
 ############################################
 
-############# Date: 2025-04-16 #############
+############# Date: 2025-05-16 #############
 
 # The default behavior only includes inc.env.mk and inc.ins.mk.
 # INC_MAKES can be set to a combination of `disenv` `conf` `app` `mod` `disins`.
@@ -195,15 +195,15 @@ export CROSS_COMPILE
 endif
 
 ifeq ($(CC_TOOL),clang)
-CC             := $(CROSS_COMPILE)clang
-CPP            := $(CROSS_COMPILE)clang -E
-CXX            := $(CROSS_COMPILE)clang++
-AS             := $(CROSS_COMPILE)llvm-as
-LD             := $(CROSS_COMPILE)lld
-AR             := $(CROSS_COMPILE)llvm-ar
-RANLIB         := $(CROSS_COMPILE)llvm-ranlib
-OBJCOPY        := $(CROSS_COMPILE)llvm-objcopy
-STRIP          := $(CROSS_COMPILE)llvm-strip
+CC             := clang
+CPP            := clang -E
+CXX            := clang++
+AS             := llvm-as
+LD             := lld
+AR             := llvm-ar
+RANLIB         := llvm-ranlib
+OBJCOPY        := llvm-objcopy
+STRIP          := llvm-strip
 else
 CC             := $(CROSS_COMPILE)gcc
 CPP            := $(CROSS_COMPILE)gcc -E
@@ -246,6 +246,20 @@ endif
 export CC CXX CPP AS LD AR RANLIB OBJCOPY STRIP
 
 endif # NATIVE_BUILD
+
+ifeq ($(CC_TOOL),clang)
+ifeq ($(CROSS_COMPILE), )
+clang_ldflags  := -fuse-ld=lld
+else  # CROSS_COMPILE
+CROSS_SYSROOT  := $(shell PATH=$(PATH) $(CROSS_COMPILE)gcc -print-sysroot)
+ifeq ($(CROSS_SYSROOT),/)
+CROSS_SYSROOT  := /usr/$(patsubst %-,%,$(CROSS_COMPILE))
+endif
+clang_cpflags  := --target=$(patsubst %-,%,$(CROSS_COMPILE)) --sysroot=$(CROSS_SYSROOT)
+clang_ldflags  := $(clang_cpflags) -fuse-ld=lld
+endif # CROSS_COMPILE
+endif # clang
+
 endif # ENV_BUILD_MODE
 
 # Defines the GNU standard installation directories
@@ -295,11 +309,13 @@ CONF_HEADER      ?= $(shell echo __$(PACKAGE_NAME)_CONFIG_H__ | tr '[:lower:]' '
 CONF_APPEND_CMD  ?=
 
 CONFIG_PATH      := $(CONF_OUT)/.config
-AUTOCONFIG_PATH  := $(CONF_OUT)/autoconfig/auto.conf
 AUTOHEADER_PATH  := $(CONF_OUT)/config.h
+AUTOCONFIG_PATH  := $(CONF_OUT)/autoconfig/auto.conf
+RUSTCCFG_PATH    := $(CONF_OUT)/autoconfig/rustc.conf
 CONF_OPTIONS     := $(KCONFIG) --configpath $(CONFIG_PATH) \
+					--autoheaderpath $(AUTOHEADER_PATH) \
 					--autoconfigpath $(AUTOCONFIG_PATH) \
-					--autoheaderpath $(AUTOHEADER_PATH)
+					--rustccfgpath $(RUSTCCFG_PATH)
 
 define gen_config_header
 	$(CONF_PREFIX) $(CONF_PATH)/conf $(CONF_OPTIONS) --silent --syncconfig && \
@@ -402,7 +418,7 @@ endif
 	@echo Save $(CONFIG_PATH) to $(CONF_SAVE_PATH)/$(subst _savedefconfig,_defconfig,$@)
 
 cleanconfig: cleankconfig
-	@rm -rf $(CONFIG_PATH) $(CONFIG_PATH).old $(CONFIG_PATH)-md5-* $(dir $(AUTOCONFIG_PATH)) $(AUTOHEADER_PATH)
+	@rm -rf $(CONFIG_PATH) $(CONFIG_PATH).old $(CONFIG_PATH)-md5-* $(AUTOHEADER_PATH) $(dir $(AUTOCONFIG_PATH))
 
 endif
 endif
@@ -434,6 +450,11 @@ endif
 imake_cpflags  := -I. -I./include $(patsubst %,-I%,$(filter-out .,$(SRC_PATH))) $(patsubst %,-I%/include,$(filter-out .,$(SRC_PATH))) -I$(OBJ_PREFIX)
 imake_ldflags  := -L$(OBJ_PREFIX) -Wl,-rpath-link=$(OBJ_PREFIX)
 prior_ldflags  :=
+
+ifeq ($(CC_TOOL),clang)
+imake_cpflags  += $(clang_cpflags)
+imake_ldflags  += $(clang_ldflags)
+endif
 
 imake_cpflags  += $(call link_hdrs)
 imake_ldflags  += $(call link_libs)
@@ -769,10 +790,29 @@ else
 
 endif
 
+#
+# Starting from kernel version 6.10, the compilation dependency rule has been changed
+# from "$(obj)/%.o: $(src)/%.c" to "$(obj)/%.o: $(obj)/%.c", the original method of separating
+# compilation output from source code has failed, so the following rules has been added.
+#
+ifneq ($(obj), $(src))
+$(obj)/%.c : $(src)/%.c
+	@mkdir -p $(shell dirname $@)
+	@ln -sfT $< $@
+
+$(obj)/%.rs : $(src)/%.rs
+	@mkdir -p $(shell dirname $@)
+	@ln -sfT $< $@
+
+$(obj)/%.S : $(src)/%.S
+	@mkdir -p $(shell dirname $@)
+	@ln -sfT $< $@
+endif
+
 else # KERNELRELEASE
 
 KERNEL_SRC     ?= /lib/modules/$(shell uname -r)/build
-MOD_PATH       ?= $(shell pwd)
+MOD_PATH       ?= $(shell realpath $(shell pwd))
 
 ifeq ($(MOD_MAKES), )
 MOD_MAKES      := -C $(KERNEL_SRC)
@@ -785,17 +825,11 @@ MOD_MAKES      += $(if $(KERNEL_OUT),O=$(KERNEL_OUT),O=)
 endif
 
 ifneq ($(filter $(OBJ_PREFIX),. $(MOD_PATH)), )
+MOD_OPATH      ?= $(MOD_PATH)
 MOD_MAKES      += M=$(MOD_PATH)
 else
-
-MOD_MAKES      += M=$(shell realpath -m $(OBJ_PREFIX)) src=$(MOD_PATH)
-KBUILD_MK      := $(if $(wildcard $(MOD_PATH)/Kbuild),Kbuild,Makefile)
-
-modules modules_clean modules_install: $(OBJ_PREFIX)/$(KBUILD_MK)
-
-$(OBJ_PREFIX)/$(KBUILD_MK): $(MOD_PATH)/$(KBUILD_MK)
-	@-mkdir -p $(dir $@)
-	@-cp -f $< $@
+MOD_OPATH      ?= $(shell realpath -m $(OBJ_PREFIX))
+MOD_MAKES      += M=$(MOD_OPATH) src=$(MOD_PATH)
 
 #
 # Note:
@@ -806,6 +840,11 @@ $(OBJ_PREFIX)/$(KBUILD_MK): $(MOD_PATH)/$(KBUILD_MK)
 #   -             $(KBUILD_EXTMOD)/Kbuild, $(KBUILD_EXTMOD)/Makefile)
 #   +include $(if $(wildcard $(src)/Kbuild), $(src)/Kbuild, $(src)/Makefile)
 #
+KBUILD_MK      := $(if $(wildcard $(MOD_PATH)/Kbuild),Kbuild,Makefile)
+modules modules_clean modules_install: $(OBJ_PREFIX)/$(KBUILD_MK)
+$(OBJ_PREFIX)/$(KBUILD_MK): $(MOD_PATH)/$(KBUILD_MK)
+	@-mkdir -p $(dir $@)
+	@-cp -f $< $@
 
 endif
 
@@ -818,6 +857,9 @@ modules:
 
 modules_clean:
 	@$(MAKE) $(MOD_MAKES) clean
+ifeq ($(filter $(MOD_OPATH)/% $(MOD_OPATH),$(MOD_PATH)), )
+	@rm -rf $(MOD_OPATH)
+endif
 
 modules_install:
 	@$(MAKE) $(MOD_MAKES) $(if $(INS_PREFIX), INSTALL_MOD_PATH=$(INS_PREFIX)) modules_install
