@@ -1225,9 +1225,6 @@ static inline int32_t fill_significand(char *buffer, uint64_t digits, int32_t *p
         } else {
             s += fill_a_8_digits(s, r, ptz);
         }
-
-        if (*(s-1) - '0' >= (int)s_tail_cmp)
-            *(s-1) -= APPROX_TAIL_CMP_VAL;
     } else {
         digits /= 10;
         *fixed = 1;
