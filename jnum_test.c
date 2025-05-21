@@ -61,7 +61,7 @@ int main(int argc, char *argv[])
     case 'd':
         {
             double d = jnum_atod(argv[2]);
-            printf("original  : %s\nprintf    : %0.15g\n", argv[2], d);
+            printf("original  : %s\nprintf    : %0.16g\n", argv[2], d);
             jnum_dtoa(d, buf);
             printf("ldouble   : %s\n", buf);
             grisu2_dtoa(d, buf);
@@ -76,7 +76,7 @@ int main(int argc, char *argv[])
             volatile double d1, d2;
             d1 = strtod(argv[2], NULL);
             d2 = jnum_atod(argv[2]);
-            printf("strtod:    %0.15g\njnum_atod: %0.15g\n", d1, d2);
+            printf("strtod:    %0.16g\njnum_atod: %0.16g\n", d1, d2);
         } else {
             int i;
             int cnt = atoi(argv[3]);
@@ -92,17 +92,17 @@ int main(int argc, char *argv[])
                 d2 = jnum_atod(argv[2]);
             }
             ms3 = _system_ms_get();
-            printf("strtod:    %0.15g %ums\njnum_atod: %0.15g %ums\t%.0lf%%\n", d1, ms2 - ms1, d2, ms3 - ms2,
+            printf("strtod:    %0.16g %ums\njnum_atod: %0.16g %ums\t%.0lf%%\n", d1, ms2 - ms1, d2, ms3 - ms2,
                  ms3 - ms2 ? 100.0 * (ms2 - ms1) / (ms3 - ms2) : 0);
         }
         break;
 
     default:
         if (argc == 2) {
-            double d = jnum_atod(argv[1]);
+            double d = strtod(argv[1], NULL);
             char tmp[64] = {0};
 
-            sprintf(tmp, "%0.15g", d);
+            sprintf(tmp, "%0.16g", d);
             jnum_dtoa(d, buf);
             if (strcmp(buf, tmp)) {
                 printf("original  : %s\nprintf    : %s\n", argv[1], tmp);
@@ -110,17 +110,17 @@ int main(int argc, char *argv[])
             }
         } else {
             int i;
-            double d = jnum_atod(argv[1]);
+            double d = strtod(argv[1], NULL);
             int cnt = atoi(argv[2]);
             unsigned int ms, ms1, ms2, ms3;
 
             ms1 = _system_ms_get();
             for (i = 0; i < cnt; ++i) {
-                sprintf(buf, "%0.15g", d);
+                sprintf(buf, "%0.16g", d);
             }
             ms2 = _system_ms_get();
             ms = ms2 - ms1;
-            printf("original  : %s\nprintf    : %0.15g\t%ums\n", argv[1], d, ms);
+            printf("original  : %s\nprintf    : %0.16g\t%ums\n", argv[1], d, ms);
 
             ms1 = _system_ms_get();
             for (i = 0; i < cnt; ++i) {

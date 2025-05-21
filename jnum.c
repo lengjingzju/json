@@ -44,27 +44,6 @@ typedef struct {
     int32_t e;
 } diy_fp_t;
 
-/*
- * # python3 to get digits_lut
- * lut = []
- * for i in range(53):
- *     j = 53 - i
- *     v = 1<<j
- *     s = str(v)
- *     l = 16 - len(s)
- *     if int(s[0]) < 2:
- *         l += 1
- *     print("%d: %d: %d" % (i, l, v))
- *     lut.append("%-2s" % l)
- *
- * print("static const uint8_t digits_lut[53] = {%s};" % (", ".join(lut)))
- */
-static const uint8_t digits_lut[53] = {
-    0 , 0 , 0 , 1 , 1 , 1 , 2 , 2 , 2 , 3 , 3 , 3 , 3 , 4 , 4 , 4 , 5 , 5 , 5 , 6 ,
-    6 , 6 , 6 , 7 , 7 , 7 , 8 , 8 , 8 , 9 , 9 , 9 , 9 , 10, 10, 10, 11, 11, 11, 12,
-    12, 12, 12, 13, 13, 13, 14, 14, 14, 15, 15, 15, 15
-};
-
 static const char ch_100_lut[200] = {
     '0','0','0','1','0','2','0','3','0','4','0','5','0','6','0','7','0','8','0','9',
     '1','0','1','1','1','2','1','3','1','4','1','5','1','6','1','7','1','8','1','9',
@@ -458,6 +437,307 @@ static inline int32_t u64_pz_get(uint64_t f)
 #endif
 }
 
+/*
+# python to get lut
+
+def print_lut():
+    result_digits_keys = {}
+    for i in range(1, 129):
+        min_digits = len(str(1<<(i-1)))
+        digits = len(str(1<<i))
+
+        if min_digits == digits:
+            if digits not in result_digits_keys.keys():
+                result_digits_keys[digits] = []
+            result_digits_keys[digits].append(i)
+
+    reserved_digits_list = []
+    for i in range(1, 53):
+        v = 1 << i
+        s = str(v)
+        digits = len(s)
+        if int(s[0]) < 2:
+            digits -= 1
+        reserved_digits_list.append(digits)
+
+    base_lut = []
+    index_lut = []
+    shift_lut = []
+    for i in range(1, 53):
+        if i <= 30:
+            digits = reserved_digits_list[i-1] + 9  # using dividend 1000000000
+        else:
+            digits = reserved_digits_list[i-1] + 16 # using dividend 10000000000000000
+
+        bits = [v - i for v in result_digits_keys[digits]]
+
+        base_exp = -1074
+
+        for j in range(0, 13): # max left shift bit is 12
+            exp = j - base_exp
+            val = 5 ** exp
+
+            cmp_value = 1 << 64 # ULONG_MAX = 18446744073709551615
+            digit = val
+            k = 0
+            bit = 64
+
+            while digit >= cmp_value:
+                k += 1
+                digit //= 10
+            while True:
+                while (1 << bit) > digit:
+                    bit -= 1
+                bit += 1
+
+                if bit > bits[-1]:
+                    k += 1
+                    digit //= 10
+                else:
+                    break
+
+            if bit in bits:
+                digit += 1
+                base_lut.append(digit)
+                index_lut.append(k - exp)
+                shift_lut.append(j)
+                #print("bit[%2d]: shift=%d, exp=%d digit=%d" % (i, j, k - exp, digit))
+                break
+
+    print('static const uint64_t n_base_lut[52] = {', end='')
+    for i in range(52):
+        if i % 5 == 0:
+            print()
+            print('    ', end='')
+        print('%-17d' % (base_lut[i]), end='')
+        if i != 51:
+            print(', ', end='');
+        else:
+            print()
+            print('};')
+
+    print()
+    print('static const uint8_t n_index_lut[52] = {', end='')
+    for i in range(52):
+        if i % 20 == 0:
+            print()
+            print('    ', end='')
+        print('%-2d' % (index_lut[i] + 400), end='')
+        if i != 51:
+            print(', ', end='');
+        else:
+            print()
+            print('};')
+
+    print()
+    print('static const uint8_t n_shift_lut[52] = {', end='')
+    for i in range(52):
+        if i % 20 == 0:
+            print()
+            print('    ', end='')
+        print('%-2d' % (shift_lut[i]), end='')
+        if i != 51:
+            print(', ', end='');
+        else:
+            print()
+            print('};')
+
+print_lut()
+*/
+
+static void ldouble_convert_no_normalized(diy_fp_t *v)
+{
+    static const uint64_t n_base_lut[52] = {
+        2470328230       , 494065646        , 494065646        , 494065646        , 1235164115       ,
+        494065646        , 494065646        , 1235164115       , 494065646        , 494065646        ,
+        2470328230       , 494065646        , 494065646        , 494065646        , 1235164115       ,
+        494065646        , 494065646        , 1235164115       , 494065646        , 494065646        ,
+        2470328230       , 494065646        , 494065646        , 494065646        , 1235164115       ,
+        494065646        , 494065646        , 1235164115       , 494065646        , 494065646        ,
+        24703282292062328, 4940656458412466 , 4940656458412466 , 2470328229206233 , 4940656458412466 ,
+        4940656458412466 , 2470328229206233 , 4940656458412466 , 4940656458412466 , 4940656458412466 ,
+        24703282292062328, 4940656458412466 , 4940656458412466 , 2470328229206233 , 4940656458412466 ,
+        4940656458412466 , 2470328229206233 , 4940656458412466 , 4940656458412466 , 2470328229206233 ,
+        4940656458412466 , 4940656458412466
+    };
+
+    static const uint8_t n_index_lut[52] = {
+        67, 68, 68, 68, 67, 68, 68, 67, 68, 68, 67, 68, 68, 68, 67, 68, 68, 67, 68, 68,
+        67, 68, 68, 68, 67, 68, 68, 67, 68, 68, 60, 61, 61, 61, 61, 61, 61, 61, 61, 61,
+        60, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61
+    };
+
+    static const uint8_t n_shift_lut[52] = {
+        1 , 0 , 0 , 0 , 2 , 0 , 0 , 2 , 0 , 0 , 1 , 0 , 0 , 0 , 2 , 0 , 0 , 2 , 0 , 0 ,
+        1 , 0 , 0 , 0 , 2 , 0 , 0 , 2 , 0 , 0 , 1 , 0 , 0 , 1 , 0 , 0 , 1 , 0 , 0 , 0 ,
+        1 , 0 , 0 , 1 , 0 , 0 , 1 , 0 , 0 , 1 , 0 , 0
+    };
+
+    int32_t i = 63 - u64_pz_get(v->f);
+    uint64_t f = v->f << n_shift_lut[i];
+    int32_t e = (int)n_index_lut[i] - 400;
+
+    if (i < 30) {
+        uint64_t m = f * n_base_lut[i];
+        v->f = (m + 500000000) / 1000000000;
+        v->e = e + 9;
+    } else {
+#if USING_U128_MUL
+        __extension__ typedef unsigned __int128 u128;
+        const u128 m = (u128)f * n_base_lut[i];
+        v->f = (uint64_t)((m + 5000000000000000llu) / 10000000000000000llu);
+#else
+        double d = (double)f * n_base_lut[i];
+        v->f = (uint64_t)((d + 5e15) * 1e-16);
+#endif
+        v->e = e + 16;
+    }
+}
+
+#define APPROX_TAIL_CMP_VAL_N         2                   /* The value should be less than or equal to 4 */
+static const uint32_t s_tail_cmp_n = (APPROX_TAIL_CMP_VAL_N << 1) + 1;
+
+static inline int32_t fill_n_4_digits(char *buffer, uint32_t digits, int32_t *ptz)
+{
+    char *s = buffer;
+    uint32_t q = FAST_DIV100(digits);
+    uint32_t r = digits - q * 100;
+
+    memcpy(s, &ch_100_lut[q<<1], 2);
+    memcpy(s + 2, &ch_100_lut[r<<1], 2);
+
+    if (r < s_tail_cmp_n) {
+        s[3] = '0';
+        *ptz = tz_100_lut[q] + 2;
+    } else {
+        if (s[3] < (char)s_tail_cmp_n + '0') {
+            s[3] = '0';
+            *ptz = 1;
+        } else {
+            s[3] -= APPROX_TAIL_CMP_VAL_N;
+            *ptz = 0;
+        }
+    }
+
+    return 4;
+}
+
+static inline int32_t fill_n_8_digits(char *buffer, uint32_t digits, int32_t *ptz)
+{
+    char *s = buffer;
+
+    if (digits < 10000) {
+        memset(s, '0', 4);
+        fill_n_4_digits(s + 4, digits, ptz);
+    } else {
+        uint32_t q = FAST_DIV10000(digits);
+        uint32_t r = digits - q * 10000;
+
+        fill_t_4_digits(s, q, ptz);
+        if (r < s_tail_cmp_n) {
+            memset(s + 4, '0', 4);
+            *ptz += 4;
+        } else {
+            fill_n_4_digits(s + 4, r, ptz);
+        }
+    }
+
+    return 8;
+}
+
+static int32_t fill_significand_no_normalized(char *buffer, uint64_t digits, int32_t *ptz, int32_t *fixed)
+{
+    char *s = buffer;
+    uint32_t q, r;
+
+    if (digits < 10) {
+        *ptz = 0;
+        *fixed = 0;
+        *s = '0' + digits;
+        return 1;
+    }
+
+    digits += APPROX_TAIL_CMP_VAL_N;
+    if (digits < 10000000000000000llu) {
+        *fixed = 0;
+
+        if (digits >= 100000000) {
+            q = (uint32_t)(digits / 100000000);
+            r = (uint32_t)(digits - (uint64_t)q * 100000000);
+
+            s += fill_1_8_digits(s, q, ptz);
+            if (r < s_tail_cmp_n) {
+                *ptz += 8;
+                memset(s, '0', 8);
+                s += 8;
+            } else {
+                s += fill_n_8_digits(s, r, ptz);
+            }
+        } else if (digits >= 10000) {
+            q = FAST_DIV10000(digits);
+            r = digits - q * 10000;
+
+            s += fill_1_4_digits(s, q, ptz);
+            if (r < s_tail_cmp_n) {
+                *ptz += 4;
+                memset(s, '0', 4);
+                s += 4;
+            } else {
+                s += fill_n_4_digits(s, r, ptz);
+            }
+        } else {
+            if (digits >= 100) {
+                q = FAST_DIV100(digits);
+                r = digits - q * 100;
+                if (q >= 10) {
+                    *ptz = tz_100_lut[q];
+                    memcpy(s, &ch_100_lut[q<<1], 2);
+                    s += 2;
+                } else {
+                    *ptz = 0;
+                    *s++ = '0' + q;
+                }
+            } else {
+                *ptz = 0;
+                r = digits;
+            }
+
+            memcpy(s, &ch_100_lut[r<<1], 2);
+            if (r < s_tail_cmp_n) {
+                s[1] = '0';
+                *ptz += 2;
+            } else {
+                if (s[1] < (char)s_tail_cmp_n + '0') {
+                    s[1] = '0';
+                    *ptz = 1;
+                } else {
+                    s[1] -= APPROX_TAIL_CMP_VAL_N;
+                    *ptz = 0;
+                }
+            }
+            s += 2;
+        }
+    } else {
+        digits /= 10;
+        *fixed = 1;
+
+        q = (uint32_t)(digits / 100000000);
+        r = (uint32_t)(digits - (uint64_t)q * 100000000);
+
+        *ptz = 0;
+        fill_t_8_digits(s, q, ptz);
+        if (!r) {
+            memset(s + 8, '0', 8);
+            *ptz += 8;
+        } else {
+            fill_t_8_digits(s + 8, r, ptz);
+        }
+        s += 16;
+    }
+
+    return s - buffer;
+}
+
 #if USING_SMALL_LUT
 
 /*
@@ -643,37 +923,6 @@ static inline diy_fp_t negative_diy_fp(int32_t e)
 
     const diy_fp_t v = { .f = negative_base_lut[e], .e = negative_index_lut[e] };
     return v;
-}
-
-static inline void ldouble_convert_no_normalized(diy_fp_t *v, int lshiftbit)
-{
-    static const double add_luts[19] = {
-        5e18,  5e19,  5e20,  5e21,  5e22,  5e23,  5e24,  5e25,  5e26,  5e27,
-        5e28,  5e29,  5e30,  5e31,  5e32,  5e33,  5e34,  5e35,  5e36
-    };
-    static const double mul_luts[19] = {
-        1e-19, 1e-20, 1e-21, 1e-22, 1e-23, 1e-24, 1e-25, 1e-26, 1e-27, 1e-28,
-        1e-29, 1e-30, 1e-31, 1e-32, 1e-33, 1e-34, 1e-35, 1e-36, 1e-37
-    };
-
-    uint64_t f = v->f << (v->e & 7);
-    int32_t e = v->e >> 3;
-    diy_fp_t x = e >= 0 ? positive_diy_fp(e) : negative_diy_fp(-e);
-    double d = (double)f * x.f;
-
-    if (d + add_luts[digits_lut[lshiftbit]] < 1e35) {
-        v->f = (uint64_t)((d + add_luts[digits_lut[lshiftbit]]) * mul_luts[digits_lut[lshiftbit]]);
-        v->e = e - x.e + 19 + digits_lut[lshiftbit];
-    } else if (d + add_luts[digits_lut[lshiftbit] + 1] < 1e36) {
-        v->f = (uint64_t)((d + add_luts[digits_lut[lshiftbit] + 1]) * mul_luts[digits_lut[lshiftbit] + 1]);
-        v->e = e - x.e + 20 + digits_lut[lshiftbit];
-    } else if (d + add_luts[digits_lut[lshiftbit] + 2] < 1e37) {
-        v->f = (uint64_t)((d + add_luts[digits_lut[lshiftbit] + 2]) * mul_luts[digits_lut[lshiftbit] + 2]);
-        v->e = e - x.e + 21 + digits_lut[lshiftbit];
-    } else {
-        v->f = (uint64_t)((d + add_luts[digits_lut[lshiftbit] + 3]) * mul_luts[digits_lut[lshiftbit] + 3]);
-        v->e = e - x.e + 22 + digits_lut[lshiftbit];
-    }
 }
 
 static inline void ldouble_convert(diy_fp_t *v)
@@ -1028,34 +1277,6 @@ static inline diy_fp_t negative_diy_fp(int32_t e)
     return v;
 }
 
-static inline void ldouble_convert_no_normalized(diy_fp_t *v, int lshiftbit)
-{
-    static const double add_luts[18] = {
-        5e16,  5e17,  5e18,  5e19,  5e20,  5e21,  5e22,  5e23,  5e24,  5e25,
-        5e26,  5e27,  5e28,  5e29,  5e30,  5e31,  5e32,  5e33
-    };
-    static const double mul_luts[18] = {
-        1e-17, 1e-18, 1e-19, 1e-20, 1e-21, 1e-22, 1e-23, 1e-24, 1e-25, 1e-26,
-        1e-27, 1e-28, 1e-29, 1e-30, 1e-31, 1e-32, 1e-33, 1e-34
-    };
-
-    uint64_t f = v->f << (v->e & 3);
-    int32_t e = v->e >> 2;
-    diy_fp_t x = e >= 0 ? positive_diy_fp(e) : negative_diy_fp(-e);
-    double d = (double)f * x.f;
-
-    if (d + add_luts[digits_lut[lshiftbit]] < 1e33) {
-        v->f = (uint64_t)((d + add_luts[digits_lut[lshiftbit]]) * mul_luts[digits_lut[lshiftbit]]);
-        v->e = e - x.e + 17 + digits_lut[lshiftbit];
-    } else if (d + add_luts[digits_lut[lshiftbit] + 1] < 1e34) {
-        v->f = (uint64_t)((d + add_luts[digits_lut[lshiftbit] + 1]) * mul_luts[digits_lut[lshiftbit] + 1]);
-        v->e = e - x.e + 18 + digits_lut[lshiftbit];
-    } else {
-        v->f = (uint64_t)((d + add_luts[digits_lut[lshiftbit] + 2]) * mul_luts[digits_lut[lshiftbit] + 2]);
-        v->e = e - x.e + 19 + digits_lut[lshiftbit];
-    }
-}
-
 static inline void ldouble_convert(diy_fp_t *v)
 {
     uint64_t f = v->f << (v->e & 3);
@@ -1123,150 +1344,6 @@ static inline void ldouble_convert(diy_fp_t *v)
 #endif
 }
 #endif
-
-#define APPROX_TAIL_CMP_VAL_N         2                   /* The value should be less than or equal to 4 */
-static const uint32_t s_tail_cmp_n = (APPROX_TAIL_CMP_VAL_N << 1) + 1;
-
-static inline int32_t fill_n_4_digits(char *buffer, uint32_t digits, int32_t *ptz)
-{
-    char *s = buffer;
-    uint32_t q = FAST_DIV100(digits);
-    uint32_t r = digits - q * 100;
-
-    memcpy(s, &ch_100_lut[q<<1], 2);
-    memcpy(s + 2, &ch_100_lut[r<<1], 2);
-
-    if (r < s_tail_cmp_n) {
-        s[3] = '0';
-        *ptz = tz_100_lut[q] + 2;
-    } else {
-        if (s[3] < (char)s_tail_cmp_n + '0') {
-            s[3] = '0';
-            *ptz = 1;
-        } else {
-            s[3] -= APPROX_TAIL_CMP_VAL_N;
-            *ptz = 0;
-        }
-    }
-
-    return 4;
-}
-
-static inline int32_t fill_n_8_digits(char *buffer, uint32_t digits, int32_t *ptz)
-{
-    char *s = buffer;
-
-    if (digits < 10000) {
-        memset(s, '0', 4);
-        fill_n_4_digits(s + 4, digits, ptz);
-    } else {
-        uint32_t q = FAST_DIV10000(digits);
-        uint32_t r = digits - q * 10000;
-
-        fill_t_4_digits(s, q, ptz);
-        if (r < s_tail_cmp_n) {
-            memset(s + 4, '0', 4);
-            *ptz += 4;
-        } else {
-            fill_n_4_digits(s + 4, r, ptz);
-        }
-    }
-
-    return 8;
-}
-
-static int32_t fill_significand_no_normalized(char *buffer, uint64_t digits, int32_t *ptz, int32_t *fixed)
-{
-    char *s = buffer;
-    uint32_t q, r;
-
-    if (digits < 10) {
-        *ptz = 0;
-        *fixed = 0;
-        *s = '0' + digits;
-        return 1;
-    }
-
-    digits += APPROX_TAIL_CMP_VAL_N;
-    if (digits < 10000000000000000llu) {
-        *fixed = 0;
-
-        if (digits >= 100000000) {
-            q = (uint32_t)(digits / 100000000);
-            r = (uint32_t)(digits - (uint64_t)q * 100000000);
-
-            s += fill_1_8_digits(s, q, ptz);
-            if (r < s_tail_cmp_n) {
-                *ptz += 8;
-                memset(s, '0', 8);
-                s += 8;
-            } else {
-                s += fill_n_8_digits(s, r, ptz);
-            }
-        } else if (digits >= 10000) {
-            q = FAST_DIV10000(digits);
-            r = digits - q * 10000;
-
-            s += fill_1_4_digits(s, q, ptz);
-            if (r < s_tail_cmp_n) {
-                *ptz += 4;
-                memset(s, '0', 4);
-                s += 4;
-            } else {
-                s += fill_n_4_digits(s, r, ptz);
-            }
-        } else {
-            if (digits >= 100) {
-                q = FAST_DIV100(digits);
-                r = digits - q * 100;
-                if (q >= 10) {
-                    *ptz = tz_100_lut[q];
-                    memcpy(s, &ch_100_lut[q<<1], 2);
-                    s += 2;
-                } else {
-                    *ptz = 0;
-                    *s++ = '0' + q;
-                }
-            } else {
-                *ptz = 0;
-                r = digits;
-            }
-
-            memcpy(s, &ch_100_lut[r<<1], 2);
-            if (r < s_tail_cmp_n) {
-                s[1] = '0';
-                *ptz += 2;
-            } else {
-                if (s[1] < (char)s_tail_cmp_n + '0') {
-                    s[1] = '0';
-                    *ptz = 1;
-                } else {
-                    s[1] -= APPROX_TAIL_CMP_VAL_N;
-                    *ptz = 0;
-                }
-            }
-            s += 2;
-        }
-    } else {
-        digits /= 10;
-        *fixed = 1;
-
-        q = (uint32_t)(digits / 100000000);
-        r = (uint32_t)(digits - (uint64_t)q * 100000000);
-
-        *ptz = 0;
-        fill_t_8_digits(s, q, ptz);
-        if (!r) {
-            memset(s + 8, '0', 8);
-            *ptz += 8;
-        } else {
-            fill_t_8_digits(s + 8, r, ptz);
-        }
-        s += 16;
-    }
-
-    return s - buffer;
-}
 
 #if !USING_HIGH_RESOLUTION
 static inline int32_t fill_significand(char *buffer, uint64_t digits, int32_t *ptz, int32_t *fixed)
@@ -1567,7 +1644,6 @@ int jnum_dtoa(double num, char *buffer)
 {
     diy_fp_t v;
     char *s = buffer;
-    int32_t lshiftbit = 11 - LSHIFT_RESERVED_BIT;
     union {double d; uint64_t n;} u = {.d = num};
     int32_t signbit = u.n >> (DIY_SIGNIFICAND_SIZE - 1);
     int32_t exponent = (u.n & DP_EXPONENT_MASK) >> DP_SIGNIFICAND_SIZE; /* Exponent */
@@ -1594,11 +1670,8 @@ int jnum_dtoa(double num, char *buffer)
             /* no-normalized double */
             v.f = significand; /* Non-normalized double doesn't have a extra integer bit for Mantissa */
             v.e = 1 - DP_EXPONENT_OFFSET - DP_SIGNIFICAND_SIZE; /* Fixed Exponent: -1022, divisor of Mantissa: pow(2,52) */
-
-            lshiftbit = u64_pz_get(v.f) - LSHIFT_RESERVED_BIT;
-            v.f <<= lshiftbit;
-            v.e -= lshiftbit; /* The smallest e is (-1022 - 52 - (63 - LSHIFT_RESERVED_BIT)) */
-            ldouble_convert_no_normalized(&v, lshiftbit);
+            /* The smallest e is (-1022 - 52 - (63 - LSHIFT_RESERVED_BIT)) */
+            ldouble_convert_no_normalized(&v);
             normalized = 0;
         } else {
             memcpy(s, "0.0", 4);
@@ -1618,8 +1691,7 @@ int jnum_dtoa(double num, char *buffer)
             memcpy(s + n, ".0", 3);
             return n + 2 + signbit;
         } else {
-            // v.f <<= lshiftbit;
-            // v.e -= lshiftbit; /* The largest e is (1023 - 52 - (11 - LSHIFT_RESERVED_BIT)) */
+            /* The largest e is (1023 - 52 - (11 - LSHIFT_RESERVED_BIT)) */
             ldouble_convert(&v);
             normalized = 1;
         }
