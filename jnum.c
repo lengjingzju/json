@@ -934,20 +934,23 @@ static inline void ldouble_convert(diy_fp_t *v)
 #if USING_U128_MUL
     __extension__ typedef unsigned __int128 u128;
     const u128 m = (u128)f * x.f;
-    uint64_t ho = (uint64_t)(m >> 64);
 
 #if !USING_HIGH_RESOLUTION
-    if (ho < 5421010862427519) { // (1e35 - 5e19) >> 64
+    static const u128 cmp1 = (u128)99999999999999950   * 1000000000000000000;
+    static const u128 cmp2 = (u128)999999999999999500  * 1000000000000000000;
+    static const u128 cmp3 = (u128)9999999999999995000 * 1000000000000000000;
+
+    if (m < cmp1) { // (1e35 - 5e19) >> 64
         static const u128 magich = (u128)10 * 5000000000000000000llu;
         static const u128 magicn = (u128)10 * 10000000000000000000llu;
         v->f = (uint64_t)((m + magich) / magicn);
         v->e = e - x.e + 20;
-    } if (ho < 54210108624275194) { // (1e36 - 5e20) >> 64
+    } if (m < cmp2) { // (1e36 - 5e20) >> 64
         static const u128 magich = (u128)100 * 5000000000000000000llu;
         static const u128 magicn = (u128)100 * 10000000000000000000llu;
         v->f = (uint64_t)((m + magich) / magicn);
         v->e = e - x.e + 21;
-    } else if (ho < 542101086242751945) { // (1e37 - 5e21) >> 64
+    } else if (m < cmp3) { // (1e37 - 5e21) >> 64
         static const u128 magich = (u128)1000 * 5000000000000000000llu;
         static const u128 magicn = (u128)1000 * 10000000000000000000llu;
         v->f = (uint64_t)((m + magich) / magicn);
@@ -959,15 +962,19 @@ static inline void ldouble_convert(diy_fp_t *v)
         v->e = e - x.e + 23;
     }
 #else
-    if (ho < 5421010862427521) { // (1e35 - 5e18) >> 64
+    static const u128 cmp1 = (u128)99999999999999995   * 1000000000000000000;
+    static const u128 cmp2 = (u128)999999999999999950  * 1000000000000000000;
+    static const u128 cmp3 = (u128)9999999999999999500 * 1000000000000000000;
+
+    if (m < cmp1) { // (1e35 - 5e18) >> 64
         v->f = (uint64_t)((m + 5000000000000000000llu) / 10000000000000000000llu);
         v->e = e - x.e + 19;
-    } else if (ho < 54210108624275218) { // (1e36 - 5e19) >> 64
+    } else if (m < cmp2) { // (1e36 - 5e19) >> 64
         static const u128 magich = (u128)10 * 5000000000000000000llu;
         static const u128 magicn = (u128)10 * 10000000000000000000llu;
         v->f = (uint64_t)((m + magich) / magicn);
         v->e = e - x.e + 20;
-    } else if (ho < 542101086242752189) { // (1e37 - 5e20) >> 64
+    } else if (m < cmp3) { // (1e37 - 5e20) >> 64
         static const u128 magich = (u128)100 * 5000000000000000000llu;
         static const u128 magicn = (u128)100 * 10000000000000000000llu;
         v->f = (uint64_t)((m + magich) / magicn);
@@ -1286,26 +1293,31 @@ static inline void ldouble_convert(diy_fp_t *v)
 #if USING_U128_MUL
     __extension__ typedef unsigned __int128 u128;
     const u128 m = (u128)f * x.f;
-    uint64_t ho = (uint64_t)(m >> 64);
 
 #if !USING_HIGH_RESOLUTION
-    static const u128 magich = (u128)10 * 5000000000000000000llu;
-    static const u128 magicn = (u128)10 * 10000000000000000000llu;
-    if (ho < 54210108624275) { // (1e33 - 5e17) >> 64
+    static const u128 cmp1 = (u128)99999999999999950 * 10000000000000000;
+    static const u128 cmp2 = (u128)99999999999999950 * 100000000000000000;
+
+    if (m < cmp1) { // (1e33 - 5e17) >> 64
         v->f = (uint64_t)((m + 500000000000000000llu) / 1000000000000000000llu);
         v->e = e - x.e + 18;
-    } else if (ho < 542101086242751) { // (1e34 - 5e18) >> 64
+    } else if (m < cmp2) { // (1e34 - 5e18) >> 64
         v->f = (uint64_t)((m + 5000000000000000000llu) / 10000000000000000000llu);
         v->e = e - x.e + 19;
     } else {
+        static const u128 magich = (u128)10 * 5000000000000000000llu;
+        static const u128 magicn = (u128)10 * 10000000000000000000llu;
         v->f = (uint64_t)((m + magich) / magicn);
         v->e = e - x.e + 20;
     }
 #else
-    if (ho < 54210108624275) { // (1e33 - 5e16) >> 64
+    static const u128 cmp1 = (u128)99999999999999995 * 10000000000000000;
+    static const u128 cmp2 = (u128)99999999999999995 * 100000000000000000;
+
+    if (m < cmp1) { // (1e33 - 5e16) >> 64
         v->f = (uint64_t)((m + 50000000000000000llu) / 100000000000000000llu);
         v->e = e - x.e + 17;
-    } else if (ho < 542101086242752) { // (1e34 - 5e17) >> 64
+    } else if (m < cmp2) { // (1e34 - 5e17) >> 64
         v->f = (uint64_t)((m + 500000000000000000llu) / 1000000000000000000llu);
         v->e = e - x.e + 18;
     } else {
@@ -1406,7 +1418,7 @@ static inline int32_t fill_significand(char *buffer, uint64_t digits, int32_t *p
 #else
 
 #if USING_U128_MUL
-#define APPROX_TAIL_CMP_VAL         2                   /* The value should be less than or equal to 4 */
+#define APPROX_TAIL_CMP_VAL         1                   /* The value should be less than or equal to 4 */
 #else
 #define APPROX_TAIL_CMP_VAL         4
 #endif
