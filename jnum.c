@@ -25,7 +25,6 @@
 #define DP_EXPONENT_MASK            0x7FF0000000000000  /* Exponent Mask, 11 bits */
 #define DP_SIGNIFICAND_MASK         0x000FFFFFFFFFFFFF  /* Mantissa Mask, 52 bits */
 #define DP_HIDDEN_BIT               0x0010000000000000  /* Integer bit for Mantissa */
-#define LSHIFT_RESERVED_BIT         11                  /* Significand: 53 bits */
 
 #ifndef USING_FLOAT_MUL
 #define USING_FLOAT_MUL             0                   /* Using floating-point multiplication */
@@ -38,14 +37,16 @@
 #define USING_U128_MUL              0
 #endif
 
-/* When set to 1, use one more precision when using large number multiplying, and it will slow down the speed. */
-#ifndef USING_HIGH_RESOLUTION
-#define USING_HIGH_RESOLUTION       1
-#endif
-
 /* When set to 1, use a lookup table with only half of the original size, and it will slightly slow down the speed. */
 #ifndef USING_SMALL_LUT
 #define USING_SMALL_LUT             0
+#endif
+
+#if USING_U128_MUL && !USING_SMALL_LUT
+/* When set to 1, use one more precision when using large number multiplying, and it will slow down the speed. */
+#define USING_HIGH_RESOLUTION       1
+#else
+#define USING_HIGH_RESOLUTION       0
 #endif
 
 typedef struct {
@@ -498,24 +499,24 @@ def print_lut():
             if digits not in result_digits_keys.keys():
                 result_digits_keys[digits] = []
             result_digits_keys[digits].append(i)
+    #print(result_digits_keys)
 
     reserved_digits_list = []
     for i in range(1, 53):
         v = 1 << i
         s = str(v)
         digits = len(s)
-        if int(s[0]) < 2:
-            digits -= 1
         reserved_digits_list.append(digits)
+    #print(reserved_digits_list)
 
     base_lut = []
     index_lut = []
     shift_lut = []
     for i in range(1, 53):
-        if i <= 30:
+        if i <= 26:
             digits = reserved_digits_list[i-1] + 9  # using dividend 1000000000
         else:
-            digits = reserved_digits_list[i-1] + 16 # using dividend 10000000000000000
+            digits = reserved_digits_list[i-1] + 17 # using dividend 100000000000000000
 
         bits = [v - i for v in result_digits_keys[digits]]
 
@@ -557,7 +558,7 @@ def print_lut():
         if i % 5 == 0:
             print()
             print('    ', end='')
-        print('%-17d' % (base_lut[i]), end='')
+        print('0x%016x' % (base_lut[i]), end='')
         if i != 51:
             print(', ', end='');
         else:
@@ -593,200 +594,233 @@ def print_lut():
 print_lut()
 */
 
-static void ldouble_convert_no_normalized(diy_fp_t *v)
+static int32_t ldouble_convert_n(diy_fp_t *v, char *buffer, int32_t *vnum_digits)
 {
     static const uint64_t n_base_lut[52] = {
-        2470328230       , 494065646        , 494065646        , 494065646        , 1235164115       ,
-        494065646        , 494065646        , 1235164115       , 494065646        , 494065646        ,
-        2470328230       , 494065646        , 494065646        , 494065646        , 1235164115       ,
-        494065646        , 494065646        , 1235164115       , 494065646        , 494065646        ,
-        2470328230       , 494065646        , 494065646        , 494065646        , 1235164115       ,
-        494065646        , 494065646        , 1235164115       , 494065646        , 494065646        ,
-        24703282292062328, 4940656458412466 , 4940656458412466 , 2470328229206233 , 4940656458412466 ,
-        4940656458412466 , 2470328229206233 , 4940656458412466 , 4940656458412466 , 4940656458412466 ,
-        24703282292062328, 4940656458412466 , 4940656458412466 , 2470328229206233 , 4940656458412466 ,
-        4940656458412466 , 2470328229206233 , 4940656458412466 , 4940656458412466 , 2470328229206233 ,
-        4940656458412466 , 4940656458412466
+        0x00000000933e37a6, 0x000000001d72d7ee, 0x000000001d72d7ee, 0x00000000933e37a6, 0x00000000499f1bd3,
+        0x000000001d72d7ee, 0x00000000933e37a6, 0x00000000499f1bd3, 0x000000001d72d7ee, 0x00000001267c6f4b,
+        0x00000000933e37a6, 0x000000001d72d7ee, 0x000000001d72d7ee, 0x00000000933e37a6, 0x00000000499f1bd3,
+        0x000000001d72d7ee, 0x00000000933e37a6, 0x00000000499f1bd3, 0x000000001d72d7ee, 0x00000001267c6f4b,
+        0x00000000933e37a6, 0x000000001d72d7ee, 0x000000001d72d7ee, 0x00000000933e37a6, 0x00000000499f1bd3,
+        0x000000001d72d7ee, 0x06db461654176951, 0x036da30b2a0bb4a9, 0x00af87023b9bf0ef, 0x06db461654176951,
+        0x036da30b2a0bb4a9, 0x00af87023b9bf0ef, 0x00af87023b9bf0ef, 0x06db461654176951, 0x00af87023b9bf0ef,
+        0x00af87023b9bf0ef, 0x06db461654176951, 0x036da30b2a0bb4a9, 0x00af87023b9bf0ef, 0x06db461654176951,
+        0x036da30b2a0bb4a9, 0x00af87023b9bf0ef, 0x00af87023b9bf0ef, 0x036da30b2a0bb4a9, 0x00af87023b9bf0ef,
+        0x00af87023b9bf0ef, 0x06db461654176951, 0x00af87023b9bf0ef, 0x00af87023b9bf0ef, 0x06db461654176951,
+        0x036da30b2a0bb4a9, 0x00af87023b9bf0ef
     };
 
     static const uint8_t n_index_lut[52] = {
-        67, 68, 68, 68, 67, 68, 68, 67, 68, 68, 67, 68, 68, 68, 67, 68, 68, 67, 68, 68,
-        67, 68, 68, 68, 67, 68, 68, 67, 68, 68, 60, 61, 61, 61, 61, 61, 61, 61, 61, 61,
-        60, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61
+        67, 68, 68, 67, 67, 68, 67, 67, 68, 67, 67, 68, 68, 67, 67, 68, 67, 67, 68, 67,
+        67, 68, 68, 67, 67, 68, 59, 59, 60, 59, 59, 60, 60, 59, 60, 60, 59, 59, 60, 59,
+        59, 60, 60, 59, 60, 60, 59, 60, 60, 59, 59, 60
     };
 
     static const uint8_t n_shift_lut[52] = {
-        1 , 0 , 0 , 0 , 2 , 0 , 0 , 2 , 0 , 0 , 1 , 0 , 0 , 0 , 2 , 0 , 0 , 2 , 0 , 0 ,
-        1 , 0 , 0 , 0 , 2 , 0 , 0 , 2 , 0 , 0 , 1 , 0 , 0 , 1 , 0 , 0 , 1 , 0 , 0 , 0 ,
-        1 , 0 , 0 , 1 , 0 , 0 , 1 , 0 , 0 , 1 , 0 , 0
+        1 , 0 , 0 , 1 , 2 , 0 , 1 , 2 , 0 , 0 , 1 , 0 , 0 , 1 , 2 , 0 , 1 , 2 , 0 , 0 ,
+        1 , 0 , 0 , 1 , 2 , 0 , 0 , 1 , 0 , 0 , 1 , 0 , 0 , 0 , 0 , 0 , 0 , 1 , 0 , 0 ,
+        1 , 0 , 0 , 1 , 0 , 0 , 0 , 0 , 0 , 0 , 1 , 0
     };
 
     int32_t i = 63 - u64_pz_get(v->f);
-    uint64_t f = v->f << n_shift_lut[i];
     int32_t e = (int)n_index_lut[i] - 400;
+    int32_t s = n_shift_lut[i];
+    if (i < 26) {
+        static const uint32_t add = 500000000;
+        static const uint32_t div = 1000000000;
+        static const uint64_t cmp_lut[11] = { 0,
+            1000000000llu, 2000000000llu, 3000000000llu, 4000000000llu, 5000000000llu,
+            6000000000llu, 7000000000llu, 8000000000llu, 9000000000llu, 10000000000llu
+        };
 
-    if (i < 30) {
-        uint64_t m = f * n_base_lut[i];
-        v->f = (m + 500000000) / 1000000000;
+        uint32_t high, low, b1, b0;
+
+        uint64_t t = n_base_lut[i];
+        uint64_t f = v->f << s;
+        uint64_t m = f * t;
+
+        v->f = (m + add) / div;
         v->e = e + 9;
+
+        if (i < 3) {
+            *buffer = '0' + v->f;
+            *vnum_digits = 1;
+            return 1;
+        }
+
+        high = (uint32_t)((v->f * 42949673) >> 32);  // v->f / 100
+        low = (uint32_t)(v->f - high * 100);
+        if (low) {
+            b1 = ch_100_lut[low << 1] - '0';
+            b0 = ch_100_lut[(low << 1) + 1] - '0';
+
+            switch (b1) {
+            case 0:
+                if (cmp_lut[b0] < (s ? (t << (s - 1)) : (t >> 1)) + add) {
+                    low = 0;
+                }
+                break;
+            case 9:
+                if (cmp_lut[10 - b0] < (s ? (t << (s - 1)) : (t >> 1)) + add) {
+                    low = 0;
+                    high += 1;
+                }
+                break;
+            default:
+                break;
+            }
+        }
+
+        int32_t num_digits, trailing_zeros;
+        if (!high) {
+            trailing_zeros = tz_100_lut[low];
+            memcpy(buffer, &ch_100_lut[low << 1], 2);
+            num_digits = 2;
+        } else {
+            num_digits = fill_1_8_digits(buffer, high, &trailing_zeros);
+            if (low) {
+                trailing_zeros = tz_100_lut[low];
+                memcpy(buffer + num_digits, &ch_100_lut[low << 1], 2);
+                num_digits += 2;
+            } else {
+                v->f = high;
+                v->e += 2;
+            }
+        }
+
+        *vnum_digits = num_digits - trailing_zeros;
+        return num_digits;
     } else {
-#if USING_U128_MUL
+#if USING_HIGH_RESOLUTION
         __extension__ typedef unsigned __int128 u128;
-        const u128 m = (u128)f * n_base_lut[i];
-        v->f = (uint64_t)((m + 5000000000000000llu) / 10000000000000000llu);
+        static const uint64_t add = 50000000000000000llu;
+        static const uint64_t div = 100000000000000000llu;
+        static const uint64_t cmp_lut[11] = {
+            0,                     100000000000000000llu, 200000000000000000llu, 300000000000000000llu,
+            400000000000000000llu, 500000000000000000llu, 600000000000000000llu, 700000000000000000llu,
+            800000000000000000llu, 900000000000000000llu, 1000000000000000000llu
+        };
+
+        uint64_t high;
+        uint32_t low, b1, b0;
+
+        uint64_t t = n_base_lut[i];
+        uint64_t f = v->f << s;
+        u128 m = (u128)f * t;
+
+        v->f = (uint64_t)((m + add) / div);
+        v->e = e + 17;
+
+        high = v->f / 100;
+        low = v->f % 100;
+        if (low) {
+            b1 = ch_100_lut[low << 1] - '0';
+            b0 = ch_100_lut[(low << 1) + 1] - '0';
+
+            switch (b1) {
+            case 0:
+                if (cmp_lut[b0] < (s ? (t << (s - 1)) : (t >> 1)) + add) {
+                    low = 0;
+                }
+                break;
+            case 9:
+                if (cmp_lut[10 - b0] < (s ? (t << (s - 1)) : (t >> 1)) + add) {
+                    low = 0;
+                    high += 1;
+                }
+                break;
+            default:
+                break;
+            }
+        }
+
+        int32_t num_digits, trailing_zeros;
+        num_digits = fill_1_16_digits(buffer, high, &trailing_zeros);
+        if (low) {
+            trailing_zeros = tz_100_lut[low];
+            memcpy(buffer + num_digits, &ch_100_lut[low << 1], 2);
+            num_digits += 2;
+        } else {
+            v->f = high;
+            v->e += 2;
+        }
+        *vnum_digits = num_digits - trailing_zeros;
+        return num_digits;
+
 #else
-        double d = (double)f * n_base_lut[i];
-        v->f = (uint64_t)((d + 5e15) * 1e-16);
+
+        uint64_t t = n_base_lut[i];
+        uint64_t f = v->f << s;
+        double d = (double)f * t;
+        v->f = (uint64_t)((d + 5e18) * 1e-19);
+        v->e = e + 19;
+
+        int32_t num_digits, trailing_zeros;
+        num_digits = fill_1_16_digits(buffer, v->f, &trailing_zeros);
+        *vnum_digits = num_digits - trailing_zeros;
+        return num_digits;
 #endif
-        v->e = e + 16;
     }
+    return 0;
 }
 
-#define APPROX_TAIL_CMP_VAL_N         2                   /* The value should be less than or equal to 4 */
-static const uint32_t s_tail_cmp_n = (APPROX_TAIL_CMP_VAL_N << 1) + 1;
+#if !USING_HIGH_RESOLUTION
 
-static inline int32_t fill_n_4_digits(char *buffer, uint32_t digits, int32_t *ptz)
+static inline int32_t fill_significand(char *buffer, uint64_t digits, int32_t *ptz)
 {
     char *s = buffer;
-    uint32_t q = FAST_DIV100(digits);
-    uint32_t r = digits - q * 100;
+    uint32_t q, r, q1, r1, q2, r2;
 
-    memcpy(s, &ch_100_lut[q<<1], 2);
-    memcpy(s + 2, &ch_100_lut[r<<1], 2);
+    q = (uint32_t)(digits / 100000000);
+    r = (uint32_t)(digits - (uint64_t)q * 100000000);
+    q1 = FAST_DIV10000(q);
+    r1 = q - q1 * 10000;
 
-    if (r < s_tail_cmp_n) {
-        s[3] = '0';
-        *ptz = tz_100_lut[q] + 2;
-    } else {
-        if (s[3] < (char)s_tail_cmp_n + '0') {
-            s[3] = '0';
-            *ptz = 1;
+    if (q1 >= 100) {
+        q2 = FAST_DIV100(q1);
+        r2 = q1 - q2 * 100;
+        if (q2 >= 10) {
+            *ptz = tz_100_lut[q2];
+            memcpy(s, &ch_100_lut[q2<<1], 2);
+            s += 2;
         } else {
-            s[3] -= APPROX_TAIL_CMP_VAL_N;
             *ptz = 0;
+            *s++ = q2 + '0';
         }
-    }
-
-    return 4;
-}
-
-static inline int32_t fill_n_8_digits(char *buffer, uint32_t digits, int32_t *ptz)
-{
-    char *s = buffer;
-
-    if (digits < 10000) {
-        memset(s, '0', 4);
-        fill_n_4_digits(s + 4, digits, ptz);
-    } else {
-        uint32_t q = FAST_DIV10000(digits);
-        uint32_t r = digits - q * 10000;
-
-        fill_t_4_digits(s, q, ptz);
-        if (r < s_tail_cmp_n) {
-            memset(s + 4, '0', 4);
-            *ptz += 4;
+        if (!r2) {
+            *ptz += 2;
+            memset(s, '0', 2);
+            s += 2;
         } else {
-            fill_n_4_digits(s + 4, r, ptz);
-        }
-    }
-
-    return 8;
-}
-
-static int32_t fill_significand_no_normalized(char *buffer, uint64_t digits, int32_t *ptz, int32_t *fixed)
-{
-    char *s = buffer;
-    uint32_t q, r;
-
-    if (digits < 10) {
-        *ptz = 0;
-        *fixed = 0;
-        *s = '0' + digits;
-        return 1;
-    }
-
-    digits += APPROX_TAIL_CMP_VAL_N;
-    if (digits < 10000000000000000llu) {
-        *fixed = 0;
-
-        if (digits >= 100000000) {
-            q = (uint32_t)(digits / 100000000);
-            r = (uint32_t)(digits - (uint64_t)q * 100000000);
-
-            s += fill_1_8_digits(s, q, ptz);
-            if (r < s_tail_cmp_n) {
-                *ptz += 8;
-                memset(s, '0', 8);
-                s += 8;
-            } else {
-                s += fill_n_8_digits(s, r, ptz);
-            }
-        } else if (digits >= 10000) {
-            q = FAST_DIV10000(digits);
-            r = digits - q * 10000;
-
-            s += fill_1_4_digits(s, q, ptz);
-            if (r < s_tail_cmp_n) {
-                *ptz += 4;
-                memset(s, '0', 4);
-                s += 4;
-            } else {
-                s += fill_n_4_digits(s, r, ptz);
-            }
-        } else {
-            if (digits >= 100) {
-                q = FAST_DIV100(digits);
-                r = digits - q * 100;
-                if (q >= 10) {
-                    *ptz = tz_100_lut[q];
-                    memcpy(s, &ch_100_lut[q<<1], 2);
-                    s += 2;
-                } else {
-                    *ptz = 0;
-                    *s++ = '0' + q;
-                }
-            } else {
-                *ptz = 0;
-                r = digits;
-            }
-
-            memcpy(s, &ch_100_lut[r<<1], 2);
-            if (r < s_tail_cmp_n) {
-                s[1] = '0';
-                *ptz += 2;
-            } else {
-                if (s[1] < (char)s_tail_cmp_n + '0') {
-                    s[1] = '0';
-                    *ptz = 1;
-                } else {
-                    s[1] -= APPROX_TAIL_CMP_VAL_N;
-                    *ptz = 0;
-                }
-            }
+            *ptz = tz_100_lut[r2];
+            memcpy(s, &ch_100_lut[r2<<1], 2);
             s += 2;
         }
     } else {
-        digits /= 10;
-        *fixed = 1;
+        r2 = q1;
+        *ptz = tz_100_lut[r2];
+        memcpy(s, &ch_100_lut[r2<<1], 2);
+        s += 2;
+    }
 
-        q = (uint32_t)(digits / 100000000);
-        r = (uint32_t)(digits - (uint64_t)q * 100000000);
+    if (!r1) {
+        *ptz += 4;
+        memset(s, '0', 4);
+        s += 4;
+    } else {
+        s += fill_t_4_digits(s, r1, ptz);
+    }
 
-        *ptz = 0;
-        fill_t_8_digits(s, q, ptz);
-        if (!r) {
-            memset(s + 8, '0', 8);
-            *ptz += 8;
-        } else {
-            fill_t_8_digits(s + 8, r, ptz);
-        }
-        s += 16;
+    if (!r) {
+        memset(s + 8, '0', 8);
+        *ptz += 8;
+        s += 8;
+    } else {
+        s += fill_t_8_digits(s, r, ptz);
     }
 
     return s - buffer;
 }
-
-#if USING_SMALL_LUT
 
 /*
 # python to get lut
@@ -853,14 +887,14 @@ def print_pow_array(unit, index, end, positive):
 def print_positive_array():
     # 1 * (2 ** 8) = 25.6 * (10 ** 1)
     # 256 = 25.6 * (10 ** 1)
-    # 122 = (1023 - 52 - (11 - x)) / 8 + 1
+    # 122 = (1023 - 52) / 8 + 1
     print_pow_array(256, 1, 122, True)
 
 def print_negative_array():
     # 1 * (2 ** -8) = 0.0390625 * (10 ** -1)
     # 390625 = 0.0390625 * (10 ** 7)
-    # 143 = (1022 + 52 + (63 - (11 - x))) / 8 + 1
-    print_pow_array(390625, 7, 143, False)
+    # 135 = (1022 + 52) / 8 + 1
+    print_pow_array(390625, 7, 135, False)
 
 print_positive_array()
 print()
@@ -919,7 +953,7 @@ static inline diy_fp_t positive_diy_fp(int32_t e)
 
 static inline diy_fp_t negative_diy_fp(int32_t e)
 {
-    static const uint64_t negative_base_lut[144] = {
+    static const uint64_t negative_base_lut[136] = {
         0x8ac7230489e80000, 0x3635c9adc5dea000, 0xd3c21bcecceda100, 0x52b7d2dcc80cd2e4,
         0x204fce5e3e250262, 0x7e37be2022c0914c, 0x314dc6448d9338c2, 0xc097ce7bc90715b4,
         0x4b3b4ca85a86c47b, 0x1d6329f1c35ca4c0, 0x72cb5bd86321e38d, 0x2cd76fe086b93ce3,
@@ -953,27 +987,24 @@ static inline diy_fp_t negative_diy_fp(int32_t e)
         0x8e679c2f5e44ff90, 0x37a0790280d2f3d4, 0xd94ad8b1c7380875, 0x54e13ca571d1e34e,
         0x2127fbb0a075fccb, 0x81842f29f2cce376, 0x3297a26c62d808db, 0xc5a05277621be294,
         0x4d32a036a252e482, 0x1e27c69557686143, 0x75cb5fb75d6fbbed, 0x2e037163a07fa569,
-        0xb3bd72ed2af29e20, 0x463600e4a4c6c5c5, 0x1b6d1859505da541, 0x6b22271ce1edcd85,
-        0x29d957474840e448, 0xa378fcee723d7bb9, 0x3fdb42cd24a00455, 0xf9707cf1571110e9,
-        0x616ff0ce4602aa9b, 0x260fba1093590aa5, 0x94ad6ed0bf93d193, 0x3a13bf498ad5bdde
+        0xb3bd72ed2af29e20, 0x463600e4a4c6c5c5, 0x1b6d1859505da541, 0x6b22271ce1edcd85
     };
 
-    static const uint8_t negative_index_lut[144] = {
+    static const uint8_t negative_index_lut[136] = {
         19 , 20 , 22 , 23 , 24 , 26 , 27 , 29 , 30 , 31 , 33 , 34 , 36 , 37 , 38 , 40 , 41 , 43 , 44 , 46 ,
         47 , 48 , 50 , 51 , 53 , 54 , 55 , 57 , 58 , 60 , 61 , 62 , 64 , 65 , 67 , 68 , 69 , 71 , 72 , 74 ,
         75 , 77 , 78 , 79 , 81 , 82 , 84 , 85 , 86 , 88 , 89 , 91 , 92 , 93 , 95 , 96 , 98 , 99 , 100, 102,
         103, 105, 106, 107, 109, 110, 112, 113, 115, 116, 117, 119, 120, 122, 123, 124, 126, 127, 129, 130,
         131, 133, 134, 136, 137, 138, 140, 141, 143, 144, 146, 147, 148, 150, 151, 153, 154, 155, 157, 158,
         160, 161, 162, 164, 165, 167, 168, 169, 171, 172, 174, 175, 176, 178, 179, 181, 182, 184, 185, 186,
-        188, 189, 191, 192, 193, 195, 196, 198, 199, 200, 202, 203, 205, 206, 207, 209, 210, 212, 213, 215,
-        216, 217, 219, 220
+        188, 189, 191, 192, 193, 195, 196, 198, 199, 200, 202, 203, 205, 206, 207, 209
     };
 
     const diy_fp_t v = { .f = negative_base_lut[e], .e = negative_index_lut[e] };
     return v;
 }
 
-static inline void ldouble_convert(diy_fp_t *v)
+static inline int32_t ldouble_convert(diy_fp_t *v, char *buffer, int32_t *vnum_digits)
 {
     uint64_t f = v->f << (v->e & 7);
     int32_t e = v->e >> 3;
@@ -983,61 +1014,34 @@ static inline void ldouble_convert(diy_fp_t *v)
     __extension__ typedef unsigned __int128 u128;
     const u128 m = (u128)f * x.f;
 
-#if !USING_HIGH_RESOLUTION
-    static const u128 cmp1 = (u128)99999999999999950   * 1000000000000000000;
-    static const u128 cmp2 = (u128)999999999999999500  * 1000000000000000000;
-    static const u128 cmp3 = (u128)9999999999999995000 * 1000000000000000000;
+    static const u128 cmp1 = (u128)99999999999999950llu   * 1000000000000000000llu;
+    static const u128 cmp2 = (u128)999999999999999500llu  * 1000000000000000000llu;
+    static const u128 cmp3 = (u128)9999999999999995000llu * 1000000000000000000llu;
 
-    if (m < cmp1) { // (1e35 - 5e19) >> 64
-        static const u128 magich = (u128)10 * 5000000000000000000llu;
-        static const u128 magicn = (u128)10 * 10000000000000000000llu;
-        v->f = (uint64_t)((m + magich) / magicn);
+    if (m < cmp1) {         // 1e35 - 5e19
+        static const u128 addn = (u128)10 * 5000000000000000000llu;
+        static const u128 divn = (u128)10 * 10000000000000000000llu;
+        v->f = (uint64_t)((m + addn) / divn);
         v->e = e - x.e + 20;
-    } if (m < cmp2) { // (1e36 - 5e20) >> 64
-        static const u128 magich = (u128)100 * 5000000000000000000llu;
-        static const u128 magicn = (u128)100 * 10000000000000000000llu;
-        v->f = (uint64_t)((m + magich) / magicn);
+    } if (m < cmp2) {       // 1e36 - 5e20
+        static const u128 addn = (u128)100 * 5000000000000000000llu;
+        static const u128 divn = (u128)100 * 10000000000000000000llu;
+        v->f = (uint64_t)((m + addn) / divn);
         v->e = e - x.e + 21;
-    } else if (m < cmp3) { // (1e37 - 5e21) >> 64
-        static const u128 magich = (u128)1000 * 5000000000000000000llu;
-        static const u128 magicn = (u128)1000 * 10000000000000000000llu;
-        v->f = (uint64_t)((m + magich) / magicn);
+    } else if (m < cmp3) {  // 1e37 - 5e21
+        static const u128 addn = (u128)1000 * 5000000000000000000llu;
+        static const u128 divn = (u128)1000 * 10000000000000000000llu;
+        v->f = (uint64_t)((m + addn) / divn);
         v->e = e - x.e + 22;
-    } else {
-        static const u128 magich = (u128)10000 * 5000000000000000000llu;
-        static const u128 magicn = (u128)10000 * 10000000000000000000llu;
-        v->f = (uint64_t)((m + magich) / magicn);
+    } else {                // 1e38 - 5e22
+        static const u128 addn = (u128)10000 * 5000000000000000000llu;
+        static const u128 divn = (u128)10000 * 10000000000000000000llu;
+        v->f = (uint64_t)((m + addn) / divn);
         v->e = e - x.e + 23;
     }
-#else
-    static const u128 cmp1 = (u128)99999999999999995   * 1000000000000000000;
-    static const u128 cmp2 = (u128)999999999999999950  * 1000000000000000000;
-    static const u128 cmp3 = (u128)9999999999999999500 * 1000000000000000000;
-
-    if (m < cmp1) { // (1e35 - 5e18) >> 64
-        v->f = (uint64_t)((m + 5000000000000000000llu) / 10000000000000000000llu);
-        v->e = e - x.e + 19;
-    } else if (m < cmp2) { // (1e36 - 5e19) >> 64
-        static const u128 magich = (u128)10 * 5000000000000000000llu;
-        static const u128 magicn = (u128)10 * 10000000000000000000llu;
-        v->f = (uint64_t)((m + magich) / magicn);
-        v->e = e - x.e + 20;
-    } else if (m < cmp3) { // (1e37 - 5e20) >> 64
-        static const u128 magich = (u128)100 * 5000000000000000000llu;
-        static const u128 magicn = (u128)100 * 10000000000000000000llu;
-        v->f = (uint64_t)((m + magich) / magicn);
-        v->e = e - x.e + 21;
-    } else {
-        static const u128 magich = (u128)1000 * 5000000000000000000llu;
-        static const u128 magicn = (u128)1000 * 10000000000000000000llu;
-        v->f = (uint64_t)((m + magich) / magicn);
-        v->e = e - x.e + 22;
-    }
-#endif
 
 #else
 
-#if !USING_HIGH_RESOLUTION
     double d = (double)f * x.f;
     if (d + 5e19 < 1e35) {
         v->f = (uint64_t)((d + 5e19) * 1e-20);
@@ -1052,32 +1056,55 @@ static inline void ldouble_convert(diy_fp_t *v)
         v->f = (uint64_t)((d + 5e22) * 1e-23);
         v->e = e - x.e + 23;
     }
-#else
-    double d = (double)f * x.f;
-    if (d + 5e18 < 1e35) {
-        v->f = (uint64_t)((d + 5e18) * 1e-19);
-        v->e = e - x.e + 19;
-    } else if (d + 5e19 < 1e36) {
-        v->f = (uint64_t)((d + 5e19) * 1e-20);
-        v->e = e - x.e + 20;
-    } else if (d + 5e20 < 1e37) {
-        v->f = (uint64_t)((d + 5e20) * 1e-21);
-        v->e = e - x.e + 21;
-    } else {
-        v->f = (uint64_t)((d + 5e21) * 1e-22);
-        v->e = e - x.e + 22;
-    }
 #endif
-#endif
+
+    int32_t num_digits, trailing_zeros;
+    num_digits =  fill_significand(buffer, v->f, &trailing_zeros);
+    *vnum_digits = num_digits - trailing_zeros;
+    return num_digits;
 }
 
 #else
 
+static inline int32_t fill_significand(char *buffer, uint64_t digits, int32_t *ptz)
+{
+    char *s = buffer;
+
+    if (digits == 100000000000000llu) {
+        memcpy(buffer, "100000000000000", 15);
+        *ptz = 14;
+        return 15;
+    }
+
+    uint32_t q = (uint32_t)(digits / 100000000);
+    uint32_t r = (uint32_t)(digits - (uint64_t)q * 100000000);
+    uint32_t qq = FAST_DIV10000(q);
+    uint32_t qr = q - qq * 10000;
+
+    memcpy(s, &ch_100_lut[qq<<1], 2);
+    *ptz = tz_100_lut[qq];
+
+    if (!qr) {
+        memset(s + 2, '0', 4);
+        *ptz += 4;
+    } else {
+        fill_t_4_digits(s + 2, qr, ptz);
+    }
+
+    if (!r) {
+        memset(s + 6, '0', 8);
+        *ptz += 8;
+    } else {
+        fill_t_8_digits(s + 6, r, ptz);
+    }
+
+    return 14;
+}
+
 /*
 # python to get lut
-
 def print_pow_array(unit, index, end, positive):
-    cmp_value = 1000000000000000000 # ULONG_MAX = 18446744073709551615
+    cmp_value = 1<<59 # ULONG_MAX = 18446744073709551615
     base_lut = []
     index_lut = []
     for i in range(end + 1):
@@ -1110,7 +1137,7 @@ def print_pow_array(unit, index, end, positive):
         if i % 4 == 0:
             print()
             print('    ', end='')
-        print('%18d' % (base_lut[i]), end='')
+        print('0x%016x' % (base_lut[i]), end='')
         if i != end:
             print(', ', end='');
         else:
@@ -1118,29 +1145,38 @@ def print_pow_array(unit, index, end, positive):
             print('};')
 
     print()
-    print('static const int8_t %s_index_lut[%d] = {' % ('positive' if positive else 'negative', end + 1), end='')
+    pos = 0;
+    print('static const uint8_t %s_index_lut[%d] = {' % ('positive' if positive else 'negative', end + 1), end='')
     for i in range(end + 1):
         if i % 20 == 0:
             print()
             print('    ', end='')
-        print('%-3d' % (index_lut[i]), end='')
+        if index_lut[i] >= 0:
+            print('%-3d' % (index_lut[i]), end='')
+        else:
+            if pos == 0:
+                pos = i
+            print('%-3d' % (-index_lut[i]), end='')
+
         if i != end:
             print(', ', end='');
         else:
             print()
             print('};')
+    if pos:
+        print('From index %d, the real value is "-index_lut[i]"' % (pos))
 
 def print_positive_array():
-    # 1 * (2 ** 4) = 1.6 * (10 ** 1)
-    # 16 = 1.6 * (10 ** 1)
-    # 243 = (1023 - 52 - (11 - x)) / 4 + 1
-    print_pow_array(16, 1, 243, True)
+    # 1 * (2 ** 2) = 0.4 * (10 ** 1)
+    # 4 = 0.4 * (10 ** 1)
+    # 486 = (1023 - 52) / 2 + 1
+    print_pow_array(4, 1, 486, True)
 
 def print_negative_array():
-    # 1 * (2 ** -4) = 0.625 * (10 ** -1)
-    # 625 = 0.625 * (10 ** 3)
-    # 285 = (1022 + 52 + (63 - (11 - x))) / 4 + 1
-    print_pow_array(625, 3, 285, False)
+    # 1 * (2 ** -2) = 2.5 * (10 ** -1)
+    # 25 = 2.5 * (10 ** 1)
+    # 538 = (1022 + 52) / 2 + 1
+    print_pow_array(25, 1, 538, False)
 
 print_positive_array()
 print()
@@ -1149,462 +1185,407 @@ print_negative_array()
 
 static inline diy_fp_t positive_diy_fp(int32_t e)
 {
-    static const uint64_t positive_base_lut[244] = {
-        100000000000000000, 160000000000000000, 256000000000000000, 409600000000000000,
-        655360000000000000, 104857600000000000, 167772160000000000, 268435456000000000,
-        429496729600000000, 687194767360000000, 109951162777600000, 175921860444160000,
-        281474976710656000, 450359962737049600, 720575940379279360, 115292150460684698,
-        184467440737095517, 295147905179352826, 472236648286964522, 755578637259143235,
-        120892581961462918, 193428131138340668, 309485009821345069, 495176015714152110,
-        792281625142643376, 126765060022822941, 202824096036516705, 324518553658426727,
-        519229685853482763, 830767497365572421, 132922799578491588, 212676479325586540,
-        340282366920938464, 544451787073501542, 871122859317602467, 139379657490816395,
-        223007451985306232, 356811923176489971, 570899077082383953, 913438523331814324,
-        146150163733090292, 233840261972944467, 374144419156711148, 598631070650737836,
-        957809713041180537, 153249554086588886, 245199286538542218, 392318858461667548,
-        627710173538668077, 100433627766186893, 160693804425899028, 257110087081438445,
-        411376139330301511, 658201822928482417, 105312291668557187, 168499666669691499,
-        269599466671506398, 431359146674410237, 690174634679056379, 110427941548649021,
-        176684706477838433, 282695530364541493, 452312848583266389, 723700557733226222,
-        115792089237316196, 185267342779705913, 296427748447529461, 474284397516047137,
-        758855036025675419, 121416805764108067, 194266889222572908, 310827022756116652,
-        497323236409786643, 795717178255658628, 127314748520905381, 203703597633448609,
-        325925756213517774, 521481209941628439, 834369935906605501, 133499189745056881,
-        213598703592091009, 341757925747345614, 546812681195752982, 874900289913204770,
-        139984046386112764, 223974474217780422, 358359158748448674, 573374653997517878,
-        917399446396028605, 146783911423364577, 234854258277383323, 375766813243813317,
-        601226901190101307, 961963041904162091, 153914086704665935, 246262538727465496,
-        394020061963944793, 630432099142311668, 100869135862769867, 161390617380431787,
-        258224987808690859, 413159980493905375, 661055968790248599, 105768955006439776,
-        169230328010303642, 270768524816485827, 433229639706377322, 693167423530203715,
-        110906787764832595, 177450860423732152, 283921376677971442, 454274202684754307,
-        726838724295606891, 116294195887297103, 186070713419675364, 297713141471480583,
-        476341026354368932, 762145642166990291, 121943302746718447, 195109284394749515,
-        312174855031599224, 499479768050558758, 799167628880894012, 127866820620943042,
-        204586912993508867, 327339060789614188, 523742497263382700, 837987995621412319,
-        134078079299425971, 214524926879081554, 343239883006530486, 549183812810448778,
-        878694100496718044, 140591056079474887, 224945689727159820, 359913103563455711,
-        575860965701529137, 921377545122446620, 147420407219591460, 235872651551346335,
-        377396242482154136, 603833987971446617, 966134380754314587, 154581500920690334,
-        247330401473104535, 395728642356967255, 633165827771147608, 101306532443383618,
-        162090451909413788, 259344723055062060, 414951556888099296, 663922491020958874,
-        106227598563353420, 169964157701365472, 271942652322184755, 435108243715495608,
-        696173189944792972, 111387710391166876, 178220336625867001, 285152538601387202,
-        456244061762219522, 729990498819551235, 116798479811128198, 186877567697805117,
-        299004108316488186, 478406573306381098, 765450517290209756, 122472082766433561,
-        195955332426293698, 313528531882069916, 501645651011311866, 802633041618098985,
-        128421286658895838, 205474058654233341, 328758493846773345, 526013590154837351,
-        841621744247739762, 134659479079638362, 215455166527421379, 344728266443874207,
-        551565226310198730, 882504362096317968, 141200697935410875, 225921116696657400,
-        361473786714651840, 578358058743442944, 925372893989508710, 148059663038321394,
-        236895460861314230, 379032737378102768, 606452379804964428, 970323807687943085,
-        155251809230070894, 248402894768113430, 397444631628981488, 635911410606370380,
-        101745825697019261, 162793321115230818, 260469313784369308, 416750902054990893,
-        666801443287985428, 106688230926077669, 170701169481724270, 273121871170758832,
-        436994993873214130, 699191990197142608, 111870718431542818, 178993149490468508,
-        286389039184749613, 458222462695599380, 733155940312959007, 117304950450073442,
-        187687920720117506, 300300673152188010, 480481077043500815, 768769723269601304,
-        123003155723136209, 196805049157017934, 314888078651228694, 503820925841965911,
-        806113481347145457, 128978157015543274, 206365051224869237, 330184081959790779,
-        528294531135665247, 845271249817064395, 135243399970730304, 216389439953168485,
-        346223103925069576, 553956966280111322, 886331146048178115, 141812983367708499,
-        226900773388333598, 363041237421333756, 580865979874134009, 929385567798614415,
-        148701690847778307, 237922705356445291, 380676328570312465, 609082125712499943,
-        974531401139999909, 155925024182399986, 249480038691839977, 399168061906943963
+    static const uint64_t positive_base_lut[487] = {
+        0x016345785d8a0000, 0x058d15e176280000, 0x02386f26fc100000, 0x00e35fa931a00000,
+        0x038d7ea4c6800000, 0x016bcc41e9000000, 0x05af3107a4000000, 0x0246139ca8000000,
+        0x00e8d4a510000000, 0x03a3529440000000, 0x0174876e80000000, 0x05d21dba00000000,
+        0x02540be400000000, 0x00ee6b2800000000, 0x03b9aca000000000, 0x017d784000000000,
+        0x05f5e10000000000, 0x02625a0000000000, 0x00f4240000000000, 0x03d0900000000000,
+        0x0186a00000000000, 0x061a800000000000, 0x0271000000000000, 0x00fa000000000000,
+        0x03e8000000000000, 0x0190000000000000, 0x0640000000000000, 0x0280000000000000,
+        0x0100000000000000, 0x0400000000000000, 0x019999999999999a, 0x0666666666666667,
+        0x028f5c28f5c28f5d, 0x010624dd2f1a9fbf, 0x04189374bc6a7efa, 0x01a36e2eb1c432cb,
+        0x068db8bac710cb2a, 0x029f16b11c6d1e11, 0x010c6f7a0b5ed8d4, 0x0431bde82d7b634e,
+        0x01ad7f29abcaf486, 0x06b5fca6af2bd216, 0x02af31dc4611873c, 0x0112e0be826d694c,
+        0x044b82fa09b5a52d, 0x01b7cdfd9d7bdbac, 0x06df37f675ef6eae, 0x02bfaffc2f2c92ac,
+        0x0119799812dea112, 0x0465e6604b7a8447, 0x01c25c268497681d, 0x0709709a125da071,
+        0x02d09370d4257361, 0x01203af9ee75615a, 0x0480ebe7b9d58567, 0x01cd2b297d889bc3,
+        0x0734aca5f6226f0b, 0x02e1dea8c8da92d2, 0x012725dd1d243abb, 0x049c97747490eae9,
+        0x01d83c94fb6d2ac4, 0x0760f253edb4ab0e, 0x02f394219248446c, 0x012e3b40a0e9b4f8,
+        0x04b8ed0283a6d3e0, 0x01e392010175ee5a, 0x078e480405d7b966, 0x0305b66802564a29,
+        0x01357c299a88ea77, 0x04d5f0a66a23a9db, 0x01ef2d0f5da7dd8b, 0x07bcb43d769f762b,
+        0x0318481895d96278, 0x013ce9a36f23c0fd, 0x04f3a68dbc8f03f3, 0x01fb0f6be5060195,
+        0x07ec3daf94180651, 0x032b4bdfd4d668ed, 0x014484bfeebc29f9, 0x051212ffbaf0a7e2,
+        0x02073accb12d0ff4, 0x00cfb11ead453995, 0x033ec47ab514e653, 0x014c4e977ba1f5bb,
+        0x05313a5dee87d6ec, 0x0213b0f25f69892b, 0x00d4ad2dbfc3d078, 0x0352b4b6ff0f41df,
+        0x0154484932d2e726, 0x05512124cb4b9c97, 0x022073a8515171d6, 0x00d9c7dced53c723,
+        0x03671f73b54f1c8a, 0x015c72fb1552d837, 0x0571cbec554b60dc, 0x022d84c4eeeaf38c,
+        0x00df01e85f912e38, 0x037c07a17e44b8df, 0x0164cfda3281e38d, 0x05933f68ca078e31,
+        0x023ae629ea696c14, 0x00e45c10c42a2b3c, 0x0391704310a8aced, 0x016d601ad376ab92,
+        0x05b5806b4ddaae47, 0x024899c4858aac1d, 0x00e9d71b689dde72, 0x03a75c6da27779c7,
+        0x017624f8a762fd83, 0x05d893e29d8bf60b, 0x0256a18dd89e626b, 0x00ef73d256a5c0f8,
+        0x03bdcf495a9703de, 0x017f1fb6f10934c0, 0x05fc7edbc424d2fd, 0x0264ff8b1b41edff,
+        0x00f53304714d9266, 0x03d4cc11c5364998, 0x018851a0b548ea3d, 0x06214682d523a8f3,
+        0x0273b5cdeedb1061, 0x00fb158592be068e, 0x03ec56164af81a35, 0x0191bc08eac9a416,
+        0x0646f023ab269055, 0x0282c674aadc39bc, 0x01011c2eaabe7d7f, 0x040470baaaf9f5f9,
+        0x019b604aaaca6264, 0x066d812aab29898e, 0x029233aaaadd6a39, 0x010747ddddf22a7e,
+        0x041d1f7777c8a9f5, 0x01a53fc9631d10c9, 0x0694ff258c744321, 0x02a1ffa89e94e7a7,
+        0x010d9976a5d52976, 0x043665da9754a5d8, 0x01af5bf109550f23, 0x06bd6fc425543c8c,
+        0x02b22cb4dbbb4b6c, 0x011411e1f17e1e2b, 0x04504787c5f878ac, 0x01b9b6364f303045,
+        0x06e6d8d93cc0c113, 0x02c2bd23b1e6b3a1, 0x011ab20e472914a7, 0x046ac8391ca4529b,
+        0x01c45016d841baa5, 0x0711405b6106ea92, 0x02d3b357c0692aa1, 0x01217aefe6907774,
+        0x0485ebbf9a41ddce, 0x01cf2b1970e72586, 0x073cac65c39c9617, 0x02e511c24e3ea270,
+        0x01286d80ec190dc7, 0x04a1b603b0643719, 0x01da48ce468e7c71, 0x076923391a39f1c1,
+        0x02f6dae3a4172d81, 0x012f8ac174d61234, 0x04be2b05d35848ce, 0x01e5aacf21568386,
+        0x0796ab3c855a0e16, 0x0309114b688a6c09, 0x0136d3b7c36a919d, 0x04db4edf0daa4674,
+        0x01f152bf9f10e8fc, 0x07c54afe7c43a3ed, 0x031bb798fe8174c6, 0x013e497065cd61e9,
+        0x04f925c1973587a2, 0x01fd424d6faf030e, 0x07f50935bebc0c36, 0x032ed07be5e4d1b0,
+        0x0145ecfe5bf520ad, 0x0517b3f96fd482b2, 0x02097b309321cde1, 0x00d097ad07a71f27,
+        0x03425eb41e9c7c9b, 0x014dbf7b3f71cb72, 0x0536fdecfdc72dc5, 0x0215ff2b98b6124f,
+        0x00d59944a37c0753, 0x035665128df01d4b, 0x0155c2076bf9a552, 0x0557081dafe69545,
+        0x0222d00bdff5d54f, 0x00dab99e59958886, 0x036ae67966562218, 0x015df5ca28ef40d7,
+        0x0577d728a3bd0359, 0x022fefa9db1867bd, 0x00dff9772470297f, 0x037fe5dc91c0a5fb,
+        0x01665bf1d3e6a8cb, 0x05996fc74f9aa32c, 0x023d5fe9530aa7ab, 0x00e55990879ddcab,
+        0x039566421e7772ab, 0x016ef5b40c2fc778, 0x05bbd6d030bf1ddf, 0x024b22b9ad193f26,
+        0x00eadab0aba3b2dc, 0x03ab6ac2ae8ecb70, 0x0177c44ddf6c5160, 0x05df11377db14580,
+        0x02593a163246e89a, 0x00f07da27a82c371, 0x03c1f689ea0b0dc3, 0x0180c903f7379f1b,
+        0x0603240fdcde7c6a, 0x0267a8065858fe91, 0x00f64335bcf065d4, 0x03d90cd6f3c1974e,
+        0x018a0522c7e70953, 0x0628148b1f9c254a, 0x02766e9e0ca4dbb8, 0x00fc2c3f3841f17d,
+        0x03f0b0fce107c5f2, 0x019379fec0698261, 0x064de7fb01a60983, 0x02858ffe00a8d09b,
+        0x01023998cd105372, 0x0408e66334414dc5, 0x019d28f47b4d524f, 0x0674a3d1ed35493a,
+        0x02950e53f87bb6e4, 0x01086c219697e2c2, 0x0421b0865a5f8b07, 0x01a71368f0f30469,
+        0x069c4da3c3cc11a4, 0x02a4ebdb1b1e6d75, 0x010ec4be0ad8f896, 0x043b12f82b63e255,
+        0x01b13ac9aaf4c0ef, 0x06c4eb26abd303bb, 0x02b52adc44bace4b, 0x011544581b7dec1e,
+        0x045511606df7b078, 0x01bba08cf8c979ca, 0x06ee8233e325e726, 0x02c5cdae5adbf60f,
+        0x011bebdf578b2f3a, 0x046faf7d5e2cbce5, 0x01c6463225ab7ec2, 0x071918c896adfb08,
+        0x02d6d6b6a2abfe03, 0x0122bc490dde659b, 0x048af1243779966c, 0x01d12d41afca3c2b,
+        0x0744b506bf28f0ac, 0x02e8486919439378, 0x0129b69070816e30, 0x04a6da41c205b8c0,
+        0x01dc574d80cf16b3, 0x07715d36033c5acc, 0x02fa2548ce182452, 0x0130dbb6b8d674ee,
+        0x04c36edae359d3b6, 0x01e7c5f127bd87e3, 0x079f17c49ef61f8a, 0x030c6fe83f95a637,
+        0x01382cc34ca2427d, 0x04e0b30d328909f2, 0x01f37ad21436d0c7, 0x07cdeb4850db431c,
+        0x031f2ae9b9f14e0c, 0x013faac3e3fa1f38, 0x04feab0f8fe87cdf, 0x01ff779fd329cb8d,
+        0x07fdde7f4ca72e31, 0x033258ffb842df47, 0x014756ccb01abfb6, 0x051d5b32c06afed8,
+        0x020bbe144cf79924, 0x00d17f3b51fca3a8, 0x0345fced47f28e9f, 0x014f31f8832dd2a6,
+        0x053cc7e20cb74a98, 0x02184ff405161dd7, 0x00d686619ba27256, 0x035a19866e89c957,
+        0x01573d68f903ea23, 0x055cf5a3e40fa88b, 0x02252f0e5b39769e, 0x00dbac6c247d62a6,
+        0x036eb1b091f58a97, 0x015f7a46a0c89dd6, 0x057de91a83227757, 0x02325d3dce0dc956,
+        0x00e0f218b8d25089, 0x0383c862e3494223, 0x0167e9c127b6e742, 0x059fa7049edb9d05,
+        0x023fdc683f8b0b9c, 0x00e65829b3046b0b, 0x039960a6cc11ac2c, 0x01708d0f84d3de78,
+        0x05c2343e134f79e0, 0x024dae7f3aec9727, 0x00ebdf661791d610, 0x03af7d985e47583e,
+        0x0179657025b6234c, 0x05e595c096d88d2f, 0x025bd5803c569ee0, 0x00f18899b1bc3f8d,
+        0x03c62266c6f0fe33, 0x018274291c6065ae, 0x0609d0a4718196b8, 0x026a5374fa33d5e3,
+        0x00f7549530e188c2, 0x03dd5254c3862305, 0x018bba884e35a79c, 0x062eea2138d69e6e,
+        0x02792a73b055d8f9, 0x00fd442e4688bd31, 0x03f510b91a22f4c2, 0x019539e3a40dfb81,
+        0x0654e78e9037ee02, 0x02885c9f6ce32c01, 0x0103583fc527ab34, 0x040d60ff149eacce,
+        0x019ef3993b72ab86, 0x067bce64edcaae17, 0x0297ec285f1ddf3d, 0x010991a9bfa58c7f,
+        0x042646a6fe9631fa, 0x01a8e90f9908e0cb, 0x06a3a43e6423832a, 0x02a7db4c280e3477,
+        0x010ff151a99f4830, 0x043fc546a67d20bf, 0x01b31bb5dc320d19, 0x06cc6ed770c83464,
+        0x02b82c562d1ce1c2, 0x011678227871f3e7, 0x0459e089e1c7cf9c, 0x01bd8d03f3e9863f,
+        0x06f6340fcfa618fa, 0x02c8e19feca8d6cb, 0x011d270cc51055eb, 0x04749c33144157aa,
+        0x01c83e7ad4e6efde, 0x0720f9eb539bbf77, 0x02d9fd9154a4b2fd, 0x0123ff06eea84799,
+        0x048ffc1bbaa11e61, 0x01d331a4b10d3f5a, 0x074cc692c434fd67, 0x02eb82a11b48655d,
+        0x012b010d3e1cf559, 0x04ac0434f873d561, 0x01de6815302e555a, 0x0779a054c0b95568,
+        0x02fd735519e3bbc3, 0x01322e220a5b17e8, 0x04c8b888296c5f9f, 0x01e9e369aa2b5973,
+        0x07a78da6a8ad65ca, 0x030fd242a9def584, 0x0139874ddd8c6235, 0x04e61d37763188d4,
+        0x01f5a549627a36bb, 0x07d6952589e8daec, 0x0322a20f03f6bdf8, 0x01410d9f9b2f7f30,
+        0x0504367e6cbdfcc0, 0x0201af65c518cb80, 0x00cd795be8705167, 0x0335e56fa1c1459a,
+        0x0148c22ca71a1bd7, 0x052308b29c686f5c, 0x020e037aa4f692f2, 0x00d267caa862a12e,
+        0x03499f2aa18a84b6, 0x0150a6110d6a9b7c, 0x0542984435aa6df0, 0x021aa34e7bddc593,
+        0x00d77485cb25823b, 0x035dd2172c9608ec, 0x0158ba6fab6f36c5, 0x0562e9beadbcdb12,
+        0x022790b2abe5246e, 0x00dca04777f541c6, 0x0372811ddfd50716, 0x016100725988693c,
+        0x058401c96621a4f0, 0x0234cd83c273db93, 0x00e1ebce4dc7f16e, 0x0387af39371fc5b8,
+        0x0169794a160cb57d, 0x05a5e5285832d5f4, 0x02425ba9bce12262, 0x00e757dd7ec07427,
+        0x039d5f75fb01d09c, 0x0172262f3133ed0c, 0x05c898bcc4cfb42d, 0x02503d184eb97b45,
+        0x00ece53cec4a314f, 0x03b394f3b128c53b, 0x017b08617a104ee5, 0x05ec2185e8413b92,
+        0x025e73cf29b3b16e, 0x00f294b943e17a2c, 0x03ca52e50f85e8b0, 0x018421286c9bf6ad,
+        0x061084a1b26fdab2, 0x026d01da475ff114, 0x00f867241c8cc6d5, 0x03e19c9072331b54,
+        0x018d71d360e13e22, 0x0635c74d8384f885, 0x027be952349b969c, 0x00fe5d54150b090c,
+        0x03f97550542c242d, 0x0196fbb9bb44db45, 0x065beee6ed136d14, 0x028b2c5c5ed49208,
+        0x01047824f2bb6d9d, 0x0411e093caedb673, 0x01a0c03b1df8af62, 0x068300ec77e2bd85,
+        0x029acd2b63277f02, 0x010ab877c142ff9b, 0x042ae1df050bfe6a, 0x01aac0bf9b9e65c4,
+        0x06ab02fe6e79970f, 0x02aacdff5f63d606, 0x01111f32f2f4bc03, 0x04447ccbcbd2f00a,
+        0x01b4feb7eb212cd1, 0x06d3fadfac84b343, 0x02bb31264501e14e, 0x0117ad428200c086,
+        0x045eb50a08030216, 0x01bf7b9d9cce00d6, 0x06fdee7673380357, 0x02cbf8fc2e1667bd,
+        0x011e6398126f5cb2, 0x04798e6049bd72c7, 0x01ca38f350b22dea, 0x0728e3cd42c8b7a5,
+        0x02dd27ebb4504975, 0x0125432b14ecea2f, 0x04950cac53b3a8bb, 0x01d53844ee47dd18,
+        0x0754e113b91f745f, 0x02eec06e4a0c94f3, 0x012c4cf8ea6b6ec8, 0x04b133e3a9adbb1e,
+        0x01e07b27dd78b140, 0x0781ec9f75e2c4fd, 0x0300c50c958de865, 0x01338205089f29c2,
+        0x04ce0814227ca708, 0x01ec033b40fea937, 0x07b00ced03faa4da, 0x0313385ece6441f1,
+        0x013ae3591f5b4d94, 0x04eb8d647d6d364e, 0x01f7d228322baf53, 0x07df48a0c8aebd4a,
+        0x03261d0d1d12b21e, 0x014272053ed4473f, 0x0509c814fb511cfc, 0x0203e9a1fe2071ff,
+        0x00ce5d73ff402d99, 0x033975cffd00b664, 0x014a2f1ffecd15c2, 0x0528bc7ffb345706,
+        0x02104b66647b5603, 0x00d3515c2831559b, 0x034d4570a0c5566b, 0x01521bc6a6b555c5,
+        0x05486f1a9ad55711, 0x021cf93dd788893a, 0x00d863b256369d4b, 0x03618ec958da752a,
+        0x015a391d56bdc877, 0x0568e4755af721dc, 0x0229f4fbbdfc73f2, 0x00dd95317f31c7fb,
+        0x037654c5fcc71fe9, 0x0162884f31e93ff7, 0x058a213cc7a4ffdb
     };
 
-    static const int8_t positive_index_lut[244] = {
-        17 , 17 , 17 , 17 , 17 , 16 , 16 , 16 , 16 , 16 , 15 , 15 , 15 , 15 , 15 , 14 , 14 , 14 , 14 , 14 ,
-        13 , 13 , 13 , 13 , 13 , 12 , 12 , 12 , 12 , 12 , 11 , 11 , 11 , 11 , 11 , 10 , 10 , 10 , 10 , 10 ,
-        9  , 9  , 9  , 9  , 9  , 8  , 8  , 8  , 8  , 7  , 7  , 7  , 7  , 7  , 6  , 6  , 6  , 6  , 6  , 5  ,
-        5  , 5  , 5  , 5  , 4  , 4  , 4  , 4  , 4  , 3  , 3  , 3  , 3  , 3  , 2  , 2  , 2  , 2  , 2  , 1  ,
-        1  , 1  , 1  , 1  , 0  , 0  , 0  , 0  , 0  , -1 , -1 , -1 , -1 , -1 , -2 , -2 , -2 , -2 , -3 , -3 ,
-        -3 , -3 , -3 , -4 , -4 , -4 , -4 , -4 , -5 , -5 , -5 , -5 , -5 , -6 , -6 , -6 , -6 , -6 , -7 , -7 ,
-        -7 , -7 , -7 , -8 , -8 , -8 , -8 , -8 , -9 , -9 , -9 , -9 , -9 , -10, -10, -10, -10, -10, -11, -11,
-        -11, -11, -11, -12, -12, -12, -12, -13, -13, -13, -13, -13, -14, -14, -14, -14, -14, -15, -15, -15,
-        -15, -15, -16, -16, -16, -16, -16, -17, -17, -17, -17, -17, -18, -18, -18, -18, -18, -19, -19, -19,
-        -19, -19, -20, -20, -20, -20, -20, -21, -21, -21, -21, -21, -22, -22, -22, -22, -23, -23, -23, -23,
-        -23, -24, -24, -24, -24, -24, -25, -25, -25, -25, -25, -26, -26, -26, -26, -26, -27, -27, -27, -27,
-        -27, -28, -28, -28, -28, -28, -29, -29, -29, -29, -29, -30, -30, -30, -30, -30, -31, -31, -31, -31,
-        -31, -32, -32, -32
+    static const uint8_t positive_index_lut[487] = {
+        17 , 18 , 18 , 18 , 19 , 19 , 20 , 20 , 20 , 21 , 21 , 22 , 22 , 22 , 23 , 23 , 24 , 24 , 24 , 25 ,
+        25 , 26 , 26 , 26 , 27 , 27 , 28 , 28 , 28 , 29 , 29 , 30 , 30 , 30 , 31 , 31 , 32 , 32 , 32 , 33 ,
+        33 , 34 , 34 , 34 , 35 , 35 , 36 , 36 , 36 , 37 , 37 , 38 , 38 , 38 , 39 , 39 , 40 , 40 , 40 , 41 ,
+        41 , 42 , 42 , 42 , 43 , 43 , 44 , 44 , 44 , 45 , 45 , 46 , 46 , 46 , 47 , 47 , 48 , 48 , 48 , 49 ,
+        49 , 49 , 50 , 50 , 51 , 51 , 51 , 52 , 52 , 53 , 53 , 53 , 54 , 54 , 55 , 55 , 55 , 56 , 56 , 57 ,
+        57 , 57 , 58 , 58 , 59 , 59 , 59 , 60 , 60 , 61 , 61 , 61 , 62 , 62 , 63 , 63 , 63 , 64 , 64 , 65 ,
+        65 , 65 , 66 , 66 , 67 , 67 , 67 , 68 , 68 , 69 , 69 , 69 , 70 , 70 , 71 , 71 , 71 , 72 , 72 , 73 ,
+        73 , 73 , 74 , 74 , 75 , 75 , 75 , 76 , 76 , 77 , 77 , 77 , 78 , 78 , 79 , 79 , 79 , 80 , 80 , 81 ,
+        81 , 81 , 82 , 82 , 83 , 83 , 83 , 84 , 84 , 85 , 85 , 85 , 86 , 86 , 87 , 87 , 87 , 88 , 88 , 88 ,
+        89 , 89 , 90 , 90 , 90 , 91 , 91 , 92 , 92 , 92 , 93 , 93 , 94 , 94 , 94 , 95 , 95 , 96 , 96 , 96 ,
+        97 , 97 , 98 , 98 , 98 , 99 , 99 , 100, 100, 100, 101, 101, 102, 102, 102, 103, 103, 104, 104, 104,
+        105, 105, 106, 106, 106, 107, 107, 108, 108, 108, 109, 109, 110, 110, 110, 111, 111, 112, 112, 112,
+        113, 113, 114, 114, 114, 115, 115, 116, 116, 116, 117, 117, 118, 118, 118, 119, 119, 120, 120, 120,
+        121, 121, 122, 122, 122, 123, 123, 124, 124, 124, 125, 125, 126, 126, 126, 127, 127, 127, 128, 128,
+        129, 129, 129, 130, 130, 131, 131, 131, 132, 132, 133, 133, 133, 134, 134, 135, 135, 135, 136, 136,
+        137, 137, 137, 138, 138, 139, 139, 139, 140, 140, 141, 141, 141, 142, 142, 143, 143, 143, 144, 144,
+        145, 145, 145, 146, 146, 147, 147, 147, 148, 148, 149, 149, 149, 150, 150, 151, 151, 151, 152, 152,
+        153, 153, 153, 154, 154, 155, 155, 155, 156, 156, 157, 157, 157, 158, 158, 159, 159, 159, 160, 160,
+        161, 161, 161, 162, 162, 163, 163, 163, 164, 164, 164, 165, 165, 166, 166, 166, 167, 167, 168, 168,
+        168, 169, 169, 170, 170, 170, 171, 171, 172, 172, 172, 173, 173, 174, 174, 174, 175, 175, 176, 176,
+        176, 177, 177, 178, 178, 178, 179, 179, 180, 180, 180, 181, 181, 182, 182, 182, 183, 183, 184, 184,
+        184, 185, 185, 186, 186, 186, 187, 187, 188, 188, 188, 189, 189, 190, 190, 190, 191, 191, 192, 192,
+        192, 193, 193, 194, 194, 194, 195, 195, 196, 196, 196, 197, 197, 198, 198, 198, 199, 199, 200, 200,
+        200, 201, 201, 202, 202, 202, 203, 203, 203, 204, 204, 205, 205, 205, 206, 206, 207, 207, 207, 208,
+        208, 209, 209, 209, 210, 210, 211
     };
-
     const diy_fp_t v = { .f = positive_base_lut[e], .e = positive_index_lut[e] };
     return v;
 }
 
 static inline diy_fp_t negative_diy_fp(int32_t e)
 {
-    static const uint64_t negative_base_lut[286] = {
-        100000000000000000, 625000000000000000, 390625000000000000, 244140625000000000,
-        152587890625000000, 953674316406250000, 596046447753906250, 372529029846191407,
-        232830643653869629, 145519152283668519, 909494701772928238, 568434188608080149,
-        355271367880050093, 222044604925031309, 138777878078144568, 867361737988403548,
-        542101086242752218, 338813178901720136, 211758236813575085, 132348898008484428,
-        827180612553027675, 516987882845642297, 323117426778526436, 201948391736579023,
-        126217744835361889, 788860905221011806, 493038065763132379, 308148791101957737,
-        192592994438723586, 120370621524202241, 752316384526264006, 470197740328915004,
-        293873587705571877, 183670992315982424, 114794370197489015, 717464813734306341,
-        448415508583941463, 280259692864963415, 175162308040602134, 109476442525376334,
-        684227765783602086, 427642353614751304, 267276471009219565, 167047794380762228,
-        104404871487976393, 652530446799852453, 407831529249907783, 254894705781192365,
-        159309191113245228, 995682444457782674, 622301527786114171, 388938454866321357,
-        243086534291450848, 151929083932156780, 949556774575979875, 593472984109987422,
-        370920615068742139, 231825384417963837, 144890865261227398, 905567907882671237,
-        565979942426669523, 353737464016668452, 221085915010417783, 138178696881511115,
-        863616855509444463, 539760534693402790, 337350334183376744, 210843958864610465,
-        131777474290381541, 823609214314884627, 514755758946802892, 321722349341751808,
-        201076468338594880, 125672792711621800, 785454954447636249, 490909346529772656,
-        306818341581107910, 191761463488192444, 119850914680120278, 749068216750751733,
-        468167635469219833, 292604772168262396, 182877982605163998, 114298739128227499,
-        714367119551421864, 446479449719638665, 279049656074774166, 174406035046733854,
-        109003771904208659, 681273574401304116, 425795984000815072, 266122490000509420,
-        166326556250318388, 103954097656448993, 649713110352806202, 406070693970503876,
-        253794183731564923, 158621364832228077, 991383530201425478, 619614706375890924,
-        387259191484931828, 242036994678082393, 151273121673801496, 945457010461259344,
-        590910631538287090, 369319144711429432, 230824465444643395, 144265290902902122,
-        901658068143138260, 563536292589461413, 352210182868413383, 220131364292758365,
-        137582102682973978, 859888141768587361, 537430088605367101, 335893805378354438,
-        209933628361471524, 131208517725919703, 820053235786998139, 512533272366873837,
-        320333295229296148, 200208309518310093, 125130193448943808, 782063709055898799,
-        488789818159936750, 305493636349960469, 190933522718725293, 119333451699203308,
-        745834073120020675, 466146295700012922, 291341434812508076, 182088396757817548,
-        113805247973635968, 711282799835224795, 444551749897015497, 277844843685634686,
-        173653027303521679, 108533142064701049, 678332137904381557, 423957586190238473,
-        264973491368899046, 165608432105561904, 103505270065976190, 646907937912351186,
-        404317461195219491, 252698413247012182, 157936508279382614, 987103176746141335,
-        616939485466338335, 385587178416461459, 240991986510288412, 150619991568930258,
-        941374947305814109, 588359342066133818, 367724588791333637, 229827867994583523,
-        143642417496614702, 897765109353841886, 561103193346151179, 350689495841344487,
-        219180934900840304, 136988084313025190, 856175526956407438, 535109704347754649,
-        334443565217346656, 209027228260841660, 130642017663026038, 816512610393912733,
-        510320381496195458, 318950238435122162, 199343899021951351, 124589936888719595,
-        778687105554497464, 486679440971560915, 304174650607225572, 190109156629515983,
-        118818222893447489, 742613893084046807, 464133683177529254, 290083551985955784,
-        181302219991222365, 113313887494513978, 708211796840712363, 442632373025445227,
-        276645233140903267, 172903270713064542, 108064544195665339, 675403401222908366,
-        422127125764317729, 263829453602698581, 164893408501686613, 103058380313554133,
-        644114876959713331, 402571798099820832, 251607373812388020, 157254608632742513,
-        982841303954640703, 614275814971650440, 383922384357281525, 239951490223300953,
-        149969681389563096, 937310508684769347, 585819067927980842, 366136917454988027,
-        228835573409367517, 143022233380854698, 893888958630341861, 558680599143963663,
-        349175374464977290, 218234609040610806, 136396630650381754, 852478941564885961,
-        532799338478053726, 332999586548783579, 208124741592989737, 130077963495618586,
-        812987271847616158, 508117044904760099, 317573153065475062, 198483220665921914,
-        124052012916201196, 775325080726257475, 484578175453910922, 302861359658694327,
-        189288349786683954, 118305218616677472, 739407616354234195, 462129760221396372,
-        288831100138372733, 180519437586482958, 112824648491551849, 705154053072199054,
-        440721283170124409, 275450801981327756, 172156751238329847, 107597969523956155,
-        672487309524725965, 420304568452953728, 262690355283096080, 164181472051935050,
-        102613420032459407, 641333875202871289, 400833672001794556, 250521045001121598,
-        156575653125700999, 978597832035631240, 611623645022269525, 382264778138918453,
-        238915486336824034, 149322178960515021, 933263618503218879, 583289761564511800,
-        364556100977819875, 227847563111137422, 142404726944460889, 890029543402880554,
-        556268464626800346, 347667790391750217, 217292368994843886, 135807730621777429,
-        848798316386108927, 530498947741318079, 331561842338323800, 207226151461452375,
-        129516344663407735, 809477154146298338, 505923221341436462, 316202013338397789,
-        197626258336498618, 123516411460311637, 771977571626947726, 482485982266842329,
-        301553738916776456, 188471086822985285, 117794429264365803, 736215182902286268,
-        460134489313928918, 287584055821205574, 179740034888253484, 112337521805158428,
-        702109511282240170, 438818444551400106, 274261527844625067, 171413454902890667,
-        107133409314306667, 669583808214416666
+    static const uint64_t negative_base_lut[539] = {
+        0x016345785d8a0000, 0x03782dace9d90000, 0x00de0b6b3a764000, 0x022b1c8c1227a000,
+        0x056bc75e2d631000, 0x015af1d78b58c400, 0x03635c9adc5dea00, 0x00d8d726b7177a80,
+        0x021e19e0c9bab240, 0x054b40b1f852bda0, 0x0152d02c7e14af68, 0x034f086f3b33b684,
+        0x00d3c21bcecceda1, 0x0211654585005213, 0x052b7d2dcc80cd2f, 0x014adf4b7320334c,
+        0x033b2e3c9fd0803d, 0x00cecb8f27f42010, 0x0204fce5e3e25027, 0x050c783eb9b5c860,
+        0x01431e0fae6d7218, 0x0327cb2734119d3c, 0x07e37be2022c0915, 0x01f8def8808b0246,
+        0x04ee2d6d415b85ad, 0x013b8b5b5056e16c, 0x0314dc6448d9338d, 0x07b426fab61f00df,
+        0x01ed09bead87c038, 0x04d0985cb1d3608b, 0x013426172c74d823, 0x03025f39ef241c57,
+        0x0785ee10d5da46da, 0x01e17b84357691b7, 0x04b3b4ca85a86c48, 0x012ced32a16a1b12,
+        0x02f050fe938943ad, 0x0758ca7c70d72930, 0x01d6329f1c35ca4c, 0x04977e8dc68679be,
+        0x0125dfa371a19e70, 0x02deaf189c140c17, 0x072cb5bd86321e39, 0x01cb2d6f618c878f,
+        0x047bf19673df52e4, 0x011efc659cf7d4b9, 0x02cd76fe086b93cf, 0x0701a97b150cf184,
+        0x01c06a5ec5433c61, 0x046109eced2816f3, 0x0118427b3b4a05bd, 0x02bca63414390e58,
+        0x06d79f82328ea3db, 0x01b5e7e08ca3a8f7, 0x0446c3b15f992669, 0x0111b0ec57e6499b,
+        0x02ac3a4edbbfb802, 0x06ae91c5255f4c04, 0x01aba4714957d301, 0x042d1b1b375b8f83,
+        0x010b46c6cdd6e3e1, 0x029c30f1029939b2, 0x06867a5a867f103c, 0x01a19e96a19fc40f,
+        0x04140c78940f6a25, 0x0105031e2503da8a, 0x028c87cb5c89a258, 0x065f537c675815da,
+        0x0197d4df19d60577, 0x03fb942dc0970da9, 0x00fee50b7025c36b, 0x027d3c9c985e688a,
+        0x063917877cec0557, 0x018e45e1df3b0156, 0x03e3aeb4ae138357, 0x00f8ebad2b84e0d6,
+        0x026e4d30eccc3216, 0x0613c0fa4ffe7d37, 0x0184f03e93ff9f4e, 0x03cc589c71ff0e43,
+        0x00f316271c7fc391, 0x025fb761c73f68ea, 0x05ef4a74721e8648, 0x017bd29d1c87a192,
+        0x03b58e88c75313ed, 0x00ed63a231d4c4fc, 0x025179157c93ec74, 0x05cbaeb5b771cf22,
+        0x0172ebad6ddc73c9, 0x039f4d3192a72176, 0x00e7d34c64a9c85e, 0x0243903efba874ea,
+        0x05a8e89d75252447, 0x016a3a275d494912, 0x03899162693736ad, 0x00e264589a4dcdac,
+        0x0235fadd81c2822c, 0x0586f329c466456e, 0x0161bcca7119915c, 0x037457fa1abfeb65,
+        0x00dd15fe86affada, 0x0228b6fc50b7f31f, 0x0565c976c9cbdfcd, 0x0159725db272f7f4,
+        0x035f9dea3e1f6be0, 0x00d7e77a8f87daf8, 0x021bc2b266d3a36c, 0x054566be0111188e,
+        0x015159af80444624, 0x034b6036c0aaaf59, 0x00d2d80db02aabd7, 0x020f1c22386aad98,
+        0x0525c6558d0ab1fb, 0x014971956342ac7f, 0x03379bf57826af3d, 0x00cde6fd5e09abd0,
+        0x0202c1796b182d86, 0x0506e3af8bbc71cf, 0x0141b8ebe2ef1c74, 0x03244e4db755c722,
+        0x07dac3c24a5671d3, 0x01f6b0f092959c75, 0x04e8ba596e760724, 0x013a2e965b9d81c9,
+        0x03117477e509c477, 0x07aba32bbc986b29, 0x01eae8caef261acb, 0x04cb45fb55df42fa,
+        0x0132d17ed577d0bf, 0x02ff0bbd15ab89dc, 0x077d9d58b62cd8a6, 0x01df67562d8b362a,
+        0x04ae825771dc0768, 0x012ba095dc7701da, 0x02ed1176a72984a1, 0x0750aba8a1e7cb92,
+        0x01d42aea2879f2e5, 0x04926b496530df3b, 0x01249ad2594c37cf, 0x02db830ddf3e8b85,
+        0x0724c7a2ae1c5ccc, 0x01c931e8ab871733, 0x0476fcc5acd1ba00, 0x011dbf316b346e80,
+        0x02ca5dfb8c031440, 0x06f9eaf4de07b2a0, 0x01be7abd3781eca8, 0x045c32d90ac4cfa4,
+        0x01170cb642b133e9, 0x02b99fc7a6bb01c7, 0x06d00f7320d38470, 0x01b403dcc834e11c,
+        0x044209a7f48432c6, 0x01108269fd210cb2, 0x02a94608f8d29fbc, 0x06a72f166e0e8f55,
+        0x01a9cbc59b83a3d6, 0x04287d6e04c91995, 0x010a1f5b81324666, 0x02994e64c2fdaffe,
+        0x067f43fbe77a37f9, 0x019fd0fef9de8dff, 0x040f8a7d70ac62fc, 0x0103e29f5c2b18bf,
+        0x0289b68e666bbdde, 0x06584864000d5aa9, 0x01961219000356ab, 0x03f72d3e800858aa,
+        0x00fdcb4fa002162b, 0x027a7c471005376a, 0x063236b1a80d0a89, 0x018c8dac6a0342a3,
+        0x03df622f09082696, 0x00f7d88bc24209a6, 0x026b9d5d65a5181e, 0x060d09697e1cbc4a,
+        0x0183425a5f872f13, 0x03c825e1eed1f5af, 0x00f209787bb47d6c, 0x025d17ad3543398d,
+        0x05e8bb3105280fe0, 0x017a2ecc414a03f8, 0x03b174fea33909ec, 0x00ec5d3fa8ce427b,
+        0x024ee91f2603a634, 0x05c546cddf091f81, 0x017151b377c247e1, 0x039b4c40ab65b3b1,
+        0x00e6d3102ad96ced, 0x02410fa86b1f904f, 0x05a2a7250bcee8c4, 0x0168a9c942f3ba31,
+        0x0385a8772761517b, 0x00e16a1dc9d8545f, 0x0233894a789cd2ed, 0x0580d73a2d880f50,
+        0x016035ce8b6203d4, 0x037086845c750992, 0x00dc21a1171d4265, 0x02265412b9c925fb,
+        0x055fd22ed076def4, 0x0157f48bb41db7bd, 0x035be35d424a4b59, 0x00d6f8d7509292d7,
+        0x02196e1a496e6f18, 0x053f9341b79415ba, 0x014fe4d06de5056f, 0x0347bc0912bc8d94,
+        0x00d1ef0244af2365, 0x020cd585abb5d87d, 0x052015ce2d469d38, 0x014805738b51a74e,
+        0x03340da0dc4c2243, 0x00cd036837130891, 0x0200888489af956a, 0x0501554b5836f588,
+        0x01405552d60dbd62, 0x0320d54f17225975, 0x07d21545b9d5dfa5, 0x01f485516e7577ea,
+        0x04e34d4b9425abc7, 0x0138d352e5096af2, 0x030e104f3c978b5d, 0x07a328c6177adc67,
+        0x01e8ca3185deb71a, 0x04c5f97bceacc9c1, 0x01317e5ef3ab3271, 0x02fbbbed612bfe19,
+        0x077555d172edfb3d, 0x01dd55745cbb7ed0, 0x04a955a2e7d4bd06, 0x012a5568b9f52f42,
+        0x02e9d585d0e4f624, 0x074895ce8a3c6759, 0x01d22573a28f19d7, 0x048d5da11665c098,
+        0x0123576845997026, 0x02d85a84adff985f, 0x071ce24bb2fefced, 0x01c73892ecbfbf3c,
+        0x04720d6f4fdf5e14, 0x011c835bd3f7d785, 0x02c7486591eb9acd, 0x06f234fdeccd0300,
+        0x01bc8d3f7b3340c0, 0x0457611eb40021e0, 0x0115d847ad000878, 0x02b69cb33080152c,
+        0x06c887bff94034ee, 0x01b221effe500d3c, 0x043d54d7fbc82115, 0x010f5535fef20846,
+        0x02a65506fd5d14ad, 0x069fd4917968b3b0, 0x01a7f5245e5a2cec, 0x0423e4daebe1704e,
+        0x0108f936baf85c14, 0x02966f08d36ce631, 0x0678159610903f7a, 0x019e056584240fdf,
+        0x040b0d7dca5a27ac, 0x0102c35f729689eb, 0x0286e86e9e7858cc, 0x065145148c2cddfd,
+        0x01945145230b3780, 0x03f2cb2cd79c0abe, 0x00fcb2cb35e702b0, 0x0277befc06c186b7,
+        0x062b5d7610e3d0c9, 0x018ad75d8438f433, 0x03db1a69ca8e627e, 0x00f6c69a72a398a0,
+        0x0268f0821e98fd8f, 0x060659454c7e79e4, 0x01819651531f9e79, 0x03c3f7cb4fcf0c2f,
+        0x00f0fdf2d3f3c30c, 0x025a7adf11e1679e, 0x05e2332dacb38309, 0x01788ccb6b2ce0c3,
+        0x03ad5ffc8bf031e6, 0x00eb57ff22fc0c7a, 0x024c5bfdd7761f30, 0x05bee5fa9aa74df7,
+        0x016fb97ea6a9d37e, 0x03974fbca0a890bb, 0x00e5d3ef282a242f, 0x023e91d5e4695a75,
+        0x059c6c96bb076223, 0x01671b25aec1d889, 0x0381c3de34e49d56, 0x00e070f78d392756,
+        0x02311a6ae10ee256, 0x057ac20b32a535d6, 0x015eb082cca94d76, 0x036cb946ffa741a6,
+        0x00db2e51bfe9d06a, 0x0223f3cc5fc88908, 0x0559e17eef755693, 0x0156785fbbdd55a5,
+        0x03582cef55a9561c, 0x00d60b3bd56a5587, 0x02171c159589d5d2, 0x0539c635f5d8968c,
+        0x014e718d7d7625a3, 0x03441be1b9a75e18, 0x00d106f86e69d786, 0x020a916d14089acf,
+        0x051a6b90b2158305, 0x01469ae42c8560c2, 0x0330833a6f4d71e3, 0x07f9481216419cb7,
+        0x01fe52048590672e, 0x04fbcd0b4de901f3, 0x013ef342d37a407d, 0x031d602710b1a138,
+        0x07c97061a9bc130b, 0x01f25c186a6f04c3, 0x04dde63d0a158be7, 0x0137798f428562fa,
+        0x030aafe6264d7770, 0x079ab7bf5fc1aa98, 0x01e6adefd7f06aa6, 0x04c0b2d79bd90a9f,
+        0x01302cb5e6f642a8, 0x02f86fc6c167a6a4, 0x076d1770e3832099, 0x01db45dc38e0c827,
+        0x04a42ea68e31f460, 0x01290ba9a38c7d18, 0x02e69d2818df38bc, 0x074088e43e2e0dd5,
+        0x01d022390f8b8376, 0x0488558ea6dcc8a6, 0x01221563a9b7322a, 0x02d535792849fd68,
+        0x071505aee4b8f982, 0x01c5416bb92e3e61, 0x046d238d4ef39bf2, 0x011b48e353bce6fd,
+        0x02c4363851584177, 0x06ea878ccb5ca3a9, 0x01baa1e332d728eb, 0x045294b7ff19e64a,
+        0x0114a52dffc67993, 0x02b39cf2ff702fee, 0x06c1085f7e9877d3, 0x01b04217dfa61df5,
+        0x0438a53baf1f4ae4, 0x010e294eebc7d2b9, 0x02a367454d738ecf, 0x0698822d41a0e504,
+        0x01a6208b50683941, 0x041f515c49048f23, 0x0107d457124123c9, 0x029392d9ada2d976,
+        0x0670ef2032171fa6, 0x019c3bc80c85c7ea, 0x040695741f4e73c8, 0x0101a55d07d39cf2,
+        0x02841d689391085d, 0x064a498570ea94e8, 0x019292615c3aa53a, 0x03ee6df366929d11,
+        0x00fb9b7cd9a4a745, 0x027504b8201ba22b, 0x06248bcc5045156b, 0x018922f31411455b,
+        0x03d6d75fb22b2d63, 0x00f5b5d7ec8acb59, 0x0266469bcf5afc5e, 0x05ffb085866376ea,
+        0x017fec216198ddbb, 0x03bfce5373fe2a53, 0x00eff394dcff8a95, 0x0257e0f4287eda74,
+        0x05dbb262653d2221, 0x0176ec98994f4889, 0x03a94f7d7f463555, 0x00ea53df5fd18d56,
+        0x0249d1ae6f8be155, 0x05b88c3416ddb354, 0x016e230d05b76cd5, 0x039357a08e4a9015,
+        0x00e4d5e82392a406, 0x023c16c458ee9a0d, 0x059638eade548120, 0x01658e3ab7952048,
+        0x037de392caf4d0b4, 0x00df78e4b2bd342d, 0x022eae3bbed90271, 0x0574b3955d1e861a,
+        0x015d2ce55747a187, 0x0368f03d5a3313d0, 0x00da3c0f568cc4f4, 0x02219626585fec62,
+        0x0553f75fdcefcef5, 0x0154fdd7f73bf3be, 0x03547a9bea15e159, 0x00d51ea6fa857857,
+        0x0214cca1724dacd8, 0x0533ff939dc2301b, 0x014cffe4e7708c07, 0x03407fbc42995e11,
+        0x00d01fef10a65785, 0x02084fd5a99fdacb, 0x0514c796280fa2fb, 0x014531e58a03e8bf,
+        0x032cfcbdd909c5dd, 0x07f077da9e986ea7, 0x01fc1df6a7a61baa, 0x04f64ae8a31f4529,
+        0x013d92ba28c7d14b, 0x0319eed165f38b3a, 0x07c0d50b7ee0dc0f, 0x01f03542dfb83704,
+        0x04d885272f4c898a, 0x01362149cbd32263, 0x030753387d8fd5f6, 0x0792500d39e796e7,
+        0x01e494034e79e5ba, 0x04bb72084430be51, 0x012edc82110c2f95, 0x02f527452a9e76f3,
+        0x0764e22cea8c295e, 0x01d9388b3aa30a58, 0x049f0d5c129799db, 0x0127c35704a5e677,
+        0x02e368598b9ec029, 0x073884dfdd0ce065, 0x01ce2137f743381a, 0x0483530bea280c40,
+        0x0120d4c2fa8a0310, 0x02d213e7725907a8, 0x070d31c29dde9323, 0x01c34c70a777a4c9,
+        0x04683f19a2ab1bf6, 0x011a0fc668aac6fe, 0x02c1277005aaf17a, 0x06e2e2980e2b5bb0,
+        0x01b8b8a6038ad6ec, 0x044dcd9f08db194e, 0x01137367c236c654, 0x02b0a0836588efd1,
+        0x06b991487dd6578a, 0x01ae64521f7595e3, 0x0433facd4ea5f6b7, 0x010cfeb353a97dae,
+        0x02a07cc05127ba32, 0x069137e0cae3517d, 0x01a44df832b8d460, 0x041ac2ec7ece12ee,
+        0x0106b0bb1fb384bc, 0x0290b9d3cf40cbd5, 0x0669d0918621fd94, 0x019a742461887f65,
+        0x0402225af3d53e7d, 0x01008896bcf54fa0, 0x02815578d865470e, 0x064355ae1cfd31a3,
+        0x0190d56b873f4c69, 0x03ea158cd21e3f06, 0x00fa856334878fc2, 0x02724d780352e764,
+        0x061dc1ac084f4279, 0x0187706b0213d09f, 0x03d2990b8531898c, 0x00f4a642e14c6263,
+        0x02639fa7333ef5f7, 0x05f90f22001d66ea, 0x017e43c8800759bb, 0x03bba97540126052,
+        0x00eeea5d50049815, 0x025549e9480b7c34, 0x05d538c7341cb680, 0x01754e31cd072da0,
+        0x03a5437c8091f210, 0x00e950df20247c84, 0x02474a2dd05b374a, 0x05b2397288e40a39,
+        0x016c8e5ca239028f, 0x038f63e7958e8664, 0x00e3d8f9e563a199, 0x02399e70bd7913ff,
+        0x05900c19d9aeb1fc, 0x01640306766bac7f, 0x037a0790280d2f3e, 0x00de81e40a034bd0,
+        0x022c44ba19083d87, 0x056eabd13e9499d0, 0x015baaf44fa52674, 0x03652b62c71ce022,
+        0x00d94ad8b1c73809, 0x021f3b1dbc720c16, 0x054e13ca571d1e35, 0x015384f295c7478e,
+        0x0350cc5e767232e2, 0x00d433179d9c8cb9, 0x02127fbb0a075fcd, 0x052e3f5399126f80,
+        0x014b8fd4e6449be0, 0x033ce7943fab85b0, 0x00cf39e50feae16c, 0x020610bca7cb338e,
+        0x050f29d7a37c00e3, 0x0143ca75e8df0039, 0x03297a26c62d808e, 0x07e7b160ef71c163,
+        0x01f9ec583bdc7059, 0x04f0cedc95a718de, 0x013c33b72569c638, 0x03168149dd886f8b,
+        0x07b84338a9d516da, 0x01ee10ce2a7545b7, 0x04d32a036a252e49, 0x0134ca80da894b93,
+        0x0303fa4222573cee, 0x0789f1a555da1851, 0x01e27c6955768615, 0x04b6370755a84f33,
+        0x012d8dc1d56a13cd, 0x02f1e26495893180, 0x075cb5fb75d6fbbf, 0x01d72d7edd75bef0,
+        0x0499f1bd29a65d58, 0x01267c6f4a699756, 0x02e037163a07fa57, 0x073089b79113f1d9,
+        0x01cc226de444fc77, 0x047e5612baac7728, 0x011f9584aeab1dca, 0x02cef5cbb4abca79,
+        0x0705667d43ad7a2e, 0x01c1599f50eb5e8c, 0x0463600e4a4c6c5d, 0x0118d80392931b18,
+        0x02be1c08ee6fc3ba, 0x06db461654176951, 0x01b6d1859505da55
     };
 
-    static const int8_t negative_index_lut[286] = {
-        17 , 18 , 18 , 18 , 18 , 19 , 19 , 19 , 19 , 19 , 20 , 20 , 20 , 20 , 20 , 21 , 21 , 21 , 21 , 21 ,
-        22 , 22 , 22 , 22 , 22 , 23 , 23 , 23 , 23 , 23 , 24 , 24 , 24 , 24 , 24 , 25 , 25 , 25 , 25 , 25 ,
-        26 , 26 , 26 , 26 , 26 , 27 , 27 , 27 , 27 , 28 , 28 , 28 , 28 , 28 , 29 , 29 , 29 , 29 , 29 , 30 ,
-        30 , 30 , 30 , 30 , 31 , 31 , 31 , 31 , 31 , 32 , 32 , 32 , 32 , 32 , 33 , 33 , 33 , 33 , 33 , 34 ,
-        34 , 34 , 34 , 34 , 35 , 35 , 35 , 35 , 35 , 36 , 36 , 36 , 36 , 36 , 37 , 37 , 37 , 37 , 38 , 38 ,
-        38 , 38 , 38 , 39 , 39 , 39 , 39 , 39 , 40 , 40 , 40 , 40 , 40 , 41 , 41 , 41 , 41 , 41 , 42 , 42 ,
-        42 , 42 , 42 , 43 , 43 , 43 , 43 , 43 , 44 , 44 , 44 , 44 , 44 , 45 , 45 , 45 , 45 , 45 , 46 , 46 ,
-        46 , 46 , 46 , 47 , 47 , 47 , 47 , 48 , 48 , 48 , 48 , 48 , 49 , 49 , 49 , 49 , 49 , 50 , 50 , 50 ,
-        50 , 50 , 51 , 51 , 51 , 51 , 51 , 52 , 52 , 52 , 52 , 52 , 53 , 53 , 53 , 53 , 53 , 54 , 54 , 54 ,
-        54 , 54 , 55 , 55 , 55 , 55 , 55 , 56 , 56 , 56 , 56 , 56 , 57 , 57 , 57 , 57 , 58 , 58 , 58 , 58 ,
-        58 , 59 , 59 , 59 , 59 , 59 , 60 , 60 , 60 , 60 , 60 , 61 , 61 , 61 , 61 , 61 , 62 , 62 , 62 , 62 ,
-        62 , 63 , 63 , 63 , 63 , 63 , 64 , 64 , 64 , 64 , 64 , 65 , 65 , 65 , 65 , 65 , 66 , 66 , 66 , 66 ,
-        66 , 67 , 67 , 67 , 67 , 68 , 68 , 68 , 68 , 68 , 69 , 69 , 69 , 69 , 69 , 70 , 70 , 70 , 70 , 70 ,
-        71 , 71 , 71 , 71 , 71 , 72 , 72 , 72 , 72 , 72 , 73 , 73 , 73 , 73 , 73 , 74 , 74 , 74 , 74 , 74 ,
-        75 , 75 , 75 , 75 , 75 , 76
+    static const uint8_t negative_index_lut[539] = {
+        17 , 17 , 16 , 16 , 16 , 15 , 15 , 14 , 14 , 14 , 13 , 13 , 12 , 12 , 12 , 11 , 11 , 10 , 10 , 10 ,
+        9  , 9  , 9  , 8  , 8  , 7  , 7  , 7  , 6  , 6  , 5  , 5  , 5  , 4  , 4  , 3  , 3  , 3  , 2  , 2  ,
+        1  , 1  , 1  , 0  , 0  , 1  , 1  , 1  , 2  , 2  , 3  , 3  , 3  , 4  , 4  , 5  , 5  , 5  , 6  , 6  ,
+        7  , 7  , 7  , 8  , 8  , 9  , 9  , 9  , 10 , 10 , 11 , 11 , 11 , 12 , 12 , 13 , 13 , 13 , 14 , 14 ,
+        15 , 15 , 15 , 16 , 16 , 17 , 17 , 17 , 18 , 18 , 19 , 19 , 19 , 20 , 20 , 21 , 21 , 21 , 22 , 22 ,
+        23 , 23 , 23 , 24 , 24 , 25 , 25 , 25 , 26 , 26 , 27 , 27 , 27 , 28 , 28 , 29 , 29 , 29 , 30 , 30 ,
+        30 , 31 , 31 , 32 , 32 , 32 , 33 , 33 , 34 , 34 , 34 , 35 , 35 , 36 , 36 , 36 , 37 , 37 , 38 , 38 ,
+        38 , 39 , 39 , 40 , 40 , 40 , 41 , 41 , 42 , 42 , 42 , 43 , 43 , 44 , 44 , 44 , 45 , 45 , 46 , 46 ,
+        46 , 47 , 47 , 48 , 48 , 48 , 49 , 49 , 50 , 50 , 50 , 51 , 51 , 52 , 52 , 52 , 53 , 53 , 54 , 54 ,
+        54 , 55 , 55 , 56 , 56 , 56 , 57 , 57 , 58 , 58 , 58 , 59 , 59 , 60 , 60 , 60 , 61 , 61 , 62 , 62 ,
+        62 , 63 , 63 , 64 , 64 , 64 , 65 , 65 , 66 , 66 , 66 , 67 , 67 , 68 , 68 , 68 , 69 , 69 , 69 , 70 ,
+        70 , 71 , 71 , 71 , 72 , 72 , 73 , 73 , 73 , 74 , 74 , 75 , 75 , 75 , 76 , 76 , 77 , 77 , 77 , 78 ,
+        78 , 79 , 79 , 79 , 80 , 80 , 81 , 81 , 81 , 82 , 82 , 83 , 83 , 83 , 84 , 84 , 85 , 85 , 85 , 86 ,
+        86 , 87 , 87 , 87 , 88 , 88 , 89 , 89 , 89 , 90 , 90 , 91 , 91 , 91 , 92 , 92 , 93 , 93 , 93 , 94 ,
+        94 , 95 , 95 , 95 , 96 , 96 , 97 , 97 , 97 , 98 , 98 , 99 , 99 , 99 , 100, 100, 101, 101, 101, 102,
+        102, 103, 103, 103, 104, 104, 105, 105, 105, 106, 106, 106, 107, 107, 108, 108, 108, 109, 109, 110,
+        110, 110, 111, 111, 112, 112, 112, 113, 113, 114, 114, 114, 115, 115, 116, 116, 116, 117, 117, 118,
+        118, 118, 119, 119, 120, 120, 120, 121, 121, 122, 122, 122, 123, 123, 124, 124, 124, 125, 125, 126,
+        126, 126, 127, 127, 128, 128, 128, 129, 129, 130, 130, 130, 131, 131, 132, 132, 132, 133, 133, 134,
+        134, 134, 135, 135, 136, 136, 136, 137, 137, 138, 138, 138, 139, 139, 140, 140, 140, 141, 141, 142,
+        142, 142, 143, 143, 144, 144, 144, 145, 145, 145, 146, 146, 147, 147, 147, 148, 148, 149, 149, 149,
+        150, 150, 151, 151, 151, 152, 152, 153, 153, 153, 154, 154, 155, 155, 155, 156, 156, 157, 157, 157,
+        158, 158, 159, 159, 159, 160, 160, 161, 161, 161, 162, 162, 163, 163, 163, 164, 164, 165, 165, 165,
+        166, 166, 167, 167, 167, 168, 168, 169, 169, 169, 170, 170, 171, 171, 171, 172, 172, 173, 173, 173,
+        174, 174, 175, 175, 175, 176, 176, 177, 177, 177, 178, 178, 179, 179, 179, 180, 180, 181, 181, 181,
+        182, 182, 183, 183, 183, 184, 184, 184, 185, 185, 186, 186, 186, 187, 187, 188, 188, 188, 189, 189,
+        190, 190, 190, 191, 191, 192, 192, 192, 193, 193, 194, 194, 194, 195, 195, 196, 196, 196, 197
     };
-
-    const diy_fp_t v = { .f = negative_base_lut[e], .e = negative_index_lut[e] };
+    const diy_fp_t v = { .f = negative_base_lut[e], .e = e < 45 ? negative_index_lut[e] : -negative_index_lut[e] };
     return v;
 }
 
-static inline void ldouble_convert(diy_fp_t *v)
+static inline int32_t ldouble_convert(diy_fp_t *v, char *buffer, int32_t *vnum_digits)
 {
-    uint64_t f = v->f << (v->e & 3);
-    int32_t e = v->e >> 2;
-    diy_fp_t x = e >= 0 ? positive_diy_fp(e) : negative_diy_fp(-e);
-
-#if USING_U128_MUL
     __extension__ typedef unsigned __int128 u128;
-    const u128 m = (u128)f * x.f;
 
-#if !USING_HIGH_RESOLUTION
-    static const u128 cmp1 = (u128)99999999999999950 * 10000000000000000;
-    static const u128 cmp2 = (u128)99999999999999950 * 100000000000000000;
+    const uint64_t *cmp_lut;
+    uint64_t add, high;
+    uint32_t low, b0, b1;
+    int32_t num_digits, trailing_zeros;
 
-    if (m < cmp1) { // (1e33 - 5e17) >> 64
-        v->f = (uint64_t)((m + 500000000000000000llu) / 1000000000000000000llu);
-        v->e = e - x.e + 18;
-    } else if (m < cmp2) { // (1e34 - 5e18) >> 64
-        v->f = (uint64_t)((m + 5000000000000000000llu) / 10000000000000000000llu);
-        v->e = e - x.e + 19;
-    } else {
-        static const u128 magich = (u128)10 * 5000000000000000000llu;
-        static const u128 magicn = (u128)10 * 10000000000000000000llu;
-        v->f = (uint64_t)((m + magich) / magicn);
-        v->e = e - x.e + 20;
-    }
-#else
-    static const u128 cmp1 = (u128)99999999999999995 * 10000000000000000;
-    static const u128 cmp2 = (u128)99999999999999995 * 100000000000000000;
+    int32_t s = v->e & 1;
+    uint64_t f = v->f << s;
+    int32_t e = v->e >> 1;
+    diy_fp_t x = e >= 0 ? positive_diy_fp(e) : negative_diy_fp(-e);
+    u128 m = (u128)f * x.f;
 
-    if (m < cmp1) { // (1e33 - 5e16) >> 64
-        v->f = (uint64_t)((m + 50000000000000000llu) / 100000000000000000llu);
+    static const u128 cmp = (u128)99999999999999995llu * 10000000000000000llu;
+    static const uint64_t add1 = 50000000000000000llu;
+    static const uint64_t add2 = 500000000000000000llu;
+    static const uint64_t cmp_lut1[11] = {
+        0,                      100000000000000000llu,  200000000000000000llu,  300000000000000000llu,
+        400000000000000000llu,  500000000000000000llu,  600000000000000000llu,  700000000000000000llu,
+        800000000000000000llu,  900000000000000000llu,  1000000000000000000llu };
+    static const uint64_t cmp_lut2[11] = {
+        0,                      1000000000000000000llu, 2000000000000000000llu, 3000000000000000000llu,
+        4000000000000000000llu, 5000000000000000000llu, 6000000000000000000llu, 7000000000000000000llu,
+        8000000000000000000llu, 9000000000000000000llu, 10000000000000000000llu };
+    if (m < cmp) {              // 1e33 - 5e16
+        v->f = (uint64_t)((m + add1) / cmp_lut1[1]);
         v->e = e - x.e + 17;
-    } else if (m < cmp2) { // (1e34 - 5e17) >> 64
-        v->f = (uint64_t)((m + 500000000000000000llu) / 1000000000000000000llu);
+        add = add1;
+        cmp_lut = cmp_lut1;
+    } else {
+        v->f = (uint64_t)((m + add2) / cmp_lut2[1]);
         v->e = e - x.e + 18;
-    } else {
-        v->f = (uint64_t)((m + 5000000000000000000llu) / 10000000000000000000llu);
-        v->e = e - x.e + 19;
-    }
-#endif
-
-#else
-
-#if !USING_HIGH_RESOLUTION
-    double d = (double)f * x.f;
-    if (d + 5e17 < 1e33) {
-        v->f = (uint64_t)((d + 5e17) * 1e-18);
-        v->e = e - x.e + 18;
-    } else if (d + 5e18 < 1e34) {
-        v->f = (uint64_t)((d + 5e18) * 1e-19);
-        v->e = e - x.e + 19;
-    } else {
-        v->f = (uint64_t)((d + 5e19) * 1e-20);
-        v->e = e - x.e + 20;
-    }
-#else
-    double d = (double)f * x.f;
-    if (d + 5e16 < 1e33) {
-        v->f = (uint64_t)((d + 5e16) * 1e-17);
-        v->e = e - x.e + 17;
-    } else if (d + 5e17 < 1e34) {
-        v->f = (uint64_t)((d + 5e17) * 1e-18);
-        v->e = e - x.e + 18;
-    } else {
-        v->f = (uint64_t)((d + 5e18) * 1e-19);
-        v->e = e - x.e + 19;
-    }
-#endif
-#endif
-}
-#endif
-
-#if !USING_HIGH_RESOLUTION
-static inline int32_t fill_significand(char *buffer, uint64_t digits, int32_t *ptz, int32_t *fixed)
-{
-    char *s = buffer;
-    uint32_t q, r, q1, r1, q2, r2;
-
-    *fixed = 0;
-    q = (uint32_t)(digits / 100000000);
-    r = (uint32_t)(digits - (uint64_t)q * 100000000);
-    q1 = FAST_DIV10000(q);
-    r1 = q - q1 * 10000;
-
-    if (q1 >= 100) {
-        q2 = FAST_DIV100(q1);
-        r2 = q1 - q2 * 100;
-        if (q2 >= 10) {
-            *ptz = tz_100_lut[q2];
-            memcpy(s, &ch_100_lut[q2<<1], 2);
-            s += 2;
-        } else {
-            *ptz = 0;
-            *s++ = q2 + '0';
-        }
-        if (!r2) {
-            *ptz += 2;
-            memset(s, '0', 2);
-            s += 2;
-        } else {
-            *ptz = tz_100_lut[r2];
-            memcpy(s, &ch_100_lut[r2<<1], 2);
-            s += 2;
-        }
-    } else {
-        r2 = q1;
-        *ptz = tz_100_lut[r2];
-        memcpy(s, &ch_100_lut[r2<<1], 2);
-        s += 2;
+        add = add2;
+        cmp_lut = cmp_lut2;
     }
 
-    if (!r1) {
-        *ptz += 4;
-        memset(s, '0', 4);
-        s += 4;
-    } else {
-        s += fill_t_4_digits(s, r1, ptz);
-    }
+    high = v->f / 100;
+    low = v->f % 100;
+    if (low) {
+        b1 = ch_100_lut[low << 1] - '0';
+        b0 = ch_100_lut[(low << 1) + 1] - '0';
 
-    if (!r) {
-        memset(s + 8, '0', 8);
-        *ptz += 8;
-        s += 8;
-    } else {
-        s += fill_t_8_digits(s, r, ptz);
-    }
-
-    return s - buffer;
-}
-
-#else
-
-#if USING_U128_MUL
-#define APPROX_TAIL_CMP_VAL         1                   /* The value should be less than or equal to 4 */
-#else
-#define APPROX_TAIL_CMP_VAL         4
-#endif
-static const uint32_t s_tail_cmp = (APPROX_TAIL_CMP_VAL << 1) + 1;
-
-static inline int32_t fill_a_4_digits(char *buffer, uint32_t digits, int32_t *ptz)
-{
-    char *s = buffer;
-    uint32_t q = FAST_DIV100(digits);
-    uint32_t r = digits - q * 100;
-
-    memcpy(s, &ch_100_lut[q<<1], 2);
-    memcpy(s + 2, &ch_100_lut[r<<1], 2);
-
-    if (r < s_tail_cmp) {
-        s[3] = '0';
-        *ptz = tz_100_lut[q] + 2;
-    } else {
-        if (s[3] < (char)s_tail_cmp + '0') {
-            s[3] = '0';
-            *ptz = 1;
-        } else {
-            s[3] -= APPROX_TAIL_CMP_VAL;
-            *ptz = 0;
+        switch (b1) {
+        case 0:
+            if (cmp_lut[b0] < (x.f >> !s) + add) {
+                low = 0;
+            }
+            break;
+        case 9:
+            if (cmp_lut[10 - b0] < (x.f >> !s) + add) {
+                low = 0;
+                high += 1;
+            }
+            break;
+        default:
+            break;
         }
     }
 
-    return 4;
-}
-
-static inline int32_t fill_a_8_digits(char *buffer, uint32_t digits, int32_t *ptz)
-{
-    char *s = buffer;
-
-    if (digits < 10000) {
-        memset(s, '0', 4);
-        fill_a_4_digits(s + 4, digits, ptz);
+    num_digits = fill_significand(buffer, high, &trailing_zeros);
+    if (low) {
+        trailing_zeros = tz_100_lut[low];
+        memcpy(buffer + num_digits, &ch_100_lut[low << 1], 2);
+        num_digits += 2;
     } else {
-        uint32_t q = FAST_DIV10000(digits);
-        uint32_t r = digits - q * 10000;
-
-        fill_t_4_digits(s, q, ptz);
-        if (r < s_tail_cmp) {
-            memset(s + 4, '0', 4);
-            *ptz += 4;
-        } else {
-            fill_a_4_digits(s + 4, r, ptz);
-        }
+        v->f = high;
+        v->e += 2;
     }
-
-    return 8;
-}
-
-static inline int32_t fill_d_4_digits(char *buffer, uint32_t digits, int32_t *ptz)
-{
-    char *s = buffer;
-    uint32_t q = FAST_DIV100(digits);
-    uint32_t r = digits - q * 100;
-
-    if (q >= 10) {
-        *ptz = tz_100_lut[q];
-        memcpy(s, &ch_100_lut[q<<1], 2);
-        s += 2;
-    } else {
-        *ptz = 0;
-        *s++ = q + '0';
-    }
-
-    if (!r) {
-        *ptz += 2;
-        memset(s, '0', 2);
-        s += 2;
-    } else {
-        *ptz = tz_100_lut[r];
-        memcpy(s, &ch_100_lut[r<<1], 2);
-        s += 2;
-    }
-
-    return s - buffer;
-}
-
-static inline int32_t fill_d_8_digits(char *buffer, uint32_t digits, int32_t *ptz)
-{
-    char *s = buffer;
-
-    uint32_t q = FAST_DIV10000(digits);
-    uint32_t r = digits - q * 10000;
-
-    s += fill_d_4_digits(s, q, ptz);
-    if (!r) {
-        *ptz += 4;
-        memset(s, '0', 4);
-        s += 4;
-    } else {
-        s += fill_t_4_digits(s, r, ptz);
-    }
-
-    return s - buffer;
-}
-
-static inline int32_t fill_significand(char *buffer, uint64_t digits, int32_t *ptz, int32_t *fixed)
-{
-    char *s = buffer;
-
-    digits += APPROX_TAIL_CMP_VAL;
-    if (digits < 10000000000000000llu) {
-        *fixed = 0;
-
-        uint32_t q = (uint32_t)(digits / 100000000);
-        uint32_t r = (uint32_t)(digits - (uint64_t)q * 100000000);
-
-        s += fill_d_8_digits(s, q, ptz);
-        if (r < s_tail_cmp) {
-            *ptz += 8;
-            memset(s, '0', 8);
-            s += 8;
-        } else {
-            s += fill_a_8_digits(s, r, ptz);
-        }
-    } else {
-        digits /= 10;
-        *fixed = 1;
-
-        uint32_t q = (uint32_t)(digits / 100000000);
-        uint32_t r = (uint32_t)(digits - (uint64_t)q * 100000000);
-
-        *ptz = 0;
-        fill_t_8_digits(s, q, ptz);
-        if (!r) {
-            memset(s + 8, '0', 8);
-            *ptz += 8;
-        } else {
-            fill_t_8_digits(s + 8, r, ptz);
-        }
-        s += 16;
-    }
-
-    return s - buffer;
+    *vnum_digits = num_digits - trailing_zeros;
+    return num_digits;
 }
 
 #endif
@@ -1638,19 +1619,8 @@ static inline int32_t fill_exponent(int32_t K, char *buffer)
     return i;
 }
 
-static inline char* ldouble_format(char *buffer, uint64_t digits, int32_t decimal_exponent, int normalized)
+static inline char* ldouble_format(char *buffer, int32_t num_digits, int32_t vnum_digits, int32_t decimal_point)
 {
-    int32_t num_digits, trailing_zeros, vnum_digits, decimal_point, fixed_exponent = 0;
-
-    if (normalized)
-        num_digits = fill_significand(buffer + 1, digits, &trailing_zeros, &fixed_exponent);
-    else
-        num_digits = fill_significand_no_normalized(buffer + 1, digits, &trailing_zeros, &fixed_exponent);
-
-    vnum_digits = num_digits - trailing_zeros;
-    decimal_exponent += fixed_exponent;
-    decimal_point = num_digits + decimal_exponent;
-
     switch (decimal_point) {
     case -6: case -5: case -4: case -3: case -2: case -1: case 0:
          /* 0.[000]digits */
@@ -1708,7 +1678,7 @@ int jnum_dtoa(double num, char *buffer)
     int32_t signbit = u.n >> (DIY_SIGNIFICAND_SIZE - 1);
     int32_t exponent = (u.n & DP_EXPONENT_MASK) >> DP_SIGNIFICAND_SIZE; /* Exponent */
     uint64_t significand = u.n & DP_SIGNIFICAND_MASK; /* Mantissa */
-    int normalized = 0;
+    int32_t num_digits, vnum_digits;
 
     if (signbit) {
         *s++ = '-';
@@ -1717,11 +1687,11 @@ int jnum_dtoa(double num, char *buffer)
     switch (exponent) {
     case DP_EXPONENT_MAX:
         if (significand) {
-            memcpy(buffer, "NaN", 4);
+            memcpy(buffer, "nan", 4);
             return 3;
         } else {
-            memcpy(s, "Infinity", 9);
-            return signbit + 8;
+            memcpy(s, "inf", 4);
+            return signbit + 3;
         }
         break;
 
@@ -1730,9 +1700,7 @@ int jnum_dtoa(double num, char *buffer)
             /* no-normalized double */
             v.f = significand; /* Non-normalized double doesn't have a extra integer bit for Mantissa */
             v.e = 1 - DP_EXPONENT_OFFSET - DP_SIGNIFICAND_SIZE; /* Fixed Exponent: -1022, divisor of Mantissa: pow(2,52) */
-            /* The smallest e is (-1022 - 52 - (63 - LSHIFT_RESERVED_BIT)) */
-            ldouble_convert_no_normalized(&v);
-            normalized = 0;
+            num_digits = ldouble_convert_n(&v, s + 1, &vnum_digits);
         } else {
             memcpy(s, "0.0", 4);
             return signbit + 3;
@@ -1751,14 +1719,13 @@ int jnum_dtoa(double num, char *buffer)
             memcpy(s + n, ".0", 3);
             return n + 2 + signbit;
         } else {
-            /* The largest e is (1023 - 52 - (11 - LSHIFT_RESERVED_BIT)) */
-            ldouble_convert(&v);
-            normalized = 1;
+            /* (-1022 - 52) <= e <= (1023 - 52) */
+            num_digits = ldouble_convert(&v, s + 1, &vnum_digits);
         }
         break;
     }
 
-    s = ldouble_format(s, v.f, v.e, normalized);
+    s = ldouble_format(s, num_digits, vnum_digits, num_digits + v.e);
     *s = '\0';
     return s - buffer;
 }

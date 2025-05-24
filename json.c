@@ -79,7 +79,7 @@ extern int dragonbox_dtoa(double num, char *buffer);
 #define JSON_PARSE_SPECIAL_NUM          1
 #endif
 
-/* Whether to allow special double such as NaN, Infinity, -Infinity */
+/* Whether to allow special double such as nan, inf, -inf */
 #ifndef JSON_PARSE_SPECIAL_DOUBLE
 #define JSON_PARSE_SPECIAL_DOUBLE       1
 #endif
@@ -2642,7 +2642,7 @@ static int _json_parse_single_value(json_parse_t *parse_ptr, char *str, json_str
 #endif
     case '-':
 #if JSON_PARSE_SPECIAL_DOUBLE
-        if (strncmp("Infinity", str + 1, 8) == 0) {
+        if (strncmp("inf", str + 1, 3) == 0) {
             jkey->type = JSON_DOUBLE;
             value->vnum.vlhex = (*str == '-' ? 0xFFF0000000000000 : 0x7FF0000000000000);
             _UPDATE_PARSE_OFFSET(9);
@@ -2688,24 +2688,22 @@ static int _json_parse_single_value(json_parse_t *parse_ptr, char *str, json_str
         if (likely(parse_ptr->size - parse_ptr->offset >= 4 && memcmp("null", str, 4) == 0)) {
             jkey->type = JSON_NULL;
             _UPDATE_PARSE_OFFSET(4);
-        } else {
-            JsonPareseErr("invalid next ptr!");
-            goto err;
+            break;
         }
-        break;
 #if JSON_PARSE_SPECIAL_DOUBLE
-    case 'N':
-        if (likely(parse_ptr->size - parse_ptr->offset >= 3 && memcmp("NaN", str, 3) == 0)) {
+        if (likely(parse_ptr->size - parse_ptr->offset >= 3 && memcmp("nan", str, 3) == 0)) {
             jkey->type = JSON_DOUBLE;
             value->vnum.vlhex = 0x7FF0000000000001;
             _UPDATE_PARSE_OFFSET(3);
-        } else {
-            JsonPareseErr("invalid next ptr!");
-            goto err;
+            break;
         }
-        break;
-    case 'I':
-        if (likely(parse_ptr->size - parse_ptr->offset >= 8 && memcmp("Infinity", str, 8) == 0)) {
+#endif
+        JsonPareseErr("invalid next ptr!");
+        goto err;
+
+#if JSON_PARSE_SPECIAL_DOUBLE
+    case 'i':
+        if (likely(parse_ptr->size - parse_ptr->offset >= 3 && memcmp("inf", str, 3) == 0)) {
             jkey->type = JSON_DOUBLE;
             value->vnum.vlhex = 0x7FF0000000000000;
             _UPDATE_PARSE_OFFSET(8);
@@ -3319,7 +3317,7 @@ next3:
 #endif
     case '-':
 #if JSON_PARSE_SPECIAL_DOUBLE
-        if (strncmp("Infinity", str + 1, 8) == 0) {
+        if (strncmp("inf", str + 1, 3) == 0) {
             item->type_member = JSON_DOUBLE;
             item->value.vnum.vlhex = (*str == '-' ? 0xFFF0000000000000 : 0x7FF0000000000000);
             _UPDATE_PARSE_OFFSET(9);
@@ -3398,24 +3396,22 @@ next3:
         if (likely(parse_ptr->size - parse_ptr->offset >= 4 && memcmp("null", str, 4) == 0)) {
             item->type_member = JSON_NULL;
             _UPDATE_PARSE_OFFSET(4);
-        } else {
-            JsonPareseErr("invalid next ptr!");
-            goto err;
+            break;
         }
-        break;
 #if JSON_PARSE_SPECIAL_DOUBLE
-    case 'N':
-        if (likely(parse_ptr->size - parse_ptr->offset >= 3 && memcmp("NaN", str, 3) == 0)) {
+        if (likely(parse_ptr->size - parse_ptr->offset >= 3 && memcmp("nan", str, 3) == 0)) {
             item->type_member = JSON_DOUBLE;
             item->value.vnum.vlhex = 0x7FF0000000000001;
             _UPDATE_PARSE_OFFSET(3);
-        } else {
-            JsonPareseErr("invalid next ptr!");
-            goto err;
+            break;
         }
-        break;
-    case 'I':
-        if (likely(parse_ptr->size - parse_ptr->offset >= 8 && memcmp("Infinity", str, 8) == 0)) {
+#endif
+        JsonPareseErr("invalid next ptr!");
+        goto err;
+
+#if JSON_PARSE_SPECIAL_DOUBLE
+    case 'i':
+        if (likely(parse_ptr->size - parse_ptr->offset >= 3 && memcmp("inf", str, 3) == 0)) {
             item->type_member = JSON_DOUBLE;
             item->value.vnum.vlhex = 0x7FF0000000000000;
             _UPDATE_PARSE_OFFSET(8);

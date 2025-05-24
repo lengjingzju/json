@@ -17,7 +17,6 @@ testednum      := jnum_test
 
 INSTALL_HEADERS = json.h jnum.h
 FMUL           ?= 0
-HIGH           ?= 1
 SMALL          ?= 0
 DTOA           ?= 0
 
@@ -29,9 +28,9 @@ ifeq ($(DTOA),3)
 libsrcs        += dragonbox.c
 endif
 
-CPFLAGS        += -DUSING_FLOAT_MUL=$(FMUL)
-CPFLAGS        += -DUSING_HIGH_RESOLUTION=$(HIGH) # resolutions is: 0, 14~15bits; 1, 15~16bits
-CPFLAGS        += -DUSING_SMALL_LUT=$(SMALL) # When set to 1, use a lut of half size
+# When one of FMUL or SMALL is set to 1, it will use a 1/4 size of lookup table and lose the accuracy of the 16th bit.
+# When FMUL is set to 1, it will force the use of float multiplication instead of int128 multiplication and division.
+CPFLAGS        += -DUSING_FLOAT_MUL=$(FMUL) -DUSING_SMALL_LUT=$(SMALL)
 CPFLAGS        += -DJSON_DTOA_ALGORITHM=$(DTOA) # 0:ldouble 1:sprintf 2:grisu2 3:dragonbox
 CXXFLAGS       += -Wno-missing-field-initializers -Wno-write-strings
 
