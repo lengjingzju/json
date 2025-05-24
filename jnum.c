@@ -8,6 +8,15 @@
 #include <stdlib.h>
 #include <math.h>
 #include "jnum.h"
+#if defined(_MSC_VER)
+#include <intrin.h>
+#endif
+
+#if defined(__GNUC__) || defined(__clang__)
+#define FALLTHROUGH_ATTR                __attribute__((fallthrough))
+#else
+#define FALLTHROUGH_ATTR
+#endif
 
 #define DIY_SIGNIFICAND_SIZE        64                  /* Symbol: 1 bit, Exponent, 11 bits, Mantissa, 52 bits */
 #define DP_SIGNIFICAND_SIZE         52                  /* Mantissa, 52 bits */
@@ -43,6 +52,11 @@ typedef struct {
     uint64_t f;
     int32_t e;
 } diy_fp_t;
+
+typedef struct {
+    uint64_t hi;
+    uint64_t lo;
+} u64x2_t;
 
 static const char ch_100_lut[200] = {
     '0','0','0','1','0','2','0','3','0','4','0','5','0','6','0','7','0','8','0','9',
@@ -423,18 +437,52 @@ int jnum_lhtoa(uint64_t num, char *buffer)
 
 static inline int32_t u64_pz_get(uint64_t f)
 {
-#if defined(_MSC_VER) && defined(_M_AMD64)
+#if defined(_MSC_VER)
     unsigned long index;
     _BitScanReverse64(&index, f);
     return 63 - index;
 #elif defined(__GNUC__) || defined(__clang__)
     return __builtin_clzll(f);
 #else
-    int32_t index = DP_SIGNIFICAND_SIZE; /* max value of f is smaller than pow(2, 53) */
-    while (!(f & ((uint64_t)1 << index)))
-        --index;
-    return 63 - index;
+    int c = 0;
+    if (n & 0xFFFFFFFF00000000) n >>= 32; else c += 32;
+    if (n & 0xFFFF0000)         n >>= 16; else c += 16;
+    if (n & 0xFF00)             n >>= 8 ; else c += 8;
+    if (n & 0xF0)               n >>= 4 ; else c += 4;
+    if (n & 0xC)                n >>= 2 ; else c += 2;
+    return c + (n & 0x1);
 #endif
+}
+
+static inline u64x2_t u128_multiply(uint64_t x, uint64_t y)
+{
+    u64x2_t r;
+#if defined(_MSC_VER)
+    r.lo = _umul128(x, y, &r.hi);
+#elif (__GNUC__ > 4 || (__GNUC__ == 4 && __GNUC_MINOR__ >= 6) || __clang_major__ >= 9) && (__WORDSIZE == 64)
+    __extension__ typedef unsigned __int128 u128;
+    const u128 p = (u128)x * (u128)y;
+    r.hi = (uint64_t)(p >> 64);
+    r.lo = (uint64_t)p;
+#else
+    const uint64_t M32 = 0XFFFFFFFF;
+    const uint64_t a = x >> 32;
+    const uint64_t b = x & M32;
+    const uint64_t c = y >> 32;
+    const uint64_t d = y & M32;
+
+    const uint64_t ac = a * c;
+    const uint64_t bc = b * c;
+    const uint64_t ad = a * d;
+    const uint64_t bd = b * d;
+
+    const uint64_t mid1 = ad + (bd >> 32);
+    const uint64_t mid2 = bc + (mid1 & M32);
+
+    r.hi = ac + (mid1 >> 32) + (mid2 >> 32);
+    r.lo = (bd & M32) | (mid2 & M32) << 32;
+#endif
+    return r;
 }
 
 /*
@@ -1753,30 +1801,215 @@ end:
     return s - str;
 }
 
-static int jnum_parse_num(const char *str, jnum_type_t *type, jnum_value_t *value)
+/*
+# python to get lut
+maxn = 323 + 309
+print('static const double exponent_lut[%d] = {' % (maxn), end='')
+for i in range(-323, 309):
+    j = i + 323
+    if j % 10 == 0:
+        print()
+        print('    ', end='')
+    if i == 0:
+        print('1     ', end='')
+    else:
+        print('1e%+-4d' % (i), end='')
+    if j != maxn - 1:
+        print(', ', end='');
+    else:
+        print()
+        print('};')
+*/
+
+#define MIN_NEG_EXP     -323
+#define EXP_LUT_NUM     632
+static double jnum_convert_double(uint64_t neg, uint64_t m, int32_t k, int32_t i)
+{
+    static const double exponent_lut[EXP_LUT_NUM] = {
+        1e-323, 1e-322, 1e-321, 1e-320, 1e-319, 1e-318, 1e-317, 1e-316, 1e-315, 1e-314,
+        1e-313, 1e-312, 1e-311, 1e-310, 1e-309, 1e-308, 1e-307, 1e-306, 1e-305, 1e-304,
+        1e-303, 1e-302, 1e-301, 1e-300, 1e-299, 1e-298, 1e-297, 1e-296, 1e-295, 1e-294,
+        1e-293, 1e-292, 1e-291, 1e-290, 1e-289, 1e-288, 1e-287, 1e-286, 1e-285, 1e-284,
+        1e-283, 1e-282, 1e-281, 1e-280, 1e-279, 1e-278, 1e-277, 1e-276, 1e-275, 1e-274,
+        1e-273, 1e-272, 1e-271, 1e-270, 1e-269, 1e-268, 1e-267, 1e-266, 1e-265, 1e-264,
+        1e-263, 1e-262, 1e-261, 1e-260, 1e-259, 1e-258, 1e-257, 1e-256, 1e-255, 1e-254,
+        1e-253, 1e-252, 1e-251, 1e-250, 1e-249, 1e-248, 1e-247, 1e-246, 1e-245, 1e-244,
+        1e-243, 1e-242, 1e-241, 1e-240, 1e-239, 1e-238, 1e-237, 1e-236, 1e-235, 1e-234,
+        1e-233, 1e-232, 1e-231, 1e-230, 1e-229, 1e-228, 1e-227, 1e-226, 1e-225, 1e-224,
+        1e-223, 1e-222, 1e-221, 1e-220, 1e-219, 1e-218, 1e-217, 1e-216, 1e-215, 1e-214,
+        1e-213, 1e-212, 1e-211, 1e-210, 1e-209, 1e-208, 1e-207, 1e-206, 1e-205, 1e-204,
+        1e-203, 1e-202, 1e-201, 1e-200, 1e-199, 1e-198, 1e-197, 1e-196, 1e-195, 1e-194,
+        1e-193, 1e-192, 1e-191, 1e-190, 1e-189, 1e-188, 1e-187, 1e-186, 1e-185, 1e-184,
+        1e-183, 1e-182, 1e-181, 1e-180, 1e-179, 1e-178, 1e-177, 1e-176, 1e-175, 1e-174,
+        1e-173, 1e-172, 1e-171, 1e-170, 1e-169, 1e-168, 1e-167, 1e-166, 1e-165, 1e-164,
+        1e-163, 1e-162, 1e-161, 1e-160, 1e-159, 1e-158, 1e-157, 1e-156, 1e-155, 1e-154,
+        1e-153, 1e-152, 1e-151, 1e-150, 1e-149, 1e-148, 1e-147, 1e-146, 1e-145, 1e-144,
+        1e-143, 1e-142, 1e-141, 1e-140, 1e-139, 1e-138, 1e-137, 1e-136, 1e-135, 1e-134,
+        1e-133, 1e-132, 1e-131, 1e-130, 1e-129, 1e-128, 1e-127, 1e-126, 1e-125, 1e-124,
+        1e-123, 1e-122, 1e-121, 1e-120, 1e-119, 1e-118, 1e-117, 1e-116, 1e-115, 1e-114,
+        1e-113, 1e-112, 1e-111, 1e-110, 1e-109, 1e-108, 1e-107, 1e-106, 1e-105, 1e-104,
+        1e-103, 1e-102, 1e-101, 1e-100, 1e-99 , 1e-98 , 1e-97 , 1e-96 , 1e-95 , 1e-94 ,
+        1e-93 , 1e-92 , 1e-91 , 1e-90 , 1e-89 , 1e-88 , 1e-87 , 1e-86 , 1e-85 , 1e-84 ,
+        1e-83 , 1e-82 , 1e-81 , 1e-80 , 1e-79 , 1e-78 , 1e-77 , 1e-76 , 1e-75 , 1e-74 ,
+        1e-73 , 1e-72 , 1e-71 , 1e-70 , 1e-69 , 1e-68 , 1e-67 , 1e-66 , 1e-65 , 1e-64 ,
+        1e-63 , 1e-62 , 1e-61 , 1e-60 , 1e-59 , 1e-58 , 1e-57 , 1e-56 , 1e-55 , 1e-54 ,
+        1e-53 , 1e-52 , 1e-51 , 1e-50 , 1e-49 , 1e-48 , 1e-47 , 1e-46 , 1e-45 , 1e-44 ,
+        1e-43 , 1e-42 , 1e-41 , 1e-40 , 1e-39 , 1e-38 , 1e-37 , 1e-36 , 1e-35 , 1e-34 ,
+        1e-33 , 1e-32 , 1e-31 , 1e-30 , 1e-29 , 1e-28 , 1e-27 , 1e-26 , 1e-25 , 1e-24 ,
+        1e-23 , 1e-22 , 1e-21 , 1e-20 , 1e-19 , 1e-18 , 1e-17 , 1e-16 , 1e-15 , 1e-14 ,
+        1e-13 , 1e-12 , 1e-11 , 1e-10 , 1e-9  , 1e-8  , 1e-7  , 1e-6  , 1e-5  , 1e-4  ,
+        1e-3  , 1e-2  , 1e-1  , 1     , 1e+1  , 1e+2  , 1e+3  , 1e+4  , 1e+5  , 1e+6  ,
+        1e+7  , 1e+8  , 1e+9  , 1e+10 , 1e+11 , 1e+12 , 1e+13 , 1e+14 , 1e+15 , 1e+16 ,
+        1e+17 , 1e+18 , 1e+19 , 1e+20 , 1e+21 , 1e+22 , 1e+23 , 1e+24 , 1e+25 , 1e+26 ,
+        1e+27 , 1e+28 , 1e+29 , 1e+30 , 1e+31 , 1e+32 , 1e+33 , 1e+34 , 1e+35 , 1e+36 ,
+        1e+37 , 1e+38 , 1e+39 , 1e+40 , 1e+41 , 1e+42 , 1e+43 , 1e+44 , 1e+45 , 1e+46 ,
+        1e+47 , 1e+48 , 1e+49 , 1e+50 , 1e+51 , 1e+52 , 1e+53 , 1e+54 , 1e+55 , 1e+56 ,
+        1e+57 , 1e+58 , 1e+59 , 1e+60 , 1e+61 , 1e+62 , 1e+63 , 1e+64 , 1e+65 , 1e+66 ,
+        1e+67 , 1e+68 , 1e+69 , 1e+70 , 1e+71 , 1e+72 , 1e+73 , 1e+74 , 1e+75 , 1e+76 ,
+        1e+77 , 1e+78 , 1e+79 , 1e+80 , 1e+81 , 1e+82 , 1e+83 , 1e+84 , 1e+85 , 1e+86 ,
+        1e+87 , 1e+88 , 1e+89 , 1e+90 , 1e+91 , 1e+92 , 1e+93 , 1e+94 , 1e+95 , 1e+96 ,
+        1e+97 , 1e+98 , 1e+99 , 1e+100, 1e+101, 1e+102, 1e+103, 1e+104, 1e+105, 1e+106,
+        1e+107, 1e+108, 1e+109, 1e+110, 1e+111, 1e+112, 1e+113, 1e+114, 1e+115, 1e+116,
+        1e+117, 1e+118, 1e+119, 1e+120, 1e+121, 1e+122, 1e+123, 1e+124, 1e+125, 1e+126,
+        1e+127, 1e+128, 1e+129, 1e+130, 1e+131, 1e+132, 1e+133, 1e+134, 1e+135, 1e+136,
+        1e+137, 1e+138, 1e+139, 1e+140, 1e+141, 1e+142, 1e+143, 1e+144, 1e+145, 1e+146,
+        1e+147, 1e+148, 1e+149, 1e+150, 1e+151, 1e+152, 1e+153, 1e+154, 1e+155, 1e+156,
+        1e+157, 1e+158, 1e+159, 1e+160, 1e+161, 1e+162, 1e+163, 1e+164, 1e+165, 1e+166,
+        1e+167, 1e+168, 1e+169, 1e+170, 1e+171, 1e+172, 1e+173, 1e+174, 1e+175, 1e+176,
+        1e+177, 1e+178, 1e+179, 1e+180, 1e+181, 1e+182, 1e+183, 1e+184, 1e+185, 1e+186,
+        1e+187, 1e+188, 1e+189, 1e+190, 1e+191, 1e+192, 1e+193, 1e+194, 1e+195, 1e+196,
+        1e+197, 1e+198, 1e+199, 1e+200, 1e+201, 1e+202, 1e+203, 1e+204, 1e+205, 1e+206,
+        1e+207, 1e+208, 1e+209, 1e+210, 1e+211, 1e+212, 1e+213, 1e+214, 1e+215, 1e+216,
+        1e+217, 1e+218, 1e+219, 1e+220, 1e+221, 1e+222, 1e+223, 1e+224, 1e+225, 1e+226,
+        1e+227, 1e+228, 1e+229, 1e+230, 1e+231, 1e+232, 1e+233, 1e+234, 1e+235, 1e+236,
+        1e+237, 1e+238, 1e+239, 1e+240, 1e+241, 1e+242, 1e+243, 1e+244, 1e+245, 1e+246,
+        1e+247, 1e+248, 1e+249, 1e+250, 1e+251, 1e+252, 1e+253, 1e+254, 1e+255, 1e+256,
+        1e+257, 1e+258, 1e+259, 1e+260, 1e+261, 1e+262, 1e+263, 1e+264, 1e+265, 1e+266,
+        1e+267, 1e+268, 1e+269, 1e+270, 1e+271, 1e+272, 1e+273, 1e+274, 1e+275, 1e+276,
+        1e+277, 1e+278, 1e+279, 1e+280, 1e+281, 1e+282, 1e+283, 1e+284, 1e+285, 1e+286,
+        1e+287, 1e+288, 1e+289, 1e+290, 1e+291, 1e+292, 1e+293, 1e+294, 1e+295, 1e+296,
+        1e+297, 1e+298, 1e+299, 1e+300, 1e+301, 1e+302, 1e+303, 1e+304, 1e+305, 1e+306,
+        1e+307, 1e+308
+    };
+    const uint64_t *lut = (const uint64_t *)exponent_lut;
+    double d = 0;
+    uint64_t *v = (uint64_t *)&d;
+
+    uint64_t significand, f;
+    int32_t exponent;
+    int32_t bm, bf, bits = 0;
+    u64x2_t x;
+
+    if (i < 0) {
+        if (i > -20) {
+            d = m / exponent_lut[-i - MIN_NEG_EXP];
+            *v |= neg << 63;
+            return d;
+        }
+    } else {
+        if (i + k < 20) {
+            double d = m * exponent_lut[i - MIN_NEG_EXP];
+            *v |= neg << 63;
+            return d;
+        }
+    }
+
+    bm = 64 - u64_pz_get(m);
+    i -= MIN_NEG_EXP;
+    if (i < 0) {
+        if (bm - 1 + i < 0) {
+            *v = neg << 63;
+            return d;
+        } else {
+            m >>= -i;
+            i = 0;
+            bm += i;
+        }
+    } else if (i >= EXP_LUT_NUM) {
+        *v = DP_EXPONENT_MASK | (neg << 63);
+        return d;
+    }
+
+    f = lut[i];
+    significand = f & DP_SIGNIFICAND_MASK;
+    exponent = (f & DP_EXPONENT_MASK) >> DP_SIGNIFICAND_SIZE;
+    if (exponent == 0) {
+        exponent = 1 - DP_EXPONENT_OFFSET - DP_SIGNIFICAND_SIZE;
+        bf = 64 - u64_pz_get(significand);
+    } else {
+        significand += DP_HIDDEN_BIT;
+        exponent -= DP_EXPONENT_OFFSET + DP_SIGNIFICAND_SIZE;
+        bf = DP_SIGNIFICAND_SIZE + 1;
+    }
+
+    if (bm + bf <= 64) {
+        m *= significand;
+        bits = u64_pz_get(m);
+        m <<= bits;
+        exponent -= bits;
+    } else {
+        x = u128_multiply(m, significand);
+        if (x.hi) {
+            bits = u64_pz_get(x.hi);
+            m = (x.hi << bits) | (x.lo >> (64 - bits));
+            exponent += 64 - bits;
+        } else {
+            bits = u64_pz_get(x.lo);
+            m = x.lo << bits;
+            exponent -= bits;
+        }
+    }
+
+    bits = 64 - (DP_SIGNIFICAND_SIZE + 1);
+    m >>= bits;
+    exponent += bits;
+
+    exponent += DP_EXPONENT_OFFSET + DP_SIGNIFICAND_SIZE;
+    if (exponent > 1) {
+        if (exponent < DP_EXPONENT_MAX) {
+            *v = (m & DP_SIGNIFICAND_MASK) | ((uint64_t)exponent << DP_SIGNIFICAND_SIZE) | (neg << 63);
+        } else {
+            *v = DP_EXPONENT_MASK | (neg << 63);
+        }
+    } else {
+        if (exponent > -DP_SIGNIFICAND_SIZE) {
+            exponent -= 1;
+            *v = (m >> -exponent) | (neg << 63);
+        } else {
+            *v = neg << 63;
+
+        }
+    }
+    return d;
+}
+
+int jnum_parse_num(const char *str, jnum_type_t *type, jnum_value_t *value)
 {
 #define IS_DIGIT(c)     ((c) >= '0' && (c) <= '9')
-#define MIN_NEG_EXP     40
-    static const double mul10_lut[20] = {
-        1   , 1e1 , 1e2 , 1e3 , 1e4 , 1e5 , 1e6 , 1e7 , 1e8 , 1e9 ,
-        1e10, 1e11, 1e12, 1e13, 1e14, 1e15, 1e16, 1e17, 1e18, 1e19,
-    };
-    static const double div10_lut[MIN_NEG_EXP] = {
-        1    , 1e-1 , 1e-2 , 1e-3 , 1e-4 , 1e-5 , 1e-6 , 1e-7 , 1e-8 , 1e-9 ,
-        1e-10, 1e-11, 1e-12, 1e-13, 1e-14, 1e-15, 1e-16, 1e-17, 1e-18, 1e-19,
-        1e-20, 1e-21, 1e-22, 1e-23, 1e-24, 1e-25, 1e-26, 1e-27, 1e-28, 1e-29,
-        1e-30, 1e-31, 1e-32, 1e-33, 1e-34, 1e-35, 1e-36, 1e-37, 1e-38, 1e-39,
-    };
-
     const char *s = str;
-    int32_t sign = 1, k = 0, z = 0;
-    uint64_t m = 0;
-    double d = 0;
+    int32_t eneg = 0, e = 0, k = 0, ek = 0, b = 0, i = 0, z = 0;
+    uint64_t neg = 0, m = 0, n = 0;
 
     switch (*s) {
-    case '-': ++s; sign = -1; break;
-    case '+': ++s; break;
-    default: break;
+    case '-':
+        neg = 1;
+        FALLTHROUGH_ATTR;
+    case '+':
+        ++s;
+        break;
+    case '0':
+        if ((*(s + 1) == 'x' || *(s + 1) == 'X')) {
+            int len = jnum_parse_hex(s, type, value);
+            if (len == 2) {
+                *type = JNUM_INT;
+                value->vint = 0;
+                return 1;
+            }
+            return len;
+        }
+        break;
+    default:
+        break;
     }
 
     switch (*s) {
@@ -1801,71 +2034,29 @@ static int jnum_parse_num(const char *str, jnum_type_t *type, jnum_value_t *valu
     if (k < 20) {
         switch (*s) {
         case '.':
-            d = m;
-            goto next2;
-        default:
-            goto next1;
-        }
-    } else {
-        s -= k;
-        while (1) {
-            m = 0;
-            k = 0;
-            while (IS_DIGIT(*s)) {
-                m = (m << 3) + (m << 1) + (*s++ - '0');
-                ++k;
-                if (k == 19)
-                    break;
-            }
-            d = d * mul10_lut[k] + m;
-
-            switch (*s) {
+            ++s;
+            break;
+        case 'e': case 'E':
+            switch (*(s + 1)) {
+            case '-':
+                eneg = 1;
+                FALLTHROUGH_ATTR;
+            case '+':
+                if (IS_DIGIT(*(s + 2))) {
+                    s += 2;
+                    goto end3;
+                }
+                goto end1;
             case '0': case '1': case '2': case '3': case '4':
             case '5': case '6': case '7': case '8': case '9':
-                break;
-            case '.':
-                goto next2;
+                ++s;
+                goto end3;
             default:
-                goto next3;
+                goto end1;
             }
+        default:
+            goto end1;
         }
-    }
-
-next1:
-    if (m <= 2147483647U /*INT_MAX*/) {
-        *type = JNUM_INT;
-        value->vint = sign == 1 ? (int32_t)m : -((int32_t)m);
-    } else if (m <= 9223372036854775807U /*LLONG_MAX*/) {
-        *type = JNUM_LINT;
-        value->vlint = sign == 1 ? (int64_t)m : -((int64_t)m);
-    } else {
-        if (m == 9223372036854775808U && sign == -1) {
-            *type = JNUM_LINT;
-            value->vlint = -m;
-        } else {
-            *type = JNUM_DOUBLE;
-            value->vdbl = sign == 1 ? (double)m : -((double)m);
-        }
-    }
-    return s - str;
-
-next2:
-    ++s;
-    while (*s == '0') {
-        ++s;
-        ++z;
-    }
-    if (z >= MIN_NEG_EXP)
-        goto next3;
-
-    m = 0;
-    k = 0;
-    while (IS_DIGIT(*s)) {
-        m = (m << 3) + (m << 1) + (*s++ - '0');
-        ++k;
-    }
-    if (k < 20 && k + z < MIN_NEG_EXP) {
-        d += m * div10_lut[k + z];
     } else {
         s -= k;
         m = 0;
@@ -1873,81 +2064,184 @@ next2:
         while (IS_DIGIT(*s)) {
             m = (m << 3) + (m << 1) + (*s++ - '0');
             ++k;
-            if (k == 19 || k + z == MIN_NEG_EXP - 1)
+            if (k == 19)
                 break;
         }
-        d += m * div10_lut[k + z];
+
+        while (1) {
+            switch (*s) {
+            case '0': case '1': case '2': case '3': case '4':
+            case '5': case '6': case '7': case '8': case '9':
+                ++s;
+                ++i;
+                break;
+            case '.':
+                ++s;
+                while (IS_DIGIT(*s))
+                    ++s;
+
+                if (*s == 'e' || *s == 'E') {
+                    switch (*(s + 1)) {
+                    case '-':
+                        eneg = 1;
+                        FALLTHROUGH_ATTR;
+                    case '+':
+                        if (IS_DIGIT(*(s + 2))) {
+                            s += 2;
+                            goto end3;
+                        }
+                        goto end2;
+                    case '0': case '1': case '2': case '3': case '4':
+                    case '5': case '6': case '7': case '8': case '9':
+                        ++s;
+                        goto end3;
+                    default:
+                        goto end2;
+                    }
+                }
+                goto end2;
+            case 'e': case 'E':
+                switch (*(s + 1)) {
+                case '-':
+                    eneg = 1;
+                    FALLTHROUGH_ATTR;
+                case '+':
+                    if (IS_DIGIT(*(s + 2))) {
+                        s += 2;
+                        goto end3;
+                    }
+                    goto end2;
+                case '0': case '1': case '2': case '3': case '4':
+                case '5': case '6': case '7': case '8': case '9':
+                    ++s;
+                    goto end3;
+                default:
+                    goto end2;
+                }
+            default:
+                goto end2;
+            }
+        }
+    }
+
+    if (m == 0) {
+        while (*s == '0') {
+            ++s;
+            --z;
+        }
+    } else {
+        n = m;
+        b = k;
+    }
+
+    while (IS_DIGIT(*s)) {
+        m = (m << 3) + (m << 1) + (*s++ - '0');
+        ++k;
+        --i;
+    }
+
+    if (k < 20) {
+        switch (*s) {
+        case 'e': case 'E':
+            switch (*(s + 1)) {
+            case '-':
+                eneg = 1;
+                FALLTHROUGH_ATTR;
+            case '+':
+                if (IS_DIGIT(*(s + 2))) {
+                    s += 2;
+                    goto end3;
+                }
+                goto end2;
+            case '0': case '1': case '2': case '3': case '4':
+            case '5': case '6': case '7': case '8': case '9':
+                ++s;
+                goto end3;
+            default:
+                goto end2;
+            }
+        default:
+            goto end2;
+        }
+    } else {
+        s -= k - b;
+        m = n;
+        k = b;
+        i = 0;
+
+        while (IS_DIGIT(*s)) {
+            m = (m << 3) + (m << 1) + (*s++ - '0');
+            ++k;
+            --i;
+            if (k == 19)
+                break;
+        }
         while (IS_DIGIT(*s))
             ++s;
+
+        if (*s == 'e' || *s == 'E') {
+            switch (*(s + 1)) {
+            case '-':
+                eneg = 1;
+                FALLTHROUGH_ATTR;
+            case '+':
+                if (IS_DIGIT(*(s + 2))) {
+                    s += 2;
+                    goto end3;
+                }
+                goto end2;
+            case '0': case '1': case '2': case '3': case '4':
+            case '5': case '6': case '7': case '8': case '9':
+                ++s;
+                goto end3;
+            default:
+                goto end2;
+            }
+        }
+        goto end2;
     }
 
-next3:
-    *type = JNUM_DOUBLE;
-    value->vdbl = sign == 1 ? d : -d;
-    return s - str;
-}
+end3:
+    while (*s == '0')
+        ++s;
 
-int jnum_parse(const char *str, jnum_type_t *type, jnum_value_t *value)
-{
-    const char *s = str;
-    int len = 0, len2 = 0;
-    jnum_type_t t;
-    jnum_value_t v;
-
-    while (1) {
-        switch (*s) {
-        case '\b': case '\f': case '\n': case '\r': case '\t': case '\v': case ' ':
-            ++s;
+    ek = 0;
+    while (IS_DIGIT(*s)) {
+        e = (e << 3) + (e << 1) + (*s++ - '0');
+        ++ek;
+        if (ek == 4)
             break;
-        default:
-            goto next;
+    }
+    while (IS_DIGIT(*s))
+        ++s;
+    i += eneg == 0 ? e : -e;
+
+end2:
+    *type = JNUM_DOUBLE;
+    if (m == 0) {
+        value->vlhex = neg << 63;
+    } else {
+        value->vdbl = jnum_convert_double(neg, m, k, i + z);
+    }
+    return s - str;
+
+end1:
+    if (m <= 2147483647U /*INT_MAX*/) {
+        *type = JNUM_INT;
+        value->vint = neg == 0 ? (int32_t)m : -((int32_t)m);
+    } else if (m <= 9223372036854775807U /*LLONG_MAX*/) {
+        *type = JNUM_LINT;
+        value->vlint = neg == 0 ? (int64_t)m : -((int64_t)m);
+    } else {
+        if (m == 9223372036854775808U && neg == 1) {
+            *type = JNUM_LINT;
+            value->vlint = -m;
+        } else {
+            *type = JNUM_DOUBLE;
+            value->vdbl = neg == 0 ? (double)m : -((double)m);
         }
     }
-
-next:
-    len = s - str;
-    if (*s == '0' && (*(s + 1) == 'x' || *(s + 1) == 'X')) {
-        len2 = jnum_parse_hex(s, type, value);
-        if (len2 == 2) {
-            *type = JNUM_INT;
-            value->vint = 0;
-            return len + 1;
-        }
-        return len + len2;
-    }
-
-    len += jnum_parse_num(s, type, value);
-    if (*type == JNUM_NULL)
-        return 0;
-
-    switch (*(str + len)) {
-    case 'e': case 'E':
-        len2 = jnum_parse_num(str + len + 1, &t, &v);
-        if (t == JNUM_NULL)
-            return len;
-
-        switch (*type) {
-        case JNUM_INT: value->vdbl = value->vint; break;
-        case JNUM_LINT: value->vdbl = value->vlint; break;
-        default: break;
-        }
-
-        *type = JNUM_DOUBLE;
-        len += len2 + 1;
-
-        switch (t) {
-        case JNUM_INT: value->vdbl *= pow(10, v.vint); break;
-        case JNUM_LINT: value->vdbl *= pow(10, v.vlint); break;
-        case JNUM_DOUBLE: value->vdbl *= pow(10, v.vdbl); break;
-        default: break;
-        }
-        break;
-
-    default:
-        break;
-    }
-
-    return len;
+    return s - str;
 }
 
 #define jnum_to_func(rtype, fname)                      \

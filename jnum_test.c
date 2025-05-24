@@ -76,7 +76,8 @@ int main(int argc, char *argv[])
             volatile double d1, d2;
             d1 = strtod(argv[2], NULL);
             d2 = jnum_atod(argv[2]);
-            printf("strtod:    %0.16g\njnum_atod: %0.16g\n", d1, d2);
+            if (d1 != d2)
+                printf("----%s----\nstrtod:    %0.16g\njnum_atod: %0.16g\n", argv[2], d1, d2);
         } else {
             int i;
             int cnt = atoi(argv[3]);

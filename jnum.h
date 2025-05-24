@@ -43,7 +43,20 @@ int64_t jnum_atol(const char *str);
 uint32_t jnum_atoh(const char *str);
 uint64_t jnum_atolh(const char *str);
 double jnum_atod(const char *str);
-int jnum_parse(const char *str, jnum_type_t *type, jnum_value_t *value);
+int jnum_parse_num(const char *str, jnum_type_t *type, jnum_value_t *value);
+
+static inline int jnum_parse(const char *str, jnum_type_t *type, jnum_value_t *value)
+{
+    const char *s = str;
+    while (1) {
+        switch (*s) {
+        case '\b': case '\f': case '\n': case '\r': case '\t': case '\v': case ' ': ++s; break;
+        default: goto next;
+        }
+    }
+next:
+    return jnum_parse_num(s, type, value) + (s - str);
+}
 
 #ifdef __cplusplus
 }
