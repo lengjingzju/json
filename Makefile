@@ -18,6 +18,7 @@ testednum      := jnum_test
 INSTALL_HEADERS = json.h jnum.h
 HIGH           ?= 1
 FMUL           ?= 0
+DIVE           ?= 0
 DTOA           ?= 0
 
 libsrcs        := json.c jnum.c
@@ -33,6 +34,10 @@ CPFLAGS        += -DUSING_HIGH_RES=$(HIGH)
 # When FMUL is set to 1, it will force the use of float multiplication instead of uint128_t
 # multiplication and division. It is valid when HIGH is set to 0.
 CPFLAGS        += -DUSING_FLOAT_MUL=$(FMUL)
+# When DIVE is set to 1, it will use a custom division instead of u128 division. which configuration has
+# high performance requires actual testing, It is valid when HIGH is set to 0.
+CPFLAGS        += -DUSING_DIV_EXP=$(DIVE)
+
 CPFLAGS        += -DJSON_DTOA_ALGORITHM=$(DTOA) # 0:ldouble 1:sprintf 2:grisu2 3:dragonbox
 CXXFLAGS       += -Wno-missing-field-initializers -Wno-write-strings
 

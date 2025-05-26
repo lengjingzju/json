@@ -13,7 +13,7 @@
 #endif
 
 #if defined(__GNUC__) || defined(__clang__)
-#define FALLTHROUGH_ATTR                __attribute__((fallthrough))
+#define FALLTHROUGH_ATTR            __attribute__((fallthrough))
 #else
 #define FALLTHROUGH_ATTR
 #endif
@@ -35,16 +35,23 @@
 #define USING_HIGH_RES              1
 #endif
 
-/* When set to 1, use __int128 multiplication instead of floating-point multiplication. */
+/* Using floating-point multiplication, only for low-precision (15bits), it is valid when USING_HIGH_RES is 0. */
+#ifndef USING_FLOAT_MUL
+#define USING_FLOAT_MUL             0
+#endif
+
+/* Using a custom division instead of u128 division, it is valid when USING_HIGH_RES is 1. */
+#ifndef USING_DIV_EXP
+#define USING_DIV_EXP               0
+#endif
+
 #if (__WORDSIZE == 64) && (__GNUC__ > 4 || (__GNUC__ == 4 && __GNUC_MINOR__ >= 6) || __clang_major__ >= 9)
 #define USING_U128_CALC             1
 #else
 #define USING_U128_CALC             0
 #endif
-
-/* Using floating-point multiplication, only for low-precision (15bits) */
-#ifndef USING_FLOAT_MUL
-#define USING_FLOAT_MUL             0
+#if USING_U128_CALC
+__extension__ typedef unsigned __int128 u128;
 #endif
 
 typedef struct {
@@ -57,33 +64,6 @@ typedef struct {
     uint64_t lo;
 } u64x2_t;
 
-static const char ch_100_lut[200] = {
-    '0','0','0','1','0','2','0','3','0','4','0','5','0','6','0','7','0','8','0','9',
-    '1','0','1','1','1','2','1','3','1','4','1','5','1','6','1','7','1','8','1','9',
-    '2','0','2','1','2','2','2','3','2','4','2','5','2','6','2','7','2','8','2','9',
-    '3','0','3','1','3','2','3','3','3','4','3','5','3','6','3','7','3','8','3','9',
-    '4','0','4','1','4','2','4','3','4','4','4','5','4','6','4','7','4','8','4','9',
-    '5','0','5','1','5','2','5','3','5','4','5','5','5','6','5','7','5','8','5','9',
-    '6','0','6','1','6','2','6','3','6','4','6','5','6','6','6','7','6','8','6','9',
-    '7','0','7','1','7','2','7','3','7','4','7','5','7','6','7','7','7','8','7','9',
-    '8','0','8','1','8','2','8','3','8','4','8','5','8','6','8','7','8','8','8','9',
-    '9','0','9','1','9','2','9','3','9','4','9','5','9','6','9','7','9','8','9','9',
-};
-
-static const uint8_t tz_100_lut[100] = {
-    2, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-    1, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-    1, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-    1, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-    1, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-    1, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-    1, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-    1, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-    1, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-    1, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-};
-
-#define FAST_DIV10(n)       (ch_100_lut[(n) << 1] - '0')                    /* 0 <= n < 100 */
 #define FAST_DIV100(n)      (((n) * 5243) >> 19)                            /* 0 <= n < 10000 */
 #define FAST_DIV10000(n)    ((uint32_t)(((uint64_t)(n) * 109951163) >> 40)) /* 0 <= n < 100000000 */
 
@@ -112,7 +92,6 @@ static inline u64x2_t u128_mul(uint64_t x, uint64_t y)
 #if defined(_MSC_VER)
     ret.lo = _umul128(x, y, &ret.hi);
 #elif USING_U128_CALC
-    __extension__ typedef unsigned __int128 u128;
     const u128 p = (u128)x * (u128)y;
     ret.hi = (uint64_t)(p >> 64);
     ret.lo = (uint64_t)p;
@@ -137,7 +116,21 @@ static inline u64x2_t u128_mul(uint64_t x, uint64_t y)
     return ret;
 }
 
-#if USING_HIGH_RES && !USING_U128_CALC
+#if USING_HIGH_RES
+#if !USING_U128_CALC
+static inline int u128_cmp(u64x2_t v1, u64x2_t v2)
+{
+    if (v1.hi > v2.hi)
+        return 1;
+    if (v1.hi < v2.hi)
+        return -1;
+    if (v1.lo > v2.lo)
+        return 1;
+    if (v1.lo < v2.lo)
+        return -1;
+    return 0;
+}
+
 static inline u64x2_t u128_div(u64x2_t dividend, uint64_t divisor, uint64_t *remainder)
 {
     u64x2_t ret = {0, 0};
@@ -147,8 +140,8 @@ static inline u64x2_t u128_div(u64x2_t dividend, uint64_t divisor, uint64_t *rem
         return ret;
     }
 
-    int abits = 64 - __builtin_clzll(dividend.hi);
-    int bbits = 64 - __builtin_clzll(divisor);
+    int abits = 64 - u64_pz_get(dividend.hi);
+    int bbits = 64 - u64_pz_get(divisor);
     int shift = 0;
 
     if (abits >= bbits) {
@@ -193,34 +186,177 @@ static inline u64x2_t u128_div(u64x2_t dividend, uint64_t divisor, uint64_t *rem
     return ret;
 }
 
-static inline int u128_cmp(u64x2_t v1, u64x2_t v2)
-{
-    if (v1.hi > v2.hi)
-        return 1;
-    if (v1.hi < v2.hi)
-        return -1;
-    if (v1.lo > v2.lo)
-        return 1;
-    if (v1.lo < v2.lo)
-        return -1;
-    return 0;
-}
+#else // !USING_U128_CALC
 
-static inline u64x2_t u128_add(u64x2_t v1, u64x2_t v2)
-{
-    u64x2_t ret = {0, 0};
-    uint64_t diff = 0xFFFFFFFFFFFFFFFF - v1.lo;
+#if USING_DIV_EXP
+/*
+# python to get lut
 
-    if (v2.lo > diff) {
-        ret.lo = v2.lo - diff - 1;
-        ret.hi = v1.hi + v2.hi + 1;
-    } else {
-        ret.lo = v1.lo + v2.lo;
-        ret.hi = v1.hi + v2.hi;
+# ret = dividend / divisor
+#     = dividend / (10 ^ E)
+#     = dividend / ((2 * 5) ^ E)
+#     = dividend / ((2 ^ E) * (5 ^ E))
+#     = (dividend >> E) / (5 ^ E)
+#     ≈ ((dividend >> E) * ((1 << K) / (5 ^ E))) >> K
+#
+# "10 ** maxE" should be less than "1 << 64", so maxE is 19
+
+# python to get lut
+
+mul_lut = []
+shift_lut = []
+def print_lut():
+    maxE = 19
+    for E in range(1, maxE + 1):
+        minN = (10 ** E) >> E
+        maxN = (((1 << 64) - 1) * (10 ** E)) >> E
+        V = 5 ** E
+        M = 0
+        for K in range(128, 0, -1):
+            M = ((1 << K) // V) + 1
+            if M < (1 << 64):
+                break
+        mul_lut.append(M)
+        shift_lut.append(K)
+
+    print('static const uint64_t mul_lut[%d] = {' % (maxE), end='')
+    for i in range(maxE):
+        if i % 4 == 0:
+            print()
+            print('    ', end='')
+        print('0x%016x' % (mul_lut[i]), end='')
+        if i != maxE - 1:
+            print(', ', end='');
+        else:
+            print()
+            print('};')
+
+    print()
+    print('static const uint64_t pow5_lut[%d] = {' % (maxE), end='')
+    for i in range(maxE):
+        if i % 4 == 0:
+            print()
+            print('    ', end='')
+        print('0x%016x' % (5 ** (i + 1)), end='')
+        if i != maxE - 1:
+            print(', ', end='');
+        else:
+            print()
+            print('};')
+
+    print()
+    print('static const uint8_t shift_lut[%d] = {' % (maxE), end='')
+    for i in range(maxE):
+        if i % 20 == 0:
+            print()
+            print('    ', end='')
+        print('%-2d' % (shift_lut[i]), end='')
+        if i != maxE - 1:
+            print(', ', end='');
+        else:
+            print()
+            print('};')
+
+print_lut()
+*/
+
+static inline uint64_t u128_div_exp(u128 dividend, uint64_t *remainder, uint64_t M, uint64_t P, int32_t K, int32_t E)
+{
+    const u128 n = dividend >> E;
+    uint64_t hi = (uint64_t)(n >> 64);
+    uint64_t lo = (uint64_t)n;
+    int32_t zeros = u64_pz_get(hi);
+
+    hi = (hi << zeros | lo >> (64 - zeros)) + 1;
+    uint64_t ret = (((u128)hi * M) >> (K + zeros - 64));
+
+    u128 m = (u128)ret * P;
+    if (m > n) {
+        --ret;
+        m -= P;
     }
+
+    *remainder = (n - m) << E;
+    *remainder += (uint64_t)dividend & (((uint64_t)1 << E) - 1);
     return ret;
 }
-#endif
+
+/*
+static const uint64_t mul_lut[19] = {
+    0xcccccccccccccccd, 0xa3d70a3d70a3d70b, 0x83126e978d4fdf3c, 0xd1b71758e219652c,
+    0xa7c5ac471b478424, 0x8637bd05af6c69b6, 0xd6bf94d5e57a42bd, 0xabcc77118461cefd,
+    0x89705f4136b4a598, 0xdbe6fecebdedd5bf, 0xafebff0bcb24aaff, 0x8cbccc096f5088cc,
+    0xe12e13424bb40e14, 0xb424dc35095cd810, 0x901d7cf73ab0acda, 0xe69594bec44de15c,
+    0xb877aa3236a4b44a, 0x9392ee8e921d5d08, 0xec1e4a7db69561a6
+};
+
+static const uint64_t pow5_lut[19] = {
+    0x0000000000000005, 0x0000000000000019, 0x000000000000007d, 0x0000000000000271,
+    0x0000000000000c35, 0x0000000000003d09, 0x000000000001312d, 0x000000000005f5e1,
+    0x00000000001dcd65, 0x00000000009502f9, 0x0000000002e90edd, 0x000000000e8d4a51,
+    0x0000000048c27395, 0x000000016bcc41e9, 0x000000071afd498d, 0x0000002386f26fc1,
+    0x000000b1a2bc2ec5, 0x000003782dace9d9, 0x00001158e460913d
+};
+
+static const uint8_t shift_lut[19] = {
+    66, 68, 70, 73, 75, 77, 80, 82, 84, 87, 89, 91, 94, 96, 98, 101, 103, 105, 108
+};
+*/
+
+static inline uint64_t u128_div_1e17(u128 dividend, uint64_t *remainder)
+{
+    return u128_div_exp(dividend, remainder, 0xb877aa3236a4b44a, 0x000000b1a2bc2ec5, 103, 17);
+}
+
+static inline uint64_t u128_div_1e18(u128 dividend, uint64_t *remainder)
+{
+    return u128_div_exp(dividend, remainder, 0x9392ee8e921d5d08, 0x000003782dace9d9, 105, 18);
+}
+
+#else // USING_DIV_EXP
+
+static inline uint64_t u128_div_1e17(u128 dividend, uint64_t *remainder)
+{
+    uint64_t ret = dividend / 100000000000000000llu;
+    *remainder = dividend - (u128)ret * 100000000000000000llu;
+    return ret;
+}
+
+static inline uint64_t u128_div_1e18(u128 dividend, uint64_t *remainder)
+{
+    uint64_t ret = dividend / 1000000000000000000llu;
+    *remainder = dividend - (u128)ret * 1000000000000000000llu;
+    return ret;
+}
+#endif // USING_DIV_EXP
+#endif // !USING_U128_CALC
+#endif // USING_HIGH_RES
+
+static const char ch_100_lut[200] = {
+    '0','0','0','1','0','2','0','3','0','4','0','5','0','6','0','7','0','8','0','9',
+    '1','0','1','1','1','2','1','3','1','4','1','5','1','6','1','7','1','8','1','9',
+    '2','0','2','1','2','2','2','3','2','4','2','5','2','6','2','7','2','8','2','9',
+    '3','0','3','1','3','2','3','3','3','4','3','5','3','6','3','7','3','8','3','9',
+    '4','0','4','1','4','2','4','3','4','4','4','5','4','6','4','7','4','8','4','9',
+    '5','0','5','1','5','2','5','3','5','4','5','5','5','6','5','7','5','8','5','9',
+    '6','0','6','1','6','2','6','3','6','4','6','5','6','6','6','7','6','8','6','9',
+    '7','0','7','1','7','2','7','3','7','4','7','5','7','6','7','7','7','8','7','9',
+    '8','0','8','1','8','2','8','3','8','4','8','5','8','6','8','7','8','8','8','9',
+    '9','0','9','1','9','2','9','3','9','4','9','5','9','6','9','7','9','8','9','9',
+};
+
+static const uint8_t tz_100_lut[100] = {
+    2, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    1, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    1, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    1, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    1, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    1, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    1, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    1, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    1, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    1, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+};
 
 static inline int32_t fill_t_4_digits(char *buffer, uint32_t digits, int32_t *ptz)
 {
@@ -705,140 +841,101 @@ static int32_t ldouble_convert_n(diy_fp_t *v, char *buffer, int32_t *vnum_digits
         1 , 0 , 0 , 1 , 0 , 0 , 0 , 0 , 0 , 0 , 1 , 0
     };
 
+    int32_t num_digits, trailing_zeros;
     int32_t i = 63 - u64_pz_get(v->f);
     int32_t e = (int)n_index_lut[i] - 400;
     int32_t s = n_shift_lut[i];
     if (i < 26) {
-        static const uint32_t add = 500000000;
-        static const uint32_t div = 1000000000;
-        static const uint64_t cmp_lut[11] = { 0,
-            1000000000llu, 2000000000llu, 3000000000llu, 4000000000llu, 5000000000llu,
-            6000000000llu, 7000000000llu, 8000000000llu, 9000000000llu, 10000000000llu
+        static const uint64_t cmp_lut[6] = { 0,
+            1000000000llu, 2000000000llu, 3000000000llu, 4000000000llu, 5000000000llu
         };
 
-        uint32_t high, low, b1, b0;
-
+        uint32_t remainder;
         uint64_t t = n_base_lut[i];
         uint64_t f = v->f << s;
         uint64_t m = f * t;
 
-        v->f = (m + add) / div;
+        v->f = m / 1000000000;
+        remainder = m % 1000000000;
         v->e = e + 9;
 
-        if (i < 3) {
+        if (v->f < 10) {
+            if (remainder >= 500000000) {
+                v->f += 1;
+                if (v->f == 10) {
+                    memcpy(buffer, "10", 2);
+                    *vnum_digits = 1;
+                    return 2;
+                }
+            }
             *buffer = '0' + v->f;
             *vnum_digits = 1;
             return 1;
         }
 
-        high = (uint32_t)((v->f * 42949673) >> 32);  // v->f / 100
-        low = (uint32_t)(v->f - high * 100);
-        if (low) {
-            b1 = ch_100_lut[low << 1] - '0';
-            b0 = ch_100_lut[(low << 1) + 1] - '0';
-
-            switch (b1) {
-            case 0:
-                if (cmp_lut[b0] < (s ? (t << (s - 1)) : (t >> 1)) + add) {
-                    low = 0;
-                }
-                break;
-            case 9:
-                if (cmp_lut[10 - b0] < (s ? (t << (s - 1)) : (t >> 1)) + add) {
-                    low = 0;
-                    high += 1;
-                }
-                break;
-            default:
-                break;
+        int32_t tail = v->f % 10;
+        uint64_t diff = (s ? t << (s - 1) : t >> 1) + (cmp_lut[1] >> 1);
+        if (tail < 5) {
+            if (cmp_lut[tail] + remainder <= diff) {
+                v->f -= tail;
+                goto next1;
             }
-        }
-
-        int32_t num_digits, trailing_zeros;
-        if (!high) {
-            trailing_zeros = tz_100_lut[low];
-            memcpy(buffer, &ch_100_lut[low << 1], 2);
-            num_digits = 2;
         } else {
-            num_digits = fill_1_8_digits(buffer, high, &trailing_zeros);
-            if (low) {
-                trailing_zeros = tz_100_lut[low];
-                memcpy(buffer + num_digits, &ch_100_lut[low << 1], 2);
-                num_digits += 2;
-            } else {
-                v->f = high;
-                v->e += 2;
+            if (cmp_lut[10 - tail] <= remainder + diff) {
+                v->f += 10 - tail;
+                goto next1;
             }
         }
-
+        if (remainder >= (cmp_lut[1] >> 1))
+            v->f += 1;
+next1:
+        if (v->f == 100000000) {
+            memcpy(buffer, "100000000", 9);
+            trailing_zeros = 8;
+            num_digits = 9;
+        } else {
+            num_digits = fill_1_8_digits(buffer, v->f, &trailing_zeros);
+        }
         *vnum_digits = num_digits - trailing_zeros;
         return num_digits;
     } else {
 #if USING_HIGH_RES
-        static const uint64_t add = 50000000000000000llu;
-        static const uint64_t div = 100000000000000000llu;
         static const uint64_t cmp_lut[11] = {
             0,                     100000000000000000llu, 200000000000000000llu, 300000000000000000llu,
             400000000000000000llu, 500000000000000000llu, 600000000000000000llu, 700000000000000000llu,
             800000000000000000llu, 900000000000000000llu, 1000000000000000000llu
         };
 
-        uint64_t high;
-        uint32_t low, b1, b0;
-
+        uint64_t remainder;
         uint64_t t = n_base_lut[i];
         uint64_t f = v->f << s;
 
 #if USING_U128_CALC
-        __extension__ typedef unsigned __int128 u128;
         u128 m = (u128)f * t;
-        v->f = (uint64_t)((m + add) / div);
+        v->f = u128_div_1e17(m, &remainder); // (uint64_t)(m / div)
         v->e = e + 17;
 #else
-        uint64_t remainder;
-        u64x2_t a = {.hi = 0, .lo = add};
         u64x2_t m = u128_mul(f, t);
-        u64x2_t n = u128_add(m, a);
-        u64x2_t r = u128_div(n, div, &remainder);
+        u64x2_t r = u128_div(m, 100000000000000000llu, &remainder);
         v->f = r.lo;
         v->e = e + 17;
 #endif
-
-        high = v->f / 100;
-        low = v->f % 100;
-        if (low) {
-            b1 = ch_100_lut[low << 1] - '0';
-            b0 = ch_100_lut[(low << 1) + 1] - '0';
-
-            switch (b1) {
-            case 0:
-                if (cmp_lut[b0] < (s ? (t << (s - 1)) : (t >> 1)) + add) {
-                    low = 0;
-                }
-                break;
-            case 9:
-                if (cmp_lut[10 - b0] < (s ? (t << (s - 1)) : (t >> 1)) + add) {
-                    low = 0;
-                    high += 1;
-                }
-                break;
-            default:
-                break;
+        int32_t tail = v->f % 10;
+        uint64_t diff = (s ? t << (s - 1) : t >> 1) + (cmp_lut[1] >> 1);
+        if (tail < 5) {
+            if (cmp_lut[tail] + remainder <= diff) {
+                v->f -= tail;
+                goto next2;
+            }
+        } else {
+            if (cmp_lut[10 - tail] <= remainder + diff) {
+                v->f += 10 - tail;
+                goto next2;
             }
         }
-
-        int32_t num_digits, trailing_zeros;
-        num_digits = fill_1_16_digits(buffer, high, &trailing_zeros);
-        if (low) {
-            trailing_zeros = tz_100_lut[low];
-            memcpy(buffer + num_digits, &ch_100_lut[low << 1], 2);
-            num_digits += 2;
-        } else {
-            v->f = high;
-            v->e += 2;
-        }
-        *vnum_digits = num_digits - trailing_zeros;
-        return num_digits;
+        if (remainder >= (cmp_lut[1] >> 1))
+            v->f += 1;
+next2:
 
 #else
 
@@ -847,52 +944,21 @@ static int32_t ldouble_convert_n(diy_fp_t *v, char *buffer, int32_t *vnum_digits
         double d = (double)f * t;
         v->f = (uint64_t)((d + 5e18) * 1e-19);
         v->e = e + 19;
-
-        int32_t num_digits, trailing_zeros;
-        num_digits = fill_1_16_digits(buffer, v->f, &trailing_zeros);
+#endif
+        if (v->f == 10000000000000000llu) {
+            memcpy(buffer, "10000000000000000", 17);
+            trailing_zeros = 16;
+            num_digits = 17;
+        } else {
+            num_digits = fill_1_16_digits(buffer, v->f, &trailing_zeros);
+        }
         *vnum_digits = num_digits - trailing_zeros;
         return num_digits;
-#endif
     }
     return 0;
 }
 
 #if USING_HIGH_RES
-static inline int32_t fill_significand(char *buffer, uint64_t digits, int32_t *ptz)
-{
-    char *s = buffer;
-
-    if (digits == 100000000000000llu) {
-        memcpy(buffer, "100000000000000", 15);
-        *ptz = 14;
-        return 15;
-    }
-
-    uint32_t q = (uint32_t)(digits / 100000000);
-    uint32_t r = (uint32_t)(digits - (uint64_t)q * 100000000);
-    uint32_t qq = FAST_DIV10000(q);
-    uint32_t qr = q - qq * 10000;
-
-    memcpy(s, &ch_100_lut[qq<<1], 2);
-    *ptz = tz_100_lut[qq];
-
-    if (!qr) {
-        memset(s + 2, '0', 4);
-        *ptz += 4;
-    } else {
-        fill_t_4_digits(s + 2, qr, ptz);
-    }
-
-    if (!r) {
-        memset(s + 6, '0', 8);
-        *ptz += 8;
-    } else {
-        fill_t_8_digits(s + 6, r, ptz);
-    }
-
-    return 14;
-}
-
 /*
 # python to get lut
 def print_pow_array(unit, index, end, positive):
@@ -1306,157 +1372,119 @@ static inline diy_fp_t negative_diy_fp(int32_t e)
     return v;
 }
 
+static inline int32_t fill_significand(char *buffer, uint64_t digits, int32_t *ptz)
+{
+    char *s = buffer;
+
+    uint32_t q = (uint32_t)(digits / 100000000);
+    uint32_t r = (uint32_t)(digits - (uint64_t)q * 100000000);
+
+    uint32_t q1 = FAST_DIV10000(q);
+    uint32_t r1 = q - q1 * 10000;
+
+    uint32_t q2 = FAST_DIV100(q1);
+    uint32_t r2 = q1 - q2 * 100;
+
+    memcpy(s, &ch_100_lut[q2<<1], 2);
+    memcpy(s + 2, &ch_100_lut[r2<<1], 2);
+    if (!r2) {
+        *ptz = tz_100_lut[q2] + 2;
+    } else {
+        *ptz = tz_100_lut[r2];
+    }
+
+    if (!r1) {
+        memset(s + 4, '0', 4);
+        *ptz += 4;
+    } else {
+        fill_t_4_digits(s + 4, r1, ptz);
+    }
+
+    if (!r) {
+        memset(s + 8, '0', 8);
+        *ptz += 8;
+    } else {
+        fill_t_8_digits(s + 8, r, ptz);
+    }
+
+    return 16;
+}
+
 static inline int32_t ldouble_convert(diy_fp_t *v, char *buffer, int32_t *vnum_digits)
 {
-    const uint64_t *cmp_lut;
-    uint64_t add, high;
-    uint32_t low, b0, b1;
+    static const uint64_t cmp_lut1[6] = {
+        0,                      100000000000000000llu,  200000000000000000llu,
+        300000000000000000llu,  400000000000000000llu,  500000000000000000llu
+    };
+    static const uint64_t cmp_lut2[6] = {
+        0,                      1000000000000000000llu, 2000000000000000000llu,
+        3000000000000000000llu, 4000000000000000000llu, 5000000000000000000llu
+    };
+
     int32_t num_digits, trailing_zeros;
+    uint64_t remainder;
+    const uint64_t *cmp_lut;
 
     int32_t s = v->e & 1;
     uint64_t f = v->f << s;
     int32_t e = v->e >> 1;
     diy_fp_t x = e >= 0 ? positive_diy_fp(e) : negative_diy_fp(-e);
 
-    static const uint64_t add1 = 50000000000000000llu;
-    static const uint64_t add2 = 500000000000000000llu;
-    static const uint64_t cmp_lut1[11] = {
-        0,                      100000000000000000llu,  200000000000000000llu,  300000000000000000llu,
-        400000000000000000llu,  500000000000000000llu,  600000000000000000llu,  700000000000000000llu,
-        800000000000000000llu,  900000000000000000llu,  1000000000000000000llu };
-    static const uint64_t cmp_lut2[11] = {
-        0,                      1000000000000000000llu, 2000000000000000000llu, 3000000000000000000llu,
-        4000000000000000000llu, 5000000000000000000llu, 6000000000000000000llu, 7000000000000000000llu,
-        8000000000000000000llu, 9000000000000000000llu, 10000000000000000000llu };
-
 #if USING_U128_CALC
-    __extension__ typedef unsigned __int128 u128;
-    static const u128 cmp = (u128)99999999999999995llu * 10000000000000000llu;
+    static const u128 cmp = (u128)10000000000000000llu * 100000000000000000llu; // 1e33
     u128 m = (u128)f * x.f;
-    if (m < cmp) {              // 1e33 - 5e16
-        v->f = (uint64_t)((m + add1) / cmp_lut1[1]);
+    if (m < cmp) {
+        v->f = u128_div_1e17(m, &remainder); // (uint64_t)(m / cmp_lut1[1])
         v->e = e - x.e + 17;
-        add = add1;
         cmp_lut = cmp_lut1;
     } else {
-        v->f = (uint64_t)((m + add2) / cmp_lut2[1]);
+        v->f = u128_div_1e18(m, &remainder); // (uint64_t)(m / cmp_lut2[1])
         v->e = e - x.e + 18;
-        add = add2;
         cmp_lut = cmp_lut2;
     }
 #else
-    u64x2_t cmp = {.hi = 54210108624275llu, .lo = 4039650035136921600llu};
+    u64x2_t cmp = {.hi = 54210108624275llu, .lo = 4089650035136921600llu};
     u64x2_t m = u128_mul(f, x.f);
-    if (u128_cmp(m, cmp) < 0) {              // 1e33 - 5e16
+    if (u128_cmp(m, cmp) < 0) {
         v->e = e - x.e + 17;
-        add = add1;
         cmp_lut = cmp_lut1;
     } else {
         v->e = e - x.e + 18;
-        add = add2;
         cmp_lut = cmp_lut2;
     }
-
-    uint64_t remainder;
-    u64x2_t a = {.hi = 0, .lo = add};
-    u64x2_t n = u128_add(m, a);
-    u64x2_t r = u128_div(n, cmp_lut[1], &remainder);
+    u64x2_t r = u128_div(m, cmp_lut[1], &remainder);
     v->f = r.lo;
 #endif
 
-    high = v->f / 100;
-    low = v->f % 100;
-    if (low) {
-        b1 = ch_100_lut[low << 1] - '0';
-        b0 = ch_100_lut[(low << 1) + 1] - '0';
-
-        switch (b1) {
-        case 0:
-            if (cmp_lut[b0] < (x.f >> !s) + add) {
-                low = 0;
-            }
-            break;
-        case 9:
-            if (cmp_lut[10 - b0] < (x.f >> !s) + add) {
-                low = 0;
-                high += 1;
-            }
-            break;
-        default:
-            break;
+    int32_t tail = v->f % 10;
+    uint64_t diff = (x.f >> !s) + (cmp_lut[1] >> 1);
+    if (tail < 5) {
+        if (cmp_lut[tail] + remainder <= diff) {
+            v->f -= tail;
+            goto next;
+        }
+    } else {
+        if (cmp_lut[10 - tail] <= remainder + diff) {
+            v->f += 10 - tail;
+            goto next;
         }
     }
+    if (remainder >= (cmp_lut[1] >> 1))
+        v->f += 1;
 
-    num_digits = fill_significand(buffer, high, &trailing_zeros);
-    if (low) {
-        trailing_zeros = tz_100_lut[low];
-        memcpy(buffer + num_digits, &ch_100_lut[low << 1], 2);
-        num_digits += 2;
+next:
+    if (v->f == 10000000000000000llu) {
+        memcpy(buffer, "10000000000000000", 17);
+        trailing_zeros = 16;
+        num_digits = 17;
     } else {
-        v->f = high;
-        v->e += 2;
+        num_digits = fill_significand(buffer, v->f, &trailing_zeros);
     }
     *vnum_digits = num_digits - trailing_zeros;
     return num_digits;
 }
 
 #else
-
-static inline int32_t fill_significand(char *buffer, uint64_t digits, int32_t *ptz)
-{
-    char *s = buffer;
-    uint32_t q, r, q1, r1, q2, r2;
-
-    q = (uint32_t)(digits / 100000000);
-    r = (uint32_t)(digits - (uint64_t)q * 100000000);
-    q1 = FAST_DIV10000(q);
-    r1 = q - q1 * 10000;
-
-    if (q1 >= 100) {
-        q2 = FAST_DIV100(q1);
-        r2 = q1 - q2 * 100;
-        if (q2 >= 10) {
-            *ptz = tz_100_lut[q2];
-            memcpy(s, &ch_100_lut[q2<<1], 2);
-            s += 2;
-        } else {
-            *ptz = 0;
-            *s++ = q2 + '0';
-        }
-        if (!r2) {
-            *ptz += 2;
-            memset(s, '0', 2);
-            s += 2;
-        } else {
-            *ptz = tz_100_lut[r2];
-            memcpy(s, &ch_100_lut[r2<<1], 2);
-            s += 2;
-        }
-    } else {
-        r2 = q1;
-        *ptz = tz_100_lut[r2];
-        memcpy(s, &ch_100_lut[r2<<1], 2);
-        s += 2;
-    }
-
-    if (!r1) {
-        *ptz += 4;
-        memset(s, '0', 4);
-        s += 4;
-    } else {
-        s += fill_t_4_digits(s, r1, ptz);
-    }
-
-    if (!r) {
-        memset(s + 8, '0', 8);
-        *ptz += 8;
-        s += 8;
-    } else {
-        s += fill_t_8_digits(s, r, ptz);
-    }
-
-    return s - buffer;
-}
 
 /*
 # python to get lut
@@ -1640,6 +1668,57 @@ static inline diy_fp_t negative_diy_fp(int32_t e)
     return v;
 }
 
+static inline int32_t fill_significand(char *buffer, uint64_t digits, int32_t *ptz)
+{
+    char *s = buffer;
+
+    uint32_t q = (uint32_t)(digits / 100000000);
+    uint32_t r = (uint32_t)(digits - (uint64_t)q * 100000000);
+
+    uint32_t q1 = FAST_DIV10000(q);
+    uint32_t r1 = q - q1 * 10000;
+
+    uint32_t q2 = FAST_DIV100(q1);
+    uint32_t r2 = q1 - q2 * 100;
+
+    if (q2 >= 10) {
+        memcpy(s, &ch_100_lut[q2<<1], 2);
+        s += 2;
+        *ptz = tz_100_lut[q2];
+    } else {
+        *s++ = q2 + '0';
+        *ptz = 0;
+    }
+
+    if (!r2) {
+        memset(s, '0', 2);
+        s += 2;
+        *ptz += 2;
+    } else {
+        memcpy(s, &ch_100_lut[r2<<1], 2);
+        s += 2;
+        *ptz = tz_100_lut[r2];
+    }
+
+    if (!r1) {
+        memset(s, '0', 4);
+        s += 4;
+        *ptz += 4;
+    } else {
+        s += fill_t_4_digits(s, r1, ptz);
+    }
+
+    if (!r) {
+        memset(s, '0', 8);
+        s += 8;
+        *ptz += 8;
+    } else {
+        s += fill_t_8_digits(s, r, ptz);
+    }
+
+    return s - buffer;
+}
+
 static inline int32_t ldouble_convert(diy_fp_t *v, char *buffer, int32_t *vnum_digits)
 {
     uint64_t f = v->f << (v->e & 7);
@@ -1647,7 +1726,6 @@ static inline int32_t ldouble_convert(diy_fp_t *v, char *buffer, int32_t *vnum_d
     diy_fp_t x = e >= 0 ? positive_diy_fp(e) : negative_diy_fp(-e);
 
 #if USING_U128_CALC && !USING_FLOAT_MUL
-    __extension__ typedef unsigned __int128 u128;
     const u128 m = (u128)f * x.f;
 
     static const u128 cmp1 = (u128)99999999999999950llu   * 1000000000000000000llu;
@@ -1695,7 +1773,7 @@ static inline int32_t ldouble_convert(diy_fp_t *v, char *buffer, int32_t *vnum_d
 #endif
 
     int32_t num_digits, trailing_zeros;
-    num_digits =  fill_significand(buffer, v->f, &trailing_zeros);
+    num_digits = fill_significand(buffer, v->f, &trailing_zeros);
     *vnum_digits = num_digits - trailing_zeros;
     return num_digits;
 }
@@ -1804,7 +1882,6 @@ int jnum_dtoa(double num, char *buffer)
             memcpy(s, "inf", 4);
             return signbit + 3;
         }
-        break;
 
     case 0:
         if (significand) {
@@ -2055,7 +2132,6 @@ static double jnum_convert_double(uint64_t neg, uint64_t m, int32_t k, int32_t i
             *v = (m >> -exponent) | (neg << 63);
         } else {
             *v = neg << 63;
-
         }
     }
     return d;
