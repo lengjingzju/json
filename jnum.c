@@ -146,64 +146,22 @@ static inline u64x2_t u128_add(u64x2_t v1, uint64_t v2)
     return ret;
 }
 
-static inline u64x2_t u128_div(u64x2_t dividend, uint64_t divisor, uint64_t *remainder)
+static inline u64x2_t u128_sub(u64x2_t v1, u64x2_t v2)
 {
     u64x2_t ret = {0, 0};
-    if (!dividend.hi) {
-        ret.lo = dividend.lo / divisor;
-        *remainder = dividend.lo % divisor;
-        return ret;
-    }
 
-    int abits = 64 - u64_pz_get(dividend.hi);
-    int bbits = 64 - u64_pz_get(divisor);
-    int shift = 0;
-
-    if (abits >= bbits) {
-        shift = 64;
-        while (abits > bbits) {
-            if (dividend.hi >= (divisor << (abits - bbits))) {
-                dividend.hi -= divisor << (abits - bbits);
-                ret.hi |= (uint64_t)1;
-            }
-            ret.hi <<= 1;
-            --abits;
-        }
-        if (dividend.hi >= divisor) {
-            dividend.hi -= divisor;
-            ret.hi |= (uint64_t)1;
-        }
+    if (v1.lo < v2.lo) {
+        uint64_t diff = 0xFFFFFFFFFFFFFFFF - v2.lo;
+        ret.lo = v1.lo + diff + 1;
+        ret.hi = v1.hi - v2.hi - 1;
     } else {
-        shift = 64;
-        dividend.hi = (dividend.hi << (bbits - abits - 1)) | (dividend.lo >> (64 - (bbits - abits - 1)));
-        dividend.lo <<= (bbits - abits - 1);
-        shift -= (bbits - abits - 1);
+        ret.lo = v1.lo - v2.lo;
+        ret.hi = v1.hi - v2.hi;
     }
 
-    while (--shift) {
-        dividend.hi = (dividend.hi << 1) | (dividend.lo >> 63);
-        dividend.lo <<= 1;
-        if (dividend.hi >= divisor) {
-            dividend.hi -= divisor;
-            ret.lo |= (uint64_t)1;
-        }
-        ret.lo <<= 1;
-    }
-
-    dividend.hi = (dividend.hi << 1) | (dividend.lo >> 63);
-    dividend.lo <<= 1;
-    if (dividend.hi >= divisor) {
-        dividend.hi -= divisor;
-        ret.lo |= (uint64_t)1;
-    }
-
-    *remainder = dividend.hi;
     return ret;
 }
 
-#else // !USING_U128_CALC
-
-#if USING_DIV_EXP
 /*
 # python to get lut
 
@@ -275,6 +233,44 @@ def print_lut():
 print_lut()
 */
 
+static inline uint64_t u128_div_exp(u64x2_t dividend, uint64_t *remainder, uint64_t M, uint64_t P, int32_t K, int32_t E)
+{
+    const u64x2_t n = {
+        .hi = dividend.hi >> E,
+        .lo = dividend.hi << (64 - E) | dividend.lo >> E
+    };
+    int32_t zeros = u64_pz_get(n.hi);
+
+    uint64_t hi = (n.hi << zeros | n.lo >> (64 - zeros)) + 1;
+    u64x2_t r = u128_mul(hi, M);
+    int32_t shift = (K + zeros) - 128;
+    uint64_t ret = r.hi >> shift;
+
+    u64x2_t m = u128_mul(ret, P);
+    if (u128_cmp(m, n) > 0) {
+        --ret;
+        *remainder = u128_sub(u128_add(n, P), m).lo << E;
+    } else {
+        *remainder = u128_sub(n, m).lo << E;
+    }
+
+    *remainder += dividend.lo & (((uint64_t)1 << E) - 1);
+    return ret;
+}
+
+static inline uint64_t u128_div_1e17(u64x2_t dividend, uint64_t *remainder)
+{
+    return u128_div_exp(dividend, remainder, 0xb877aa3236a4b44a, 0x000000b1a2bc2ec5, 103, 17);
+}
+
+static inline uint64_t u128_div_1e18(u64x2_t dividend, uint64_t *remainder)
+{
+    return u128_div_exp(dividend, remainder, 0x9392ee8e921d5d08, 0x000003782dace9d9, 105, 18);
+}
+
+#else // !USING_U128_CALC
+
+#if USING_DIV_EXP
 static inline uint64_t u128_div_exp(u128 dividend, uint64_t *remainder, uint64_t M, uint64_t P, int32_t K, int32_t E)
 {
     const u128 n = dividend >> E;
@@ -920,8 +916,7 @@ static int32_t ldouble_convert_n(diy_fp_t *v, char *buffer, int32_t *vnum_digits
 #else
         u64x2_t m = u128_mul(f, t);
         m = u128_add(m, delta >> 1);
-        u64x2_t r = u128_div(m, 100000000000000000llu, &remainder);
-        v->f = r.lo;
+        v->f = u128_div_1e17(m, &remainder);
         v->e = e + 17;
 #endif
         uint64_t tail = v->f % 10;
@@ -1433,15 +1428,15 @@ static inline int32_t ldouble_convert(diy_fp_t *v, char *buffer, int32_t *vnum_d
     m = u128_add(m, delta >> 1);
     if (u128_cmp(m, cmp) < 0) {
         v->e = e - x.e + 17;
+        v->f = u128_div_1e17(m, &remainder);
         div   = 100000000000000000llu;
         div10 = 10000000000000000llu;
     } else {
         v->e = e - x.e + 18;
+        v->f = u128_div_1e18(m, &remainder);
         div   = 1000000000000000000llu;
         div10 = 100000000000000000llu;
     }
-    u64x2_t r = u128_div(m, div, &remainder);
-    v->f = r.lo;
 #endif
 
     if ((v->f & 1) && (remainder + div <= delta + div10)) {
