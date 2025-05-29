@@ -14,7 +14,7 @@
 extern "C" {
 #endif
 
-#define JSON_VERSION                    0x030301
+#define JSON_VERSION                    0x030302
 #define JSON_SAX_APIS_SUPPORT           1
 
 /**************** json object structure / json对象结构 ****************/
@@ -54,7 +54,7 @@ struct json_list_head {
  * @description: LJSON supports not only standard types, but also extended types (JSON HEX...).
  */
 /*
- * json_type_t - json对象的头
+ * json_type_t - json对象的类型
  * @description: LJSON支持的对象比cJSON多，例如长整数，十六机制的数
  */
 typedef enum {
