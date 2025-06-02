@@ -1790,7 +1790,7 @@ static double jnum_convert_double(uint64_t neg, uint64_t m, int32_t k, int32_t i
         }
     } else {
         if (i + k < 20) {
-            double d = m * exponent_lut[i - MIN_NEG_EXP];
+            d = m * exponent_lut[i - MIN_NEG_EXP];
             *v |= neg << 63;
             return d;
         }
@@ -1849,7 +1849,16 @@ static double jnum_convert_double(uint64_t neg, uint64_t m, int32_t k, int32_t i
     }
 
     bits = 64 - (DP_SIGNIFICAND_SIZE + 1);
-    m >>= bits;
+    if (m & ((uint64_t)1 << (bits - 1))) {
+        m >>= bits;
+        m += 1;
+        if (m == ((uint64_t)1 << (DP_SIGNIFICAND_SIZE + 1))) {
+            m >>= 1;
+            exponent += 1;
+        }
+    } else {
+        m >>= bits;
+    }
     exponent += bits;
 
     exponent += DP_EXPONENT_OFFSET + DP_SIGNIFICAND_SIZE;
