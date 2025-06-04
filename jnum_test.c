@@ -83,6 +83,7 @@ int main(int argc, char *argv[])
             int cnt = atoi(argv[3]);
             volatile double d1, d2;
             unsigned int ms1, ms2, ms3;
+            char tmp[64] = {0};
 
             ms1 = _system_ms_get();
             for (i = 0; i < cnt; ++i) {
@@ -93,7 +94,10 @@ int main(int argc, char *argv[])
                 d2 = jnum_atod(argv[2]);
             }
             ms3 = _system_ms_get();
-            printf("strtod:    %0.16g %ums\njnum_atod: %0.16g %ums\t%.0lf%%\n", d1, ms2 - ms1, d2, ms3 - ms2,
+
+            jnum_dtoa(d1, buf);
+            jnum_dtoa(d2, tmp);
+            printf("original  : %s\nstrtod:    %s %ums\njnum_atod: %s %ums\t%.0lf%%\n", argv[2], buf, ms2 - ms1, tmp, ms3 - ms2,
                  ms3 - ms2 ? 100.0 * (ms2 - ms1) / (ms3 - ms2) : 0);
         }
         break;
