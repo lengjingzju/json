@@ -16,7 +16,6 @@ testedbin      := ljson
 testednum      := jnum_test
 
 INSTALL_HEADERS = json.h jnum.h
-DIVE           ?= 0
 DTOA           ?= 0
 
 libsrcs        := json.c jnum.c
@@ -27,9 +26,7 @@ ifeq ($(DTOA),3)
 libsrcs        += dragonbox.c
 endif
 
-# When DIVE is set to 1, it will use a custom division instead of u128 division.
-# which configuration has high performance requires actual testing.
-CPFLAGS        += -DUSING_DIV_EXP=$(DIVE)
+
 CPFLAGS        += -DJSON_DTOA_ALGORITHM=$(DTOA) # 0:ldouble 1:sprintf 2:grisu2 3:dragonbox
 CXXFLAGS       += -Wno-missing-field-initializers -Wno-write-strings
 
