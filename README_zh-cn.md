@@ -59,6 +59,10 @@ make O=<编译输出目录> CROSS_COMPILE=<交叉编译器前缀> && make O=<编
     * 1: C标准库的 sprintf
     * 2: 个人优化的 grisu2 算法
     * 3: 个人优化的 dragonbox 算法
+<br>
+
+* Windows MSC
+    * 使用 `Visual Studio 2022` 打开 `MSC\ljson\ljson.sln`
 
 ### 运行方法
 

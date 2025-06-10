@@ -6,11 +6,22 @@
 *******************************************/
 #include <stdio.h>
 #include <stdlib.h>
-#include <unistd.h>
 #include <fcntl.h>
-#include <math.h>
 #include "jnum.h"
 #include "json.h"
+
+#if !defined(_MSC_VER)
+#include <unistd.h>
+#define O_BINARY                        0
+#else
+#include <io.h>
+#define open                            _open
+#define close                           _close
+#define read                            _read
+#define write                           _write
+#define ssize_t                         int
+#pragma warning(disable: 4996)
+#endif
 
 #define type_member                     jkey.type
 #define key_member                      jkey.str
@@ -100,9 +111,9 @@ extern int dragonbox_dtoa(double num, char *buffer);
 #define JSON_ERROR_PRINT_ENABLE         1
 
 #if JSON_ERROR_PRINT_ENABLE
-#define JsonErr(fmt, args...) do {                                  \
+#define JsonErr(fmt, ...) do {                                      \
     printf("[JsonErr][%s:%d] ", __func__, __LINE__);                \
-    printf(fmt, ##args);                                            \
+    printf(fmt, ##__VA_ARGS__);                                     \
 } while(0)
 
 #define JsonPareseErr(s)      do {                                  \
@@ -116,7 +127,7 @@ extern int dragonbox_dtoa(double num, char *buffer);
 } while(0)
 
 #else
-#define JsonErr(fmt, args...) do {} while(0)
+#define JsonErr(fmt, ...)     do {} while(0)
 #define JsonPareseErr(s)      do {} while(0)
 #endif
 
@@ -171,17 +182,17 @@ extern int dragonbox_dtoa(double num, char *buffer);
 /* args of json_list_entry is different to list_entry of linux */
 #define json_list_entry(ptr, type)  ((type *)(ptr))
 
-#define json_list_for_each_entry(pos, head, member)             \
-    for (pos = json_list_entry((head)->next, typeof(*pos));     \
-        &pos->member != (struct json_list *)(head);             \
-        pos = json_list_entry(pos->member.next, typeof(*pos)))
+#define json_list_for_each_entry(pos, head, member, type)           \
+    for (pos = json_list_entry((head)->next, type);                 \
+        &pos->member != (struct json_list *)(head);                 \
+        pos = json_list_entry(pos->member.next, type))
 
-#define json_list_for_each_entry_safe(p, pos, n, head, member)  \
-    for (p = json_list_entry((head), typeof(*pos)),             \
-        pos = json_list_entry((head)->next, typeof(*pos)),      \
-        n = json_list_entry(pos->member.next, typeof(*pos));    \
-        &pos->member != (struct json_list *)(head);             \
-        p = pos, pos = n, n = json_list_entry(n->member.next, typeof(*n)))
+#define json_list_for_each_entry_safe(p, pos, n, head, member, type)\
+    for (p = json_list_entry((head), type),                         \
+        pos = json_list_entry((head)->next, type),                  \
+        n = json_list_entry(pos->member.next, type);                \
+        &pos->member != (struct json_list *)(head);                 \
+        p = pos, pos = n, n = json_list_entry(n->member.next, type))
 
 static inline void INIT_JSON_LIST_HEAD(struct json_list_head *head)
 {
@@ -239,7 +250,7 @@ static inline int _item_total_get(json_object *json)
     switch (json->type_member) {
     case JSON_ARRAY:
     case JSON_OBJECT:
-        json_list_for_each_entry(item, &json->value.head, list) {
+        json_list_for_each_entry(item, &json->value.head, list, json_object) {
             cnt += _item_total_get(item);
         }
         break;
@@ -275,7 +286,7 @@ void json_del_object(json_object *json)
         break;
     case JSON_ARRAY:
     case JSON_OBJECT:
-        json_list_for_each_entry_safe(p, pos, n, &json->value.head, list) {
+        json_list_for_each_entry_safe(p, pos, n, &json->value.head, list, json_object) {
             json_list_del(&pos->list, &p->list, &json->value.head);
             json_del_object(pos);
             pos = p;
@@ -430,8 +441,10 @@ int json_string_strdup(json_string_t *src, json_string_t *dst)
     json_string_info_update(dst);
     if (src->len) {
         if (dst->len < src->len) {
-            if ((dst->str = (char *)json_realloc(dst->str, src->len + 1)) == NULL) {
+            char *bak_str = dst->str;
+            if ((dst->str = (char *)json_realloc(bak_str, src->len + 1)) == NULL) {
                 JsonErr("malloc failed!\n");
+                json_free(bak_str);
                 dst->len = 0;
                 return -1;
             }
@@ -520,7 +533,7 @@ int json_get_array_size(json_object *json)
     json_object *pos = NULL;
 
     if (json->type_member == JSON_ARRAY) {
-        json_list_for_each_entry(pos, &json->value.head, list) {
+        json_list_for_each_entry(pos, &json->value.head, list, json_object) {
             ++count;
         }
     }
@@ -534,7 +547,7 @@ int json_get_object_size(json_object *json)
     json_object *pos = NULL;
 
     if (json->type_member == JSON_OBJECT) {
-        json_list_for_each_entry(pos, &json->value.head, list) {
+        json_list_for_each_entry(pos, &json->value.head, list, json_object) {
             ++count;
         }
     }
@@ -548,7 +561,7 @@ json_object *json_get_array_item(json_object *json, int seq, json_object **prev)
     json_object *p = NULL, *pos = NULL, *n = NULL;
 
     if (json->type_member == JSON_ARRAY) {
-        json_list_for_each_entry_safe(p, pos, n, &json->value.head, list) {
+        json_list_for_each_entry_safe(p, pos, n, &json->value.head, list, json_object) {
             if (count++ == seq) {
                 if (prev)
                     *prev = p;
@@ -566,7 +579,7 @@ json_object *json_get_object_item(json_object *json, const char *key, json_objec
 
     if (json->type_member == JSON_OBJECT) {
         if (key && key[0]) {
-            json_list_for_each_entry_safe(p, pos, n, &json->value.head, list) {
+            json_list_for_each_entry_safe(p, pos, n, &json->value.head, list, json_object) {
                 if (pos->key_member && strcmp(key, pos->key_member) == 0) {
                     if (prev)
                         *prev = p;
@@ -574,7 +587,7 @@ json_object *json_get_object_item(json_object *json, const char *key, json_objec
                 }
             }
         } else {
-            json_list_for_each_entry_safe(p, pos, n, &json->value.head, list) {
+            json_list_for_each_entry_safe(p, pos, n, &json->value.head, list, json_object) {
                 if (!pos->jkey.len) {
                     if (prev)
                         *prev = p;
@@ -686,11 +699,13 @@ int json_get_items(json_object *json, json_items_t *items)
 
     items->count = 0;
     if (json->type_member == JSON_ARRAY) {
-        json_list_for_each_entry(pos, &json->value.head, list) {
+        json_list_for_each_entry(pos, &json->value.head, list, json_object) {
             if (items->count == items->total) {
+                json_item_t *bak_items = items->items;
                 items->total += JSON_ITEM_NUM_PLUS_DEF;
-                if ((items->items = (json_item_t *)json_realloc(items->items, items->total * sizeof(json_item_t))) == NULL) {
+                if ((items->items = (json_item_t *)json_realloc(bak_items, items->total * sizeof(json_item_t))) == NULL) {
                     JsonErr("malloc failed!\n");
+                    json_free(bak_items);
                     goto err;
                 }
             }
@@ -700,11 +715,13 @@ int json_get_items(json_object *json, json_items_t *items)
     }
 
     if (json->type_member == JSON_OBJECT) {
-        json_list_for_each_entry(pos, &json->value.head, list) {
+        json_list_for_each_entry(pos, &json->value.head, list, json_object) {
             if (items->count == items->total) {
+                json_item_t *bak_items = items->items;
                 items->total += JSON_ITEM_NUM_PLUS_DEF;
-                if ((items->items = (json_item_t *)json_realloc(items->items, items->total * sizeof(json_item_t))) == NULL) {
+                if ((items->items = (json_item_t *)json_realloc(bak_items, items->total * sizeof(json_item_t))) == NULL) {
                     JsonErr("malloc failed!\n");
+                    json_free(bak_items);
                     goto err;
                 }
             }
@@ -847,7 +864,7 @@ json_object *json_deepcopy(json_object *json)
             return NULL;
         }
         if (json->type_member == JSON_ARRAY || json->type_member == JSON_OBJECT) {
-            json_list_for_each_entry(item, &json->value.head, list) {
+            json_list_for_each_entry(item, &json->value.head, list, json_object) {
                 if ((node = json_deepcopy(item)) == NULL) {
                     JsonErr("copy failed!\n");
                     json_del_object(new_json);
@@ -975,7 +992,7 @@ static void _json_mem_init(json_mem_mgr_t *mgr)
 static void _json_mem_free(json_mem_mgr_t *mgr)
 {
     json_mem_node_t *p = NULL, *pos = NULL, *n = NULL;
-    json_list_for_each_entry_safe(p, pos, n, &mgr->head, list) {
+    json_list_for_each_entry_safe(p, pos, n, &mgr->head, list, json_mem_node_t) {
         json_list_del(&pos->list, &p->list, &mgr->head);
         json_free(pos->ptr);
         json_free(pos);
@@ -988,7 +1005,7 @@ static void _json_mem_refresh(json_mem_mgr_t *mgr)
 {
     json_mem_node_t *p = NULL, *pos = NULL, *n = NULL;
     int i = 0;
-    json_list_for_each_entry_safe(p, pos, n, &mgr->head, list) {
+    json_list_for_each_entry_safe(p, pos, n, &mgr->head, list, json_mem_node_t) {
         if (++i == 1) {
             pos->cur = pos->ptr;
             mgr->cur_node = pos;
@@ -1063,8 +1080,8 @@ int pjson_memory_statistics(json_mem_mgr_t *mgr)
     json_mem_node_t *pos = NULL;
     int size = 0;
 
-    json_list_for_each_entry(pos, &mgr->head, list) {
-        size += pos->size;
+    json_list_for_each_entry(pos, &mgr->head, list, json_mem_node_t) {
+        size += (int)(pos->size);
     }
     return size;
 }
@@ -1246,7 +1263,7 @@ json_object *pjson_deepcopy(json_object *json, json_mem_t *mem)
             return NULL;
         }
         if (json->type_member == JSON_ARRAY || json->type_member == JSON_OBJECT) {
-            json_list_for_each_entry(item, &json->value.head, list) {
+            json_list_for_each_entry(item, &json->value.head, list, json_object) {
                 if ((node = pjson_deepcopy(item, mem)) == NULL) {
                     JsonErr("copy failed!\n");
                     return NULL;
@@ -1390,10 +1407,12 @@ static int _print_file_ptr_realloc(json_print_t *print_ptr, size_t slen)
 
     len = slen + 1;
     if (print_ptr->size < len) {
+        char *bak_ptr = print_ptr->ptr;
         while (print_ptr->size < len)
             print_ptr->size += print_ptr->plus_size;
-        if ((print_ptr->ptr = (char *)json_realloc(print_ptr->ptr, print_ptr->size)) == NULL) {
+        if ((print_ptr->ptr = (char *)json_realloc(bak_ptr, print_ptr->size)) == NULL) {
             JsonErr("malloc failed!\n");
+            json_free(bak_ptr);
             print_ptr->cur = print_ptr->ptr;
             return -1;
         }
@@ -1407,9 +1426,12 @@ static int _print_str_ptr_realloc(json_print_t *print_ptr, size_t slen)
 {
     size_t used = GET_BUF_USED_SIZE(print_ptr);
     size_t len = used + slen + 1;
+    char *bak_ptr = print_ptr->ptr;
 
-    while (print_ptr->item_total < print_ptr->item_count)
+    while (print_ptr->item_total < print_ptr->item_count) {
         print_ptr->item_total += JSON_PRINT_NUM_PLUS_DEF;
+        print_ptr->size += print_ptr->plus_size >> 2;
+    }
     if (print_ptr->item_total - print_ptr->item_count > print_ptr->item_count) {
         print_ptr->size += print_ptr->size;
     } else {
@@ -1419,8 +1441,9 @@ static int _print_str_ptr_realloc(json_print_t *print_ptr, size_t slen)
 
     while (print_ptr->size < len)
         print_ptr->size += print_ptr->plus_size;
-    if ((print_ptr->ptr = (char *)json_realloc(print_ptr->ptr, print_ptr->size)) == NULL) {
+    if ((print_ptr->ptr = (char *)json_realloc(bak_ptr, print_ptr->size)) == NULL) {
         JsonErr("malloc failed!\n");
+        json_free(bak_ptr);
         print_ptr->cur = print_ptr->ptr;
         return -1;
     }
@@ -1546,9 +1569,11 @@ static int _json_print_value(json_print_t *print_ptr, json_object *json)
     goto next3;
 next1:
     if (unlikely(item_depth >= item_total - 1)) {
+        json_object **bak_array = item_array;
         item_total += JSON_ITEM_NUM_PLUS_DEF;
-        if (unlikely((item_array = (json_object **)json_realloc(item_array, sizeof(json_object *) * item_total)) == NULL)) {
+        if (unlikely((item_array = (json_object **)json_realloc(bak_array, sizeof(json_object *) * item_total)) == NULL)) {
             JsonErr("malloc failed!\n");
+            json_free(bak_array);
             goto err;
         }
     }
@@ -1740,6 +1765,7 @@ static int _print_val_release(json_print_t *print_ptr, bool free_all_flag, size_
                 ptr->size = print_ptr->size;
                 ptr->p = print_ptr->ptr;
             } else {
+                /* Reduce size, never fail */
                 print_ptr->ptr = (char *)json_realloc(print_ptr->ptr, used + 1);
             }
         }
@@ -1756,7 +1782,7 @@ static int _print_val_init(json_print_t *print_ptr, json_print_choice_t *choice)
     print_ptr->fd = -1;
     if (choice->path) {
         print_ptr->realloc = _print_file_ptr_realloc;
-        if ((print_ptr->fd = open(choice->path, O_CREAT|O_TRUNC|O_WRONLY, 0666)) < 0) {
+        if ((print_ptr->fd = open(choice->path, O_CREAT|O_TRUNC|O_WRONLY|O_BINARY, 0666)) < 0) {
             JsonErr("open(%s) failed!\n", choice->path);
             goto err;
         }
@@ -1941,10 +1967,12 @@ int json_sax_print_value(json_sax_print_hd handle, json_type_t type, json_string
         switch ((*(json_sax_cmd_t*)value)) {
         case JSON_SAX_START:
             if (unlikely(print_handle->count == print_handle->total)) {
+                json_sax_print_depth_t *bak_array = print_handle->array;
                 print_handle->total += JSON_PRINT_DEPTH_DEF;
-                if (unlikely((print_handle->array = (json_sax_print_depth_t *)json_realloc(print_handle->array,
+                if (unlikely((print_handle->array = (json_sax_print_depth_t *)json_realloc(bak_array,
                             print_handle->total * sizeof(json_sax_print_depth_t))) == NULL)) {
                     JsonErr("malloc failed!\n");
+                    json_free(bak_array);
                     goto err;
                 }
             }
@@ -2016,8 +2044,7 @@ json_sax_print_hd json_sax_print_start(json_print_choice_t *choice)
         JsonErr("malloc failed!\n");
         return NULL;
     }
-    if (choice->item_total == 0)
-        choice->item_total = JSON_PRINT_NUM_INIT_DEF;
+    print_handle->print_val.item_total = choice->item_total ? choice->item_total : JSON_PRINT_NUM_INIT_DEF;
     if (_print_val_init(&print_handle->print_val, choice) < 0) {
         json_free(print_handle);
         return NULL;
@@ -2098,7 +2125,7 @@ static int _get_file_parse_ptr(json_parse_t *parse_ptr, int read_offset, size_t 
     ssize_t size = 0, rsize = 0;
 
     offset = parse_ptr->offset + read_offset;
-    size = parse_ptr->readed - offset;
+    size = (ssize_t)(parse_ptr->readed - offset);
 
     if (likely(offset + read_size <= parse_ptr->readed)) {
         *sstr = parse_ptr->str + offset;
@@ -2110,30 +2137,32 @@ static int _get_file_parse_ptr(json_parse_t *parse_ptr, int read_offset, size_t 
             size = 0;
         }
     } else {
-        size = parse_ptr->readed - parse_ptr->offset;
+        size = (ssize_t)(parse_ptr->readed - parse_ptr->offset);
         if (size && parse_ptr->offset)
             memmove(parse_ptr->str, parse_ptr->str + parse_ptr->offset, size);
         parse_ptr->offset = 0;
         parse_ptr->readed = size;
 
         if (read_size > parse_ptr->size) {
+            char *bak_str  = parse_ptr->str;
             while (read_size > parse_ptr->size)
                 parse_ptr->size += parse_ptr->read_size;
-            if ((parse_ptr->str = (char *)json_realloc(parse_ptr->str, parse_ptr->size + 1)) == NULL) {
+            if ((parse_ptr->str = (char *)json_realloc(bak_str, parse_ptr->size + 1)) == NULL) {
                 JsonErr("malloc failed!\n");
+                json_free(bak_str);
                 *sstr = JSON_PARSE_ERROR_STR; /* Reduce the judgment pointer is NULL. */
                 return 0;
             }
         }
 
-        size = parse_ptr->size - parse_ptr->readed;
+        size = (ssize_t)(parse_ptr->size - parse_ptr->readed);
         if ((rsize = read(parse_ptr->fd, parse_ptr->str + parse_ptr->readed, size)) != size)
             parse_ptr->read_size = 0; /* finish readding file */
         parse_ptr->readed += rsize < 0 ? 0 : rsize;
         parse_ptr->str[parse_ptr->readed] = '\0';
 
         *sstr = parse_ptr->str + read_offset;
-        size = parse_ptr->readed - read_offset;
+        size = (ssize_t)(parse_ptr->readed - read_offset);
     }
 
     return size;
@@ -2143,7 +2172,7 @@ static inline int _get_str_parse_ptr(json_parse_t *parse_ptr, int read_offset, s
 {
     size_t offset = parse_ptr->offset + read_offset;
     *sstr = parse_ptr->str + offset;
-    return (parse_ptr->size - offset);
+    return (int)(parse_ptr->size - offset);
 }
 
 static inline int _get_parse_ptr(json_parse_t *parse_ptr, int read_offset, size_t read_size, char **sstr)
@@ -2391,7 +2420,7 @@ static int _parse_strcpy(char *ptr, const char *str, int nsize)
             case '/' : ch = '/' ; break;
 #if JSON_PARSE_SPECIAL_CHAR
             case '\r':
-                size = str - last - 2;
+                size = (int)(str - last - 2);
                 memcpy(ptr, last, size);
                 ptr += size;
                 if (*str == '\n')
@@ -2400,7 +2429,7 @@ static int _parse_strcpy(char *ptr, const char *str, int nsize)
                 continue;
 
             case '\n':
-                size = str - last - 2;
+                size = (int)(str - last - 2);
                 memcpy(ptr, last, size);
                 ptr += size;
                 last = str;
@@ -2408,7 +2437,7 @@ static int _parse_strcpy(char *ptr, const char *str, int nsize)
 #endif
             case 'u' :
                 str -= 2;
-                size = str - last;
+                size = (int)(str - last);
                 memcpy(ptr, last, size);
                 ptr += size;
                 if (unlikely((seq_len = utf16_literal_to_utf8((unsigned char*)str,
@@ -2424,7 +2453,7 @@ static int _parse_strcpy(char *ptr, const char *str, int nsize)
                 return -1;
             }
 
-            size = str - last - 2;
+            size = (int)(str - last - 2);
             memcpy(ptr, last, size);
             ptr += size;
             *ptr++ = ch;
@@ -2432,11 +2461,11 @@ static int _parse_strcpy(char *ptr, const char *str, int nsize)
         }
     }
 
-    size = str - last;
+    size = (int)(str - last);
     memcpy(ptr, last, size);
     ptr += size;
     *ptr = '\0';
-    return ptr - bak;
+    return (int)(ptr - bak);
 }
 
 static int _parse_strlen(json_parse_t *parse_ptr, char end_ch UNUSED_END_CH, int *escaped)
@@ -2458,7 +2487,7 @@ static int _parse_strlen(json_parse_t *parse_ptr, char end_ch UNUSED_END_CH, int
             if (c == end_ch)
 #endif
             {
-                total += str - bak - 1;
+                total += (int)(str - bak - 1);
                 return total;
             }
 #if JSON_PARSE_SPECIAL_QUOTES
@@ -2472,7 +2501,7 @@ static int _parse_strlen(json_parse_t *parse_ptr, char end_ch UNUSED_END_CH, int
                 *escaped = 1;
             } else {
                 --str;
-                total += str - bak;
+                total += (int)(str - bak);
                 if (unlikely((rsize = _get_parse_ptr(parse_ptr, total, PARSE_READ_SIZE, &str)) < 2)) {
                     JsonErr("last char is slash!\n");
                     goto err;
@@ -2482,7 +2511,7 @@ static int _parse_strlen(json_parse_t *parse_ptr, char end_ch UNUSED_END_CH, int
             break;
         case '\0':
             --str;
-            total += str - bak;
+            total += (int)(str - bak);
             if (unlikely((rsize = _get_parse_ptr(parse_ptr, total, PARSE_READ_SIZE, &str)) < 1)) {
                 JsonErr("No more string!\n");
                 goto err;
@@ -2735,9 +2764,11 @@ static int _json_parse_value(json_parse_t *parse_ptr, json_object **root)
 
 next1:
     if (unlikely(item_depth >= item_total - 1)) {
+        json_object **bak_array = item_array;
         item_total += JSON_ITEM_NUM_PLUS_DEF;
-        if (unlikely((item_array = (json_object **)json_realloc(item_array, sizeof(json_object *) * item_total)) == NULL)) {
+        if (unlikely((item_array = (json_object **)json_realloc(bak_array, sizeof(json_object *) * item_total)) == NULL)) {
             JsonErr("malloc failed!\n");
+            json_free(bak_array);
             goto err;
         }
     }
@@ -3000,7 +3031,7 @@ static int _json_parse_string_reuse(json_parse_t *parse_ptr, char end_ch UNUSED_
             if (c == end_ch)
 #endif
             {
-                len = str - bak - 1;
+                len = (int)(str - bak - 1);
                 _UPDATE_PARSE_OFFSET(len);
                 ptr[len] = '\0';
                 jstr->escaped = escaped != 0;
@@ -3040,14 +3071,14 @@ next:
             if (c == end_ch)
 #endif
             {
-                size = str - last - 1;
+                size = (int)(str - last - 1);
                 memmove(ptr, last, size);
                 ptr += size;
                 *ptr = '\0';
-                len = str - bak - 1;
+                len = (int)(str - bak - 1);
                 _UPDATE_PARSE_OFFSET(len);
                 jstr->escaped = 1;
-                jstr->len = ptr - bak;
+                jstr->len = (uint32_t)(ptr - bak);
                 return jstr->len;
             }
             break;
@@ -3068,7 +3099,7 @@ next:
             case '/' : ch = '/' ; break;
 #if JSON_PARSE_SPECIAL_CHAR
             case '\r':
-                size = str - last - 2;
+                size = (int)(str - last - 2);
                 memmove(ptr, last, size);
                 ptr += size;
                 if (*str == '\n')
@@ -3077,7 +3108,7 @@ next:
                 continue;
 
             case '\n':
-                size = str - last - 2;
+                size = (int)(str - last - 2);
                 memmove(ptr, last, size);
                 ptr += size;
                 last = str;
@@ -3085,7 +3116,7 @@ next:
 #endif
             case 'u' :
                 str -= 2;
-                size = str - last;
+                size = (int)(str - last);
                 memmove(ptr, last, size);
                 ptr += size;
                 if (unlikely((seq_len = utf16_literal_to_utf8((unsigned char*)str,
@@ -3101,7 +3132,7 @@ next:
                 goto err;
             }
 
-            size = str - last - 2;
+            size = (int)(str - last - 2);
             memmove(ptr, last, size);
             ptr += size;
             *ptr++ = ch;
@@ -3168,7 +3199,7 @@ static int _json_parse_string_rapid(json_parse_t *parse_ptr, char end_ch UNUSED_
     }
 
 next:
-    total = str - bak - 1;
+    total = (int)(str - bak - 1);
     len = total;
     if (unlikely((ptr = (char *)_parse_alloc(parse_ptr, len + 1, mgr)) == NULL)) {
         JsonErr("malloc failed!\n");
@@ -3210,9 +3241,11 @@ static int _json_parse_value_rapid(json_parse_t *parse_ptr, json_object **root)
 
 next1:
     if (unlikely(item_depth >= item_total - 1)) {
+        json_object **bak_array = item_array;
         item_total += JSON_ITEM_NUM_PLUS_DEF;
-        if (unlikely((item_array = (json_object **)json_realloc(item_array, sizeof(json_object *) * item_total)) == NULL)) {
+        if (unlikely((item_array = (json_object **)json_realloc(bak_array, sizeof(json_object *) * item_total)) == NULL)) {
             JsonErr("malloc failed!\n");
+            json_free(bak_array);
             goto err;
         }
     }
@@ -3525,7 +3558,7 @@ json_object *json_parse_common(json_parse_choice_t *choice)
     parse_val.mem = choice->mem ? choice->mem : &s_invalid_json_mem;
     parse_val.fd = -1;
     if (choice->path) {
-        if ((parse_val.fd = open(choice->path, O_RDONLY)) < 0) {
+        if ((parse_val.fd = open(choice->path, O_RDONLY|O_BINARY)) < 0) {
             JsonErr("open(%s) failed!\n", choice->path);
             return NULL;
         }
@@ -3775,6 +3808,7 @@ next4:
     if (likely(parse_ptr->parser.index > 0)) {
         parse_ptr->skip_blank(parse_ptr);
         _get_parse_ptr(parse_ptr, 0, 1, &str);
+        /* parse_ptr->parser.index > 0, parent is definitely not NULL. */
         if (parent->type == JSON_OBJECT) {
             switch (*str) {
             case ',':
@@ -3889,7 +3923,7 @@ int json_sax_parse_common(json_sax_parse_choice_t *choice)
     parse_val.mem = &s_invalid_json_mem;
     parse_val.fd = -1;
     if (choice->path) {
-        if ((parse_val.fd = open(choice->path, O_RDONLY)) < 0) {
+        if ((parse_val.fd = open(choice->path, O_RDONLY|O_BINARY)) < 0) {
             JsonErr("open(%s) failed!\n", choice->path);
             return -1;
         }

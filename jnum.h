@@ -106,7 +106,7 @@ static inline int jnum_parse(const char *str, jnum_type_t *type, jnum_value_t *v
         }
     }
 next:
-    return jnum_parse_num(s, type, value) + (s - str);
+    return (int)(jnum_parse_num(s, type, value) + (s - str));
 }
 
 int32_t jnum_atoi(const char *str);

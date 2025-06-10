@@ -75,6 +75,10 @@ make O=<output path> CROSS_COMPILE=<tool prefix> && make O=<output path> DESTDIR
     * 1: C standard library sprintf
     * 2: Personal optimized grisu2 algorithm
     * 3: Personal optimized dragonbox algorithm
+<br>
+
+* Windows MSC
+    * Open `MSC\ljson\ljson.sln` with `Visual Studio 2022`
 
 ### Run Method
 

@@ -3,15 +3,31 @@
 #include <string.h>
 #include <time.h>
 #include "jnum.h"
+#if defined(_MSC_VER)
+#include <windows.h>
+#endif
 
 extern int grisu2_dtoa(double num, char *buffer);
 extern int dragonbox_dtoa(double num, char *buffer);
 
 static unsigned int _system_ms_get(void)
 {
+#if !defined(_MSC_VER)
     struct timespec ts;
     clock_gettime(CLOCK_MONOTONIC, &ts);
     return (ts.tv_sec * 1000 + ts.tv_nsec / 1000000);
+#else
+    static LARGE_INTEGER freq = {0};
+    static int freq_initialized = 0;
+    if (!freq_initialized) {
+        QueryPerformanceFrequency(&freq);
+        freq_initialized = 1;
+    }
+
+    LARGE_INTEGER counter;
+    QueryPerformanceCounter(&counter);
+    return (unsigned int)((counter.QuadPart * 1000) / freq.QuadPart);
+#endif
 }
 
 int main(int argc, char *argv[])
@@ -107,7 +123,7 @@ int main(int argc, char *argv[])
             double d = strtod(argv[1], NULL);
             char tmp[64] = {0};
 
-            sprintf(tmp, "%0.16g", d);
+            snprintf(tmp, sizeof(tmp), "%0.16g", d);
             jnum_dtoa(d, buf);
             if (strcmp(buf, tmp)) {
                 printf("original  : %s\nprintf    : %s\n", argv[1], tmp);
@@ -121,7 +137,7 @@ int main(int argc, char *argv[])
 
             ms1 = _system_ms_get();
             for (i = 0; i < cnt; ++i) {
-                sprintf(buf, "%0.16g", d);
+                snprintf(buf, sizeof(buf), "%0.16g", d);
             }
             ms2 = _system_ms_get();
             ms = ms2 - ms1;

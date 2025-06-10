@@ -8,6 +8,9 @@
 #include <stdbool.h>
 #include <string.h>
 #include <stdlib.h>
+#if defined(_MSC_VER)
+#include <intrin.h>
+#endif
 
 #define DIY_SIGNIFICAND_SIZE        64                  /* Symbol: 1 bit, Exponent, 11 bits, Mantissa, 52 bits */
 #define DP_SIGNIFICAND_SIZE         52                  /* Mantissa, 52 bits */
@@ -105,7 +108,7 @@ static inline int32_t fill_t_16_digits(char *buffer, uint64_t digits, int32_t *p
 
     if (digits < 100000000llu) {
         memset(s, '0', 8);
-        fill_t_8_digits(s + 8, digits, ptz);
+        fill_t_8_digits(s + 8, (uint32_t)digits, ptz);
     } else {
         uint32_t q = (uint32_t)(digits / 100000000);
         uint32_t r = (uint32_t)(digits - (uint64_t)q * 100000000);
@@ -159,7 +162,7 @@ static inline int32_t fill_1_4_digits(char *buffer, uint32_t digits, int32_t *pt
         }
     }
 
-    return s - buffer;
+    return (int32_t)(s - buffer);
 }
 
 static inline int32_t fill_1_8_digits(char *buffer, uint32_t digits, int32_t *ptz)
@@ -182,7 +185,7 @@ static inline int32_t fill_1_8_digits(char *buffer, uint32_t digits, int32_t *pt
         }
     }
 
-    return s - buffer;
+    return (int32_t)(s - buffer);
 }
 
 static inline int32_t fill_1_16_digits(char *buffer, uint64_t digits, int32_t *ptz)
@@ -205,7 +208,7 @@ static inline int32_t fill_1_16_digits(char *buffer, uint64_t digits, int32_t *p
         }
     }
 
-    return s - buffer;
+    return (int32_t)(s - buffer);
 }
 
 static inline u64x2_t compute_pow10_double(int32_t k)
@@ -1094,7 +1097,7 @@ static inline int32_t fill_significand(char *buffer, uint64_t digits, int32_t *p
         }
     }
 
-    return s - buffer;
+    return (int32_t)(s - buffer);
 }
 
 static inline int32_t fill_exponent(int32_t K, char *buffer)
@@ -1234,5 +1237,5 @@ int dragonbox_dtoa(double num, char *buffer)
     }
 
     s = dragonbox_format(s, v.f, v.e);
-    return s - buffer;
+    return (int)(s - buffer);
 }

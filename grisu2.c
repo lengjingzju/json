@@ -8,6 +8,9 @@
 #include <stdbool.h>
 #include <string.h>
 #include <stdlib.h>
+#if defined(_MSC_VER)
+#include <intrin.h>
+#endif
 
 /*
  * Using table lookup methods to accelerate division, etc
@@ -374,7 +377,7 @@ static inline void digit_gen(diy_fp_t Wv, diy_fp_t Wp, uint64_t delta, char* buf
     W_pv.f = Wp.f - Wv.f;
     W_pv.e = Wp.e;
 
-    p1 = Wp.f >> -one.e; /* Mp_cut */
+    p1 = (uint32_t)(Wp.f >> -one.e); /* Mp_cut */
     p2 = Wp.f & (one.f - 1);
 
     /* count decimal digit 32bit */
@@ -429,7 +432,7 @@ static inline void digit_gen(diy_fp_t Wv, diy_fp_t Wp, uint64_t delta, char* buf
     while (1) {
         p2 = (p2 << 1) + (p2 << 3);
         delta = (delta << 1) + (delta << 3);
-        d = p2 >> -one.e;
+        d = (int)(p2 >> -one.e);
 
         buffer[(*len)++] = '0' + d;
         --kappa;

@@ -6,7 +6,6 @@
 *******************************************/
 #include <string.h>
 #include <stdlib.h>
-#include <math.h>
 #include "jnum.h"
 #if defined(_MSC_VER)
 #include <intrin.h>
@@ -170,7 +169,7 @@ static inline int32_t fill_t_16_digits(char *buffer, uint64_t digits, int32_t *p
 
     if (digits < 100000000llu) {
         memset(s, '0', 8);
-        fill_t_8_digits(s + 8, digits, ptz);
+        fill_t_8_digits(s + 8, (uint32_t)digits, ptz);
     } else {
         uint32_t q = (uint32_t)(digits / 100000000);
         uint32_t r = (uint32_t)(digits - (uint64_t)q * 100000000);
@@ -224,7 +223,7 @@ static inline int32_t fill_1_4_digits(char *buffer, uint32_t digits, int32_t *pt
         }
     }
 
-    return s - buffer;
+    return (int32_t)(s - buffer);
 }
 
 static inline int32_t fill_1_8_digits(char *buffer, uint32_t digits, int32_t *ptz)
@@ -247,7 +246,7 @@ static inline int32_t fill_1_8_digits(char *buffer, uint32_t digits, int32_t *pt
         }
     }
 
-    return s - buffer;
+    return (int32_t)(s - buffer);
 }
 
 static inline int32_t fill_1_16_digits(char *buffer, uint64_t digits, int32_t *ptz)
@@ -270,7 +269,7 @@ static inline int32_t fill_1_16_digits(char *buffer, uint64_t digits, int32_t *p
         }
     }
 
-    return s - buffer;
+    return (int32_t)(s - buffer);
 }
 
 static inline int32_t fill_1_20_digits(char *buffer, uint64_t digits, int32_t *ptz)
@@ -293,7 +292,7 @@ static inline int32_t fill_1_20_digits(char *buffer, uint64_t digits, int32_t *p
         }
     }
 
-    return s - buffer;
+    return (int32_t)(s - buffer);
 }
 
 int jnum_itoa(int32_t num, char *buffer)
@@ -339,7 +338,7 @@ int jnum_itoa(int32_t num, char *buffer)
     }
 
     *s = '\0';
-    return s - buffer;
+    return (int)(s - buffer);
 }
 
 int jnum_ltoa(int64_t num, char *buffer)
@@ -363,7 +362,7 @@ int jnum_ltoa(int64_t num, char *buffer)
     s += fill_1_20_digits(s, n, &tz);
 
     *s = '\0';
-    return s - buffer;
+    return (int)(s - buffer);
 }
 
 static const char hex_char_lut[] = {
@@ -407,7 +406,7 @@ static inline int fill_1_2_hexs(char *buffer, uint32_t num)
     if (q)
         *s++ = hex_char_lut[q];
     *s++ = hex_char_lut[r];
-    return s - buffer;
+    return (int)(s - buffer);
 }
 
 static inline int fill_1_4_hexs(char *buffer, uint32_t num)
@@ -422,7 +421,7 @@ static inline int fill_1_4_hexs(char *buffer, uint32_t num)
         s += fill_1_2_hexs(s, q);
         s += fill_t_2_hexs(s, r);
     }
-    return s - buffer;
+    return (int)(s - buffer);
 }
 
 static inline int fill_1_8_hexs(char *buffer, uint32_t num)
@@ -437,7 +436,7 @@ static inline int fill_1_8_hexs(char *buffer, uint32_t num)
         s += fill_1_4_hexs(s, q);
         s += fill_t_4_hexs(s, r);
     }
-    return s - buffer;
+    return (int)(s - buffer);
 }
 
 int jnum_htoa(uint32_t num, char *buffer)
@@ -449,7 +448,7 @@ int jnum_htoa(uint32_t num, char *buffer)
     s += fill_1_8_hexs(s, num);
 
     *s = '\0';
-    return s - buffer;
+    return (int)(s - buffer);
 }
 
 int jnum_lhtoa(uint64_t num, char *buffer)
@@ -468,7 +467,7 @@ int jnum_lhtoa(uint64_t num, char *buffer)
     }
 
     *s = '\0';
-    return s - buffer;
+    return (int)(s - buffer);
 }
 
 /*
@@ -559,7 +558,7 @@ def print_pow10(step):
                 exp_lut.append(-exp)
                 if pos == 0:
                     pos = i - minv
-                    print('#define POW10_EXP_NUT_POS    %d // From the pos, the value of pow10_exp_lut is negitive.' % (pos))
+                    print('#define POW10_EXP_LUT_POS    %d // From the pos, the value of pow10_exp_lut is negitive.' % (pos))
             else:
                 exp_lut.append(exp)
 
@@ -572,7 +571,7 @@ def print_pow10(step):
                 exp_lut.append(exp)
                 if pos == 0:
                     pos = i - minv
-                    print('#define POW10_EXP_NUT_POS    %d // From the pos, the value of pow10_exp_lut is positive.' % (pos))
+                    print('#define POW10_EXP_LUT_POS    %d // From the pos, the value of pow10_exp_lut is positive.' % (pos))
 
     print('#define POW10_LUT_MIN_IDX    %d' % (minv))
     print('#define POW10_LUT_MAX_IDX    %d' % (maxv))
@@ -787,7 +786,7 @@ static inline int32_t ldouble_convert(diy_fp_t *v, char *buffer, int32_t *vnum_d
 {
     const uint8_t s_lut[4] = {8, 9, 6, 7};
     int32_t s = s_lut[v->e & 0x3];
-    v->f = (v->f << s) + (1 << (s - 1));
+    v->f = (v->f << s) + ((uint64_t)1 << (s - 1));
     v->e -= s;
     v->e >>= 2;
 
@@ -796,13 +795,13 @@ static inline int32_t ldouble_convert(diy_fp_t *v, char *buffer, int32_t *vnum_d
 
     v->e -= pow10_exp_lut[index];
     v->f = u128_mul(pow10, v->f).hi;
-    uint32_t delta = pow10 >> (64 - s);
+    uint32_t delta = (uint32_t)(pow10 >> (64 - s));
     uint32_t remainder = 0;
     uint64_t orig = v->f;
 
     if (orig < 100000000000000000llu) {
         v->f = orig / 10;
-        remainder = orig - v->f * 10;
+        remainder = (uint32_t)(orig - v->f * 10);
         v->e += 1;
         if (delta < 20) {
             if ((v->f & 1) && (10 + remainder <= delta)) {
@@ -816,7 +815,7 @@ static inline int32_t ldouble_convert(diy_fp_t *v, char *buffer, int32_t *vnum_d
         }
     } else if (orig < 1000000000000000000llu) {
         v->f = orig / 100;
-        remainder = orig - v->f * 100;
+        remainder = (uint32_t)(orig - v->f * 100);
         v->e += 2;
         if (delta < 200) {
             if ((v->f & 1) && (100 + remainder <= delta)) {
@@ -830,7 +829,7 @@ static inline int32_t ldouble_convert(diy_fp_t *v, char *buffer, int32_t *vnum_d
         }
     } else {
         v->f = orig / 1000;
-        remainder = orig - v->f * 1000;
+        remainder = (uint32_t)(orig - v->f * 1000);
         v->e += 3;
         if ((v->f & 1) && (1000 + remainder <= delta)) {
             v->f -= 1;
@@ -918,7 +917,7 @@ static inline int32_t ldouble_convert_n(diy_fp_t *v, char *buffer, int32_t *vnum
         num_digits = fill_1_16_digits(buffer, v->f, &trailing_zeros);
     }
     if (remainder) {
-        buffer[num_digits++] = remainder + '0';
+        buffer[num_digits++] = (char)(remainder + '0');
         trailing_zeros = 0;
     }
     *vnum_digits = num_digits - trailing_zeros;
@@ -1068,7 +1067,7 @@ int jnum_dtoa(double num, char *buffer)
 
     s = ldouble_format(s, num_digits, vnum_digits, num_digits + v.e);
     *s = '\0';
-    return s - buffer;
+    return (int)(s - buffer);
 }
 
 static int jnum_parse_hex(const char *str, jnum_type_t *type, jnum_value_t *value)
@@ -1106,7 +1105,7 @@ end:
         value->vhex = (uint32_t)m;
     }
 
-    return s - str;
+    return (int)(s - str);
 }
 
 /*
@@ -1381,6 +1380,14 @@ static double ldouble_rconvert(uint64_t f, int32_t e)
         1000000000000000000llu, 10000000000000000000llu
     };
 
+    if (e > -20) {
+        if (e < 0) {
+            return (double)f / pow10_lut[-e];
+        } else if (e < 20) {
+            return (double)f * pow10_lut[e];
+        }
+    }
+
     double d = 0;
     uint64_t *v = (uint64_t *)&d;
 
@@ -1391,16 +1398,6 @@ static double ldouble_rconvert(uint64_t f, int32_t e)
     if (e >= POW2_LUT_MAX_IDX) {
         *v = DP_EXPONENT_MASK;
         return d;
-    }
-
-    if (e > -20) {
-        if (e < 0) {
-            d = (double)f / pow10_lut[-e];
-            return d;
-        } else if (e < 20) {
-            d = (double)f * pow10_lut[e];
-            return d;
-        }
     }
 
     const int32_t index = e - POW2_LUT_MIN_IDX;
@@ -1474,12 +1471,7 @@ int jnum_parse_num(const char *str, jnum_type_t *type, jnum_value_t *value)
         break;
     }
 
-    switch (*s) {
-    case '0': case '1': case '2': case '3': case '4':
-    case '5': case '6': case '7': case '8': case '9':
-    case '.':
-        break;
-    default:
+    if (!IS_DIGIT(*s) && (*s != '.')) {
         *type = JNUM_NULL;
         value->vint = 0;
         return 0;
@@ -1496,38 +1488,35 @@ int jnum_parse_num(const char *str, jnum_type_t *type, jnum_value_t *value)
         goto overflow1;
     }
 
-    switch (*s) {
-    case '.':
-        ++s;
-        break;
-    case 'e': case 'E':
-        goto end3;
-    default:
-        goto end1;
-    }
-
-    /* ---------- Parse decimal ---------- */
-    if (m == 0) {
-        while (*s == '0') {
-            ++s;
-            --z;
+    if (*s != '.') {
+        if (*s != 'e' && *s != 'E') {
+            goto end1;
         }
     } else {
-        n = m;
-        b = k;
-    }
+        /* ---------- Parse decimal ---------- */
+        ++s;
+        if (m == 0) {
+            while (*s == '0') {
+                ++s;
+                --z;
+            }
+        } else {
+            n = m;
+            b = k;
+        }
 
-    while (IS_DIGIT(*s)) {
-        m = (m << 3) + (m << 1) + (*s++ - '0');
-        ++k;
-        --i;
-    }
-    if (k >= 20) {
-        goto overflow2;
-    }
+        while (IS_DIGIT(*s)) {
+            m = (m << 3) + (m << 1) + (*s++ - '0');
+            ++k;
+            --i;
+        }
+        if (k >= 20) {
+            goto overflow2;
+        }
 
-    if (*s != 'e' && *s != 'E') {
-        goto end2;
+        if (*s != 'e' && *s != 'E') {
+            goto end2;
+        }
     }
 
 end3:
@@ -1577,7 +1566,7 @@ end2:
         value->vdbl = ldouble_rconvert(m, i + z);
         value->vlhex |= neg << 63;
     }
-    return s - str;
+    return (int)(s - str);
 
 end1:
     if (m <= 2147483647U /*INT_MAX*/) {
@@ -1589,13 +1578,17 @@ end1:
     } else {
         if (m == 9223372036854775808U && neg == 1) {
             *type = JNUM_LINT;
+#if defined(_MSC_VER)
+            value->vlint = -9223372036854775807 - 1;
+#else
             value->vlint = -m;
+#endif
         } else {
             *type = JNUM_DOUBLE;
             value->vdbl = neg == 0 ? (double)m : -((double)m);
         }
     }
-    return s - str;
+    return (int)(s - str);
 
 overflow1:
     s -= k;

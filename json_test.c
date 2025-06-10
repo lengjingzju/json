@@ -1,9 +1,19 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <unistd.h>
 #include <time.h>
 #include "json.h"
+
+#if !defined(_MSC_VER)
+#include <unistd.h>
+#else
+#include <windows.h>
+#include <io.h>
+#define access                          _access
+#define unlink                          _unlink
+#define F_OK                            0
+#pragma warning(disable: 4996)
+#endif
 
 #define _fmalloc       malloc
 #define _ffree         free
@@ -16,9 +26,22 @@ static size_t s_print_size = 0;
 
 static unsigned int _system_ms_get(void)
 {
+#if !defined(_MSC_VER)
     struct timespec ts;
     clock_gettime(CLOCK_MONOTONIC, &ts);
     return (ts.tv_sec * 1000 + ts.tv_nsec / 1000000);
+#else
+    static LARGE_INTEGER freq = {0};
+    static int freq_initialized = 0;
+    if (!freq_initialized) {
+        QueryPerformanceFrequency(&freq);
+        freq_initialized = 1;
+    }
+
+    LARGE_INTEGER counter;
+    QueryPerformanceCounter(&counter);
+    return (unsigned int)((counter.QuadPart * 1000) / freq.QuadPart);
+#endif
 }
 
 int copy_data_to_file(char *data, size_t size, const char *dst)
@@ -28,7 +51,7 @@ int copy_data_to_file(char *data, size_t size, const char *dst)
 
     if (!data || !dst)
         return -1;
-    if ((wfp = fopen(dst, "w+")) == NULL)
+    if ((wfp = fopen(dst, "wb+")) == NULL)
         return -1;
     if (size == fwrite(data, 1, size, wfp))
         ret = 0;
@@ -51,7 +74,7 @@ int read_file_to_data(const char *src, char **data, size_t *size)
         size = &total;
     *data = NULL, *size = 0;
 
-    if ((rfp = fopen(src, "r")) == NULL)
+    if ((rfp = fopen(src, "rb")) == NULL)
         return -1;
     fseek(rfp, 0, SEEK_END);
     *size = ftell(rfp);
@@ -107,21 +130,21 @@ int test_json_sax_print(void)
 
     handle = json_sax_print_format_start(10, NULL);
     json_sax_print_object_start(handle, NULL);
-    jkey.str = "Name", jkey.len = 4;
-    jstr.str = "LengJing", jstr.len = 8;
+    jkey.str = (char *)"Name", jkey.len = 4;
+    jstr.str = (char *)"LengJing", jstr.len = 8;
     json_sax_print_object_item(handle, &jkey, &jstr);
-    jkey.str = "Age", jkey.len = 3;
+    jkey.str = (char *)"Age", jkey.len = 3;
     json_sax_print_object_item(handle, &jkey, 30);
-    jkey.str = "Phone", jkey.len = 5;
-    jstr.str = "18368887550", jstr.len = 11;
+    jkey.str = (char *)"Phone", jkey.len = 5;
+    jstr.str = (char *)"18368887550", jstr.len = 11;
     json_sax_print_object_item(handle, &jkey, &jstr);
-    jkey.str = "Hobby", jkey.len = 5;
+    jkey.str = (char *)"Hobby", jkey.len = 5;
     json_sax_print_array_start(handle, &jkey);
-    jstr.str = "Reading", jstr.len = 7;
+    jstr.str = (char *)"Reading", jstr.len = 7;
     json_sax_print_array_item(handle, &jstr);
-    jstr.str = "Walking", jstr.len = 7;
+    jstr.str = (char *)"Walking", jstr.len = 7;
     json_sax_print_array_item(handle, &jstr);
-    jstr.str = "Thinking", jstr.len = 8;
+    jstr.str = (char *)"Thinking", jstr.len = 8;
     json_sax_print_array_item(handle, &jstr);
     json_sax_print_array_finish(handle);
     json_sax_print_object_finish(handle);
@@ -134,6 +157,7 @@ int test_json_sax_print(void)
 }
 
 static bool s_sax_for_file = false;
+static int s_sax_item_num = 0;
 json_sax_ret_t _sax_parser_cb(json_sax_parser_t *parser)
 {
     static json_sax_print_hd handle = NULL;
@@ -145,16 +169,16 @@ json_sax_ret_t _sax_parser_cb(json_sax_parser_t *parser)
         case JSON_OBJECT:
             if (parser->value.vcmd == JSON_SAX_START) {
                 if (s_sax_for_file)
-                    handle = json_sax_fprint_format_start(0, s_dst_json_path, NULL);
+                    handle = json_sax_fprint_format_start(s_sax_item_num, s_dst_json_path, NULL);
                 else
-                    handle = json_sax_print_format_start(0, NULL);
+                    handle = json_sax_print_format_start(s_sax_item_num, NULL);
             }
             break;
         default:
             if (s_sax_for_file)
-                handle = json_sax_fprint_format_start(0, s_dst_json_path, NULL);
+                handle = json_sax_fprint_format_start(s_sax_item_num, s_dst_json_path, NULL);
             else
-                handle = json_sax_print_format_start(0, NULL);
+                handle = json_sax_print_format_start(s_sax_item_num, NULL);
             break;
         }
     }
@@ -284,6 +308,7 @@ int main(int argc, char *argv[])
 
 #if JSON_SAX_APIS_SUPPORT
     case 6:
+        s_sax_item_num = (int)(size >> 5);
         if (json_sax_parse_str(data, size, _sax_parser_cb) < 0) {
             printf("json_sax_parse_str failed!\n");
             ret = -1;
@@ -329,7 +354,7 @@ int main(int argc, char *argv[])
     if (nflag)
         nitem = pjson_memory_statistics(&mem.obj_mgr) / sizeof(json_object);
     else
-        nitem = size >> 5;
+        nitem = (int)(size >> 5);
     switch(choice)
     {
     case 1: case 2: case 3:
