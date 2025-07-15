@@ -12,7 +12,11 @@
 
 #if !defined(_MSC_VER)
 #include <unistd.h>
+#if !defined(_WIN32)
 #define O_BINARY                        0
+#else
+#define O_BINARY                        0x8000 // MinGW-gcc
+#endif
 #else
 #include <io.h>
 #define open                            _open
@@ -441,10 +445,13 @@ int json_string_strdup(json_string_t *src, json_string_t *dst)
     json_string_info_update(dst);
     if (src->len) {
         if (dst->len < src->len) {
-            char *bak_str = dst->str;
-            if ((dst->str = (char *)json_realloc(bak_str, src->len + 1)) == NULL) {
+            char *new_str = (char *)json_realloc(dst->str, src->len + 1);
+            if (new_str) {
+                dst->str = new_str;
+            } else {
                 JsonErr("malloc failed!\n");
-                json_free(bak_str);
+                json_free(dst->str);
+                dst->str = NULL;
                 dst->len = 0;
                 return -1;
             }
@@ -701,11 +708,14 @@ int json_get_items(json_object *json, json_items_t *items)
     if (json->type_member == JSON_ARRAY) {
         json_list_for_each_entry(pos, &json->value.head, list, json_object) {
             if (items->count == items->total) {
-                json_item_t *bak_items = items->items;
                 items->total += JSON_ITEM_NUM_PLUS_DEF;
-                if ((items->items = (json_item_t *)json_realloc(bak_items, items->total * sizeof(json_item_t))) == NULL) {
+                json_item_t *new_items = (json_item_t *)json_realloc(items->items, items->total * sizeof(json_item_t));
+                if (new_items) {
+                    items->items = new_items;
+                } else {
                     JsonErr("malloc failed!\n");
-                    json_free(bak_items);
+                    json_free(items->items);
+                    items->items = NULL;
                     goto err;
                 }
             }
@@ -717,11 +727,14 @@ int json_get_items(json_object *json, json_items_t *items)
     if (json->type_member == JSON_OBJECT) {
         json_list_for_each_entry(pos, &json->value.head, list, json_object) {
             if (items->count == items->total) {
-                json_item_t *bak_items = items->items;
                 items->total += JSON_ITEM_NUM_PLUS_DEF;
-                if ((items->items = (json_item_t *)json_realloc(bak_items, items->total * sizeof(json_item_t))) == NULL) {
+                json_item_t *new_items = (json_item_t *)json_realloc(items->items, items->total * sizeof(json_item_t));
+                if (new_items) {
+                    items->items = new_items;
+                } else {
                     JsonErr("malloc failed!\n");
-                    json_free(bak_items);
+                    json_free(items->items);
+                    items->items = NULL;
                     goto err;
                 }
             }
@@ -1407,16 +1420,19 @@ static int _print_file_ptr_realloc(json_print_t *print_ptr, size_t slen)
 
     len = slen + 1;
     if (print_ptr->size < len) {
-        char *bak_ptr = print_ptr->ptr;
         while (print_ptr->size < len)
             print_ptr->size += print_ptr->plus_size;
-        if ((print_ptr->ptr = (char *)json_realloc(bak_ptr, print_ptr->size)) == NULL) {
+        char *new_str = (char *)json_realloc(print_ptr->ptr, print_ptr->size);
+        if (new_str) {
+            print_ptr->ptr = new_str;
+            print_ptr->cur = print_ptr->ptr;
+        } else {
             JsonErr("malloc failed!\n");
-            json_free(bak_ptr);
+            json_free(print_ptr->ptr);
+            print_ptr->ptr = NULL;
             print_ptr->cur = print_ptr->ptr;
             return -1;
         }
-        print_ptr->cur = print_ptr->ptr;
     }
 
     return 0;
@@ -1426,7 +1442,6 @@ static int _print_str_ptr_realloc(json_print_t *print_ptr, size_t slen)
 {
     size_t used = GET_BUF_USED_SIZE(print_ptr);
     size_t len = used + slen + 1;
-    char *bak_ptr = print_ptr->ptr;
 
     while (print_ptr->item_total < print_ptr->item_count) {
         print_ptr->item_total += JSON_PRINT_NUM_PLUS_DEF;
@@ -1441,13 +1456,18 @@ static int _print_str_ptr_realloc(json_print_t *print_ptr, size_t slen)
 
     while (print_ptr->size < len)
         print_ptr->size += print_ptr->plus_size;
-    if ((print_ptr->ptr = (char *)json_realloc(bak_ptr, print_ptr->size)) == NULL) {
+
+    char *new_str = (char *)json_realloc(print_ptr->ptr, print_ptr->size);
+    if (new_str) {
+        print_ptr->ptr = new_str;
+        print_ptr->cur = print_ptr->ptr + used;
+    } else {
         JsonErr("malloc failed!\n");
-        json_free(bak_ptr);
+        json_free(print_ptr->ptr);
+        print_ptr->ptr = NULL;
         print_ptr->cur = print_ptr->ptr;
         return -1;
     }
-    print_ptr->cur = print_ptr->ptr + used;
 
     return 0;
 }
@@ -1569,11 +1589,14 @@ static int _json_print_value(json_print_t *print_ptr, json_object *json)
     goto next3;
 next1:
     if (unlikely(item_depth >= item_total - 1)) {
-        json_object **bak_array = item_array;
         item_total += JSON_ITEM_NUM_PLUS_DEF;
-        if (unlikely((item_array = (json_object **)json_realloc(bak_array, sizeof(json_object *) * item_total)) == NULL)) {
+        json_object **new_array = (json_object **)json_realloc(item_array, sizeof(json_object *) * item_total);
+        if (new_array) {
+            item_array = new_array;
+        } else {
             JsonErr("malloc failed!\n");
-            json_free(bak_array);
+            json_free(item_array);
+            item_array = NULL;
             goto err;
         }
     }
@@ -1967,12 +1990,15 @@ int json_sax_print_value(json_sax_print_hd handle, json_type_t type, json_string
         switch ((*(json_sax_cmd_t*)value)) {
         case JSON_SAX_START:
             if (unlikely(print_handle->count == print_handle->total)) {
-                json_sax_print_depth_t *bak_array = print_handle->array;
                 print_handle->total += JSON_PRINT_DEPTH_DEF;
-                if (unlikely((print_handle->array = (json_sax_print_depth_t *)json_realloc(bak_array,
-                            print_handle->total * sizeof(json_sax_print_depth_t))) == NULL)) {
+                json_sax_print_depth_t *new_array = (json_sax_print_depth_t *)json_realloc(
+                    print_handle->array, print_handle->total * sizeof(json_sax_print_depth_t));
+                if (new_array) {
+                    print_handle->array = new_array;
+                } else {
                     JsonErr("malloc failed!\n");
-                    json_free(bak_array);
+                    json_free(print_handle->array);
+                    print_handle->array = NULL;
                     goto err;
                 }
             }
@@ -2144,12 +2170,16 @@ static int _get_file_parse_ptr(json_parse_t *parse_ptr, int read_offset, size_t 
         parse_ptr->readed = size;
 
         if (read_size > parse_ptr->size) {
-            char *bak_str  = parse_ptr->str;
             while (read_size > parse_ptr->size)
                 parse_ptr->size += parse_ptr->read_size;
-            if ((parse_ptr->str = (char *)json_realloc(bak_str, parse_ptr->size + 1)) == NULL) {
+
+            char *new_str = (char *)json_realloc(parse_ptr->str, parse_ptr->size + 1);
+            if (new_str) {
+                parse_ptr->str = new_str;
+            } else {
                 JsonErr("malloc failed!\n");
-                json_free(bak_str);
+                json_free(parse_ptr->str);
+                parse_ptr->str = NULL;
                 *sstr = JSON_PARSE_ERROR_STR; /* Reduce the judgment pointer is NULL. */
                 return 0;
             }
@@ -2764,11 +2794,14 @@ static int _json_parse_value(json_parse_t *parse_ptr, json_object **root)
 
 next1:
     if (unlikely(item_depth >= item_total - 1)) {
-        json_object **bak_array = item_array;
         item_total += JSON_ITEM_NUM_PLUS_DEF;
-        if (unlikely((item_array = (json_object **)json_realloc(bak_array, sizeof(json_object *) * item_total)) == NULL)) {
+        json_object **new_array = (json_object **)json_realloc(item_array, sizeof(json_object *) * item_total);
+        if (new_array) {
+            item_array = new_array;
+        } else {
             JsonErr("malloc failed!\n");
-            json_free(bak_array);
+            json_free(item_array);
+            item_array = NULL;
             goto err;
         }
     }
@@ -3241,11 +3274,14 @@ static int _json_parse_value_rapid(json_parse_t *parse_ptr, json_object **root)
 
 next1:
     if (unlikely(item_depth >= item_total - 1)) {
-        json_object **bak_array = item_array;
         item_total += JSON_ITEM_NUM_PLUS_DEF;
-        if (unlikely((item_array = (json_object **)json_realloc(bak_array, sizeof(json_object *) * item_total)) == NULL)) {
+        json_object **new_array = (json_object **)json_realloc(item_array, sizeof(json_object *) * item_total);
+        if (new_array) {
+            item_array = new_array;
+        } else {
             JsonErr("malloc failed!\n");
-            json_free(bak_array);
+            json_free(item_array);
+            item_array = NULL;
             goto err;
         }
     }

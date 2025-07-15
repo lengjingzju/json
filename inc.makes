@@ -5,7 +5,7 @@
 # https://github.com/lengjingzju/cbuild-ng #
 ############################################
 
-############# Date: 2025-05-16 #############
+############# Date: 2025-06-25 #############
 
 # The default behavior only includes inc.env.mk and inc.ins.mk.
 # INC_MAKES can be set to a combination of `disenv` `conf` `app` `mod` `disins`.
@@ -21,6 +21,7 @@ ifeq ($(filter disenv,$(INC_MAKES)), )
 
 COLORECHO      := $(if $(findstring dash,$(shell readlink /bin/sh)),echo,echo -e)
 TOLOG          ?= $(if $(filter -s,$(MFLAG)),1>/dev/null)
+PREAT          ?= @
 
 INSTALL_HDR    ?= $(PACKAGE_NAME)
 SEARCH_HDRS    ?= $(PACKAGE_DEPS)
@@ -298,6 +299,7 @@ endif
 ifneq ($(filter conf,$(INC_MAKES)), )
 ifeq ($(KERNELRELEASE), )
 
+PREAT            ?= @
 CONF_WORKDIR     ?= $(ENV_NATIVE_ROOT)/objects/kconfig
 CONF_SRC         ?= $(ENV_MAKE_DIR)/../kconfig
 CONF_PATH        ?= $(CONF_WORKDIR)/image/usr/bin
@@ -367,11 +369,11 @@ endif
 
 buildkconfig:
 ifeq ($(wildcard $(CONF_PATH)/mconf), )
-	@unset PKG_CONFIG_LIBDIR PKG_CONFIG_PATH; $(MAKE) $(CONF_MAKES) && $(MAKE) $(CONF_MAKES) install
+	$(PREAT)unset PKG_CONFIG_LIBDIR PKG_CONFIG_PATH; $(MAKE) $(CONF_MAKES) && $(MAKE) $(CONF_MAKES) install
 endif
 
 cleankconfig:
-	@-$(MAKE) $(CONF_MAKES) clean
+	$(PREAT)-$(MAKE) $(CONF_MAKES) clean
 
 else
 
@@ -380,8 +382,8 @@ buildkconfig cleankconfig:
 endif
 
 menuconfig: buildkconfig
-	@mkdir -p $(CONF_OUT)
-	@mtime="$(if $(wildcard $(CONFIG_PATH)),$(if $(wildcard $(AUTOHEADER_PATH)),$$(stat -c %Y $(CONFIG_PATH)),0),0)"; \
+	$(PREAT)mkdir -p $(CONF_OUT)
+	$(PREAT)mtime="$(if $(wildcard $(CONFIG_PATH)),$(if $(wildcard $(AUTOHEADER_PATH)),$$(stat -c %Y $(CONFIG_PATH)),0),0)"; \
 		$(CONF_PREFIX) $(CONF_PATH)/mconf $(CONF_OPTIONS); \
 		if [ "$${mtime}" != "$$(stat -c %Y $(CONFIG_PATH))" ]; then \
 			$(call gen_config_header); \
@@ -393,32 +395,32 @@ ifneq ($(DEF_CONFIG), )
 menuconfig: loadconfig
 
 loadconfig: buildkconfig
-	@if [ ! -e $(CONFIG_PATH) ] || [ ! -e $(config_hash_file) ]; then \
+	$(PREAT)if [ ! -e $(CONFIG_PATH) ] || [ ! -e $(config_hash_file) ]; then \
 		$(call load_specific_config,$(CONF_SAVE_PATH)/$(DEF_CONFIG)); \
 	else \
 		$(call sync_config_header); \
 	fi
 
 defconfig: buildkconfig
-	@$(call load_specific_config,$(CONF_SAVE_PATH)/$(DEF_CONFIG))
+	$(PREAT)$(call load_specific_config,$(CONF_SAVE_PATH)/$(DEF_CONFIG))
 endif
 
 %_config: $(CONF_SAVE_PATH)/%_config buildkconfig
-	@$(call load_specific_config,$<)
+	$(PREAT)$(call load_specific_config,$<)
 
 %_defconfig: $(CONF_SAVE_PATH)/%_defconfig buildkconfig
-	@$(call load_specific_config,$<)
+	$(PREAT)$(call load_specific_config,$<)
 
 %_saveconfig: $(CONFIG_PATH) buildkconfig
-	@$(CONF_PREFIX) $(CONF_PATH)/conf $(CONF_OPTIONS) --savedefconfig=$(CONF_SAVE_PATH)/$(subst _saveconfig,_config,$@)
-	@echo Save $(CONFIG_PATH) to $(CONF_SAVE_PATH)/$(subst _saveconfig,_config,$@)
+	$(PREAT)$(CONF_PREFIX) $(CONF_PATH)/conf $(CONF_OPTIONS) --savedefconfig=$(CONF_SAVE_PATH)/$(subst _saveconfig,_config,$@)
+	$(PREAT)echo Save $(CONFIG_PATH) to $(CONF_SAVE_PATH)/$(subst _saveconfig,_config,$@)
 
 %_savedefconfig: $(CONFIG_PATH) buildkconfig
-	@$(CONF_PREFIX) $(CONF_PATH)/conf $(CONF_OPTIONS) --savedefconfig=$(CONF_SAVE_PATH)/$(subst _savedefconfig,_defconfig,$@)
-	@echo Save $(CONFIG_PATH) to $(CONF_SAVE_PATH)/$(subst _savedefconfig,_defconfig,$@)
+	$(PREAT)$(CONF_PREFIX) $(CONF_PATH)/conf $(CONF_OPTIONS) --savedefconfig=$(CONF_SAVE_PATH)/$(subst _savedefconfig,_defconfig,$@)
+	$(PREAT)echo Save $(CONFIG_PATH) to $(CONF_SAVE_PATH)/$(subst _savedefconfig,_defconfig,$@)
 
 cleanconfig: cleankconfig
-	@rm -rf $(CONFIG_PATH) $(CONFIG_PATH).old $(CONFIG_PATH)-md5-* $(AUTOHEADER_PATH) $(dir $(AUTOCONFIG_PATH))
+	$(PREAT)rm -rf $(CONFIG_PATH) $(CONFIG_PATH).old $(CONFIG_PATH)-md5-* $(AUTOHEADER_PATH) $(dir $(AUTOCONFIG_PATH))
 
 endif
 endif
@@ -606,16 +608,16 @@ $(if $(filter $(patsubst %,\%.%,$(CXX_SUFFIX)),$(1)),$(CXX),$(CC))
 endef
 
 define compile_cmd
-	@mkdir -p $$(dir $$@)
+	$(PREAT)mkdir -p $$(dir $$@)
 ifeq ($(filter $(1),$(ASM_SUFFIX)), )
-	@$(2) -c $(if $(filter $(1),$(CXX_SUFFIX)),$$(CXXFLAGS),$$(CFLAGS)) $$(imake_cpflags) $$(CPFLAGS) $$(CFLAGS_$$(patsubst $$(OBJ_PREFIX)/%,%,$$@)) $$(PRIVATE_CPFLAGS) -MM -MT $$@ -MF $$(patsubst %.o,%.d,$$@) $$<
-	@cat $$(patsubst %.o,%.d,$$@) | sed -e 's/#.*//' -e 's/^[^:]*:\s*//' -e 's/\s*\\$$$$//' -e 's/[ \t\v][ \t\v]*/\n/g' | sed -e '/^$$$$/ d' -e 's/$$$$/:/g' >> $$(patsubst %.o,%.d,$$@)
+	$(PREAT)$(2) -c $(if $(filter $(1),$(CXX_SUFFIX)),$$(CXXFLAGS),$$(CFLAGS)) $$(imake_cpflags) $$(CPFLAGS) $$(CFLAGS_$$(patsubst $$(OBJ_PREFIX)/%,%,$$@)) $$(PRIVATE_CPFLAGS) -MM -MT $$@ -MF $$(patsubst %.o,%.d,$$@) $$<
+	$(PREAT)cat $$(patsubst %.o,%.d,$$@) | sed -e 's/#.*//' -e 's/^[^:]*:\s*//' -e 's/\s*\\$$$$//' -e 's/[ \t\v][ \t\v]*/\n/g' | sed -e '/^$$$$/ d' -e 's/$$$$/:/g' >> $$(patsubst %.o,%.d,$$@)
 endif
-	@$(COLORECHO) "\033[032m$(2)\033[0m	$$<" $(TOLOG)
+	$(PREAT)$(COLORECHO) "\033[032m$(2)\033[0m	$$<" $(TOLOG)
 ifneq ($(2),$(AS))
-	@$(2) -c $(if $(filter $(1),$(CXX_SUFFIX)),$$(CXXFLAGS),$$(CFLAGS)) $$(imake_cpflags) $$(CPFLAGS) $$(CFLAGS_$$(patsubst $$(OBJ_PREFIX)/%,%,$$@)) $$(PRIVATE_CPFLAGS) -o $$@ $$<
+	$(PREAT)$(2) -c $(if $(filter $(1),$(CXX_SUFFIX)),$$(CXXFLAGS),$$(CFLAGS)) $$(imake_cpflags) $$(CPFLAGS) $$(CFLAGS_$$(patsubst $$(OBJ_PREFIX)/%,%,$$@)) $$(PRIVATE_CPFLAGS) -o $$@ $$<
 else
-	@$(2) $$(AFLAGS) $$(AFLAGS_$$(patsubst %.$(1),%.o,$$<)) -o $$@ $$<
+	$(PREAT)$(2) $$(AFLAGS) $$(AFLAGS_$$(patsubst %.$(1),%.o,$$<)) -o $$@ $$<
 endif
 endef
 
@@ -658,35 +660,35 @@ $(OBJS): $(MAKEFILE_LIST) $(CHECK_FILE)
 -include $(DEPS)
 
 $(CHECK_FILE): $(CHECK_FILE).tmp
-	@if [ -e $@ ] && [ $$(md5sum $@ | cut -d ' ' -f 1) = $$(md5sum $< | cut -d ' ' -f 1) ]; then \
+	$(PREAT)if [ -e $@ ] && [ $$(md5sum $@ | cut -d ' ' -f 1) = $$(md5sum $< | cut -d ' ' -f 1) ]; then \
 		rm -f $<; \
 	else \
 		mv -f $< $@; \
 	fi
 
 $(CHECK_FILE).tmp:
-	@mkdir -p $(OBJ_PREFIX)
-	@echo "$(CHECK_INFO)" > $@
+	$(PREAT)mkdir -p $(OBJ_PREFIX)
+	$(PREAT)echo "$(CHECK_INFO)" > $@
 
 .PHONY: clean_objs
 
 clean_objs:
-	@rm -rf $(OBJS) $(DEPS) $(CHECK_FILE)
+	$(PREAT)rm -rf $(OBJS) $(DEPS) $(CHECK_FILE)
 
 define add-liba-build
 LIB_TARGETS += $$(OBJ_PREFIX)/$(1)
 $$(OBJ_PREFIX)/$(1): PRIVATE_CPFLAGS := -fPIC $(4)
 $$(OBJ_PREFIX)/$(1): $$(call translate_obj,$(2)) $(3) $(5)
-	@$(COLORECHO) "\033[032mlib:\033[0m	\033[44m$$@\033[0m" $(TOLOG)
-	@rm -f $$@
-	@$$(AR) rc $$@ $$(call translate_obj,$(2))
+	$(PREAT)$(COLORECHO) "\033[032mlib:\033[0m	\033[44m$$@\033[0m" $(TOLOG)
+	$(PREAT)rm -f $$@
+	$(PREAT)$$(AR) rc $$@ $$(call translate_obj,$(2))
 ifneq ($(3), )
-	@echo OPEN $$@ > $$@.mri $(foreach lib,$(3),
-	@echo ADDLIB $(lib) >> $$@.mri)
-	@echo SAVE >> $$@.mri
-	@echo END >> $$@.mri
-	@$$(AR) -M < $$@.mri
-	@rm -f $$@.mri
+	$(PREAT)echo OPEN $$@ > $$@.mri $(foreach lib,$(3),
+	$(PREAT)echo ADDLIB $(lib) >> $$@.mri)
+	$(PREAT)echo SAVE >> $$@.mri
+	$(PREAT)echo END >> $$@.mri
+	$(PREAT)$$(AR) -M < $$@.mri
+	$(PREAT)rm -f $$@.mri
 endif
 endef
 
@@ -696,23 +698,23 @@ LIB_TARGETS += $(patsubst %,$(OBJ_PREFIX)/%,$(call all_ver_obj,$(1)))
 
 $$(OBJ_PREFIX)/$$(firstword $$(libso_names)): PRIVATE_CPFLAGS := -fPIC $(4)
 $$(OBJ_PREFIX)/$$(firstword $$(libso_names)): $$(call translate_obj,$(2)) $(5)
-	@$(COLORECHO) "\033[032mlib:\033[0m	\033[44m$$@\033[0m" $(TOLOG)
-	@$$(call compile_tool,$(2)) -shared -fPIC -o $$@ $$(call translate_obj,$(2)) $$(prior_ldflags) $$(LDFLAGS) $$(imake_ldflags) $(3) \
+	$(PREAT)$(COLORECHO) "\033[032mlib:\033[0m	\033[44m$$@\033[0m" $(TOLOG)
+	$(PREAT)$$(call compile_tool,$(2)) -shared -fPIC -o $$@ $$(call translate_obj,$(2)) $$(prior_ldflags) $$(LDFLAGS) $$(imake_ldflags) $(3) \
 		$$(if $$(findstring -soname=,$(3)),,-Wl$$(comma)-soname=$$(if $$(word 2,$(1)),$$(firstword $(1)).$$(word 2,$(1)),$(1)))
 
 ifneq ($$(word 2,$$(libso_names)), )
 $$(OBJ_PREFIX)/$$(word 2,$$(libso_names)): $$(OBJ_PREFIX)/$$(word 1,$$(libso_names))
-	@cd $$(OBJ_PREFIX) && ln -sf $$(patsubst $$(OBJ_PREFIX)/%,%,$$<) $$(patsubst $$(OBJ_PREFIX)/%,%,$$@)
+	$(PREAT)cd $$(OBJ_PREFIX) && ln -sf $$(patsubst $$(OBJ_PREFIX)/%,%,$$<) $$(patsubst $$(OBJ_PREFIX)/%,%,$$@)
 endif
 
 ifneq ($$(word 3,$$(libso_names)), )
 $$(OBJ_PREFIX)/$$(word 3,$$(libso_names)): $$(OBJ_PREFIX)/$$(word 2,$$(libso_names))
-	@cd $$(OBJ_PREFIX) && ln -sf $$(patsubst $$(OBJ_PREFIX)/%,%,$$<) $$(patsubst $$(OBJ_PREFIX)/%,%,$$@)
+	$(PREAT)cd $$(OBJ_PREFIX) && ln -sf $$(patsubst $$(OBJ_PREFIX)/%,%,$$<) $$(patsubst $$(OBJ_PREFIX)/%,%,$$@)
 endif
 
 ifneq ($$(word 4,$$(libso_names)), )
 $$(OBJ_PREFIX)/$$(word 4,$$(libso_names)): $$(OBJ_PREFIX)/$$(word 3,$$(libso_names))
-	@cd $$(OBJ_PREFIX) && ln -sf $$(patsubst $$(OBJ_PREFIX)/%,%,$$<) $$(patsubst $$(OBJ_PREFIX)/%,%,$$@)
+	$(PREAT)cd $$(OBJ_PREFIX) && ln -sf $$(patsubst $$(OBJ_PREFIX)/%,%,$$<) $$(patsubst $$(OBJ_PREFIX)/%,%,$$@)
 endif
 
 endef
@@ -721,8 +723,8 @@ define add-bin-build
 BIN_TARGETS += $$(OBJ_PREFIX)/$(1)
 $$(OBJ_PREFIX)/$(1): PRIVATE_CPFLAGS := $(if $(filter y,$(ENV_SECURITY)),-fPIE) $(4)
 $$(OBJ_PREFIX)/$(1): $$(call translate_obj,$(2)) $(5)
-	@$(COLORECHO) "\033[032mbin:\033[0m	\033[44m$$@\033[0m" $(TOLOG)
-	@$$(call compile_tool,$(2)) -o $$@ $$(call translate_obj,$(2)) $(if $(filter y,$(ENV_SECURITY)),-pie) $$(prior_ldflags) $$(LDFLAGS) $$(imake_ldflags) $(3)
+	$(PREAT)$(COLORECHO) "\033[032mbin:\033[0m	\033[44m$$@\033[0m" $(TOLOG)
+	$(PREAT)$$(call compile_tool,$(2)) -o $$@ $$(call translate_obj,$(2)) $(if $(filter y,$(ENV_SECURITY)),-pie) $$(prior_ldflags) $$(LDFLAGS) $$(imake_ldflags) $(3)
 endef
 
 ifneq ($(LIBA_NAME), )
@@ -797,16 +799,16 @@ endif
 #
 ifneq ($(obj), $(src))
 $(obj)/%.c : $(src)/%.c
-	@mkdir -p $(shell dirname $@)
-	@ln -sfT $< $@
+	$(PREAT)mkdir -p $(shell dirname $@)
+	$(PREAT)ln -sfT $< $@
 
 $(obj)/%.rs : $(src)/%.rs
-	@mkdir -p $(shell dirname $@)
-	@ln -sfT $< $@
+	$(PREAT)mkdir -p $(shell dirname $@)
+	$(PREAT)ln -sfT $< $@
 
 $(obj)/%.S : $(src)/%.S
-	@mkdir -p $(shell dirname $@)
-	@ln -sfT $< $@
+	$(PREAT)mkdir -p $(shell dirname $@)
+	$(PREAT)ln -sfT $< $@
 endif
 
 else # KERNELRELEASE
@@ -843,8 +845,8 @@ MOD_MAKES      += M=$(MOD_OPATH) src=$(MOD_PATH)
 KBUILD_MK      := $(if $(wildcard $(MOD_PATH)/Kbuild),Kbuild,Makefile)
 modules modules_clean modules_install: $(OBJ_PREFIX)/$(KBUILD_MK)
 $(OBJ_PREFIX)/$(KBUILD_MK): $(MOD_PATH)/$(KBUILD_MK)
-	@-mkdir -p $(dir $@)
-	@-cp -f $< $@
+	$(PREAT)-mkdir -p $(dir $@)
+	$(PREAT)-cp -f $< $@
 
 endif
 
@@ -853,20 +855,20 @@ export SEARCH_HDRS PACKAGE_NAME
 .PHONY: modules modules_clean modules_install symvers_install
 
 modules:
-	@$(MAKE) $(MOD_MAKES) $(if $(SEARCH_HDRS), KBUILD_EXTRA_SYMBOLS="$(wildcard $(patsubst %,$(DEP_PREFIX)/usr/include/%/Module.symvers,$(SEARCH_HDRS)))") modules
+	$(PREAT)$(MAKE) $(MOD_MAKES) $(if $(SEARCH_HDRS), KBUILD_EXTRA_SYMBOLS="$(wildcard $(patsubst %,$(DEP_PREFIX)/usr/include/%/Module.symvers,$(SEARCH_HDRS)))") modules
 
 modules_clean:
-	@$(MAKE) $(MOD_MAKES) clean
+	$(PREAT)$(MAKE) $(MOD_MAKES) clean
 ifeq ($(filter $(MOD_OPATH)/% $(MOD_OPATH),$(MOD_PATH)), )
-	@rm -rf $(MOD_OPATH)
+	$(PREAT)rm -rf $(MOD_OPATH)
 endif
 
 modules_install:
-	@$(MAKE) $(MOD_MAKES) $(if $(INS_PREFIX), INSTALL_MOD_PATH=$(INS_PREFIX)) modules_install
+	$(PREAT)$(MAKE) $(MOD_MAKES) $(if $(INS_PREFIX), INSTALL_MOD_PATH=$(INS_PREFIX)) modules_install
 
 symvers_install:
-	@install -d $(INS_PREFIX)/usr/include/$(INSTALL_HDR)
-	@cp -drf --preserve=mode,timestamps $(OBJ_PREFIX)/Module.symvers $(INS_PREFIX)/usr/include/$(INSTALL_HDR)
+	$(PREAT)install -d $(INS_PREFIX)/usr/include/$(INSTALL_HDR)
+	$(PREAT)cp -drf --preserve=mode,timestamps $(OBJ_PREFIX)/Module.symvers $(INS_PREFIX)/usr/include/$(INSTALL_HDR)
 
 install_hdrs: symvers_install
 
@@ -893,13 +895,13 @@ INSTALL_HDRS           ?= $(INSTALL_HEADERS)
 define install_obj
 .PHONY: install_$(1)s
 install_$(1)s:
-	@install -d $$(INS_PREFIX)$$($(1)dir)
-	@cp -drf --preserve=mode,timestamps $$($(shell echo install_$(1)s | tr 'a-z' 'A-Z')) $$(INS_PREFIX)$$($(1)dir)
+	$(PREAT)install -d $$(INS_PREFIX)$$($(1)dir)
+	$(PREAT)cp -drf --preserve=mode,timestamps $$($(shell echo install_$(1)s | tr 'a-z' 'A-Z')) $$(INS_PREFIX)$$($(1)dir)
 endef
 
 define install_ext
 install_$(1)s_%:
-	@ivar="$$($(shell echo install_$(1)s | tr 'a-z' 'A-Z')$$(patsubst install_$(1)s%,%,$$@))"; \
+	$(PREAT)ivar="$$($(shell echo install_$(1)s | tr 'a-z' 'A-Z')$$(patsubst install_$(1)s%,%,$$@))"; \
 	isrc="$$$$(echo $$$${ivar} | sed -E 's/\s+[a-zA-Z0-9/@_\.\-]+$$$$//g')"; \
 	idst="$$(INS_PREFIX)$$($(1)dir)$$$$(echo $$$${ivar} | sed -E 's/.*\s+([a-zA-Z0-9/@_\.\-]+)$$$$/\1/g')"; \
 	install -d $$$${idst} && cp -drf --preserve=mode,timestamps $$$${isrc} $$$${idst}
@@ -930,13 +932,13 @@ $(eval $(call install_ext,data))
 $(eval $(call install_ext,sysconf))
 
 install_todir_%:
-	@ivar="$($(shell echo install_todir | tr 'a-z' 'A-Z')$(patsubst install_todir%,%,$@))"; \
+	$(PREAT)ivar="$($(shell echo install_todir | tr 'a-z' 'A-Z')$(patsubst install_todir%,%,$@))"; \
 	isrc="$$(echo $${ivar} | sed -E 's/\s+[a-zA-Z0-9/@_\.\-]+$$//g')"; \
 	idst="$(INS_PREFIX)$$(echo $${ivar} | sed -E 's/.*\s+([a-zA-Z0-9/@_\.\-]+)$$/\1/g')"; \
 	install -d $${idst} && cp -drf --preserve=mode,timestamps $${isrc} $${idst}
 
 install_tofile_%:
-	@ivar="$($(shell echo install_tofile | tr 'a-z' 'A-Z')$(patsubst install_tofile%,%,$@))"; \
+	$(PREAT)ivar="$($(shell echo install_tofile | tr 'a-z' 'A-Z')$(patsubst install_tofile%,%,$@))"; \
 	isrc="$$(echo $${ivar} | sed -E 's/\s+[a-zA-Z0-9/@_\.\-]+$$//g')"; \
 	idst="$(INS_PREFIX)$$(echo $${ivar} | sed -E 's/.*\s+([a-zA-Z0-9/@_\.\-]+)$$/\1/g')"; \
 	install -d $$(dirname $${idst}) && cp -drf --preserve=mode,timestamps $${isrc} $${idst}
@@ -949,7 +951,7 @@ SRC_PATH        ?= .
 
 install release: license
 license:
-	@$(call install_lics)
+	$(PREAT)$(call install_lics)
 endif
 endif
 
