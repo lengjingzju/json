@@ -6,14 +6,6 @@
 
 PACKAGE_NAME    = ljson
 
-majorver       := $(shell cat json.h | grep JSON_VERSION | sed 's/.*0x//g' | cut -b 1-2 | sed 's/^0//g')
-minorver       := $(shell cat json.h | grep JSON_VERSION | sed 's/.*0x//g' | cut -b 3-4 | sed 's/^0//g')
-patchver       := $(shell cat json.h | grep JSON_VERSION | sed 's/.*0x//g' | cut -b 5-6 | sed 's/^0//g')
-
-staticlib      := libljson.a
-sharedlib      := libljson.so $(majorver) $(minorver) $(patchver)
-testedbin      := ljson
-testednum      := jnum_test
 
 INSTALL_HEADERS = json.h jnum.h
 DTOA           ?= 0
@@ -38,6 +30,10 @@ INC_MAKES      := app
 object_byte_size=10240
 include inc.makes
 
+staticlib      := libljson.a
+sharedlib      := libljson.so $(call get_version,json.h,JSON_VERSION, )
+testedbin      := ljson
+testednum      := jnum_test
 $(eval $(call add-liba-build,$(staticlib),$(libsrcs)))
 $(eval $(call add-libso-build,$(sharedlib),$(libsrcs)))
 $(eval $(call add-bin-build,$(testedbin),json_test.c,-L $(OBJ_PREFIX) $(call set_links,ljson,m),,$(OBJ_PREFIX)/$(staticlib)))
@@ -56,5 +52,5 @@ INSTALL_PKGCONFIGS := pcfiles/*
 $(eval $(call install_obj,pkgconfig))
 
 install: install_hdrs install_libs install_bins install_pkgconfigs
-	@sed -i "s/@Version@/$(majorver).$(minorver).$(patchver)/g" $(INS_PREFIX)$(pkgconfigdir)/ljson.pc
+	@sed -i "s/@Version@/$(call get_version,json.h,JSON_VERSION,.)/g" $(INS_PREFIX)$(pkgconfigdir)/ljson.pc
 	@echo "Install $(PACKAGE_NAME) to $(INS_PREFIX) Done."

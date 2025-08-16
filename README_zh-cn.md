@@ -32,6 +32,20 @@ LJSON 是一款面向极致性能设计的双模数据处理引擎，既是符�
     * LDOUBLE算法除一位小数外一般显著快于grisu2算法，特别是科学计数法表示时，可快100%以上
     * LDOUBLE算法绝大多数情况下快于dragonbox算法 ，特别是科学计数法表示时，可快30%以上
 
+## 功能、性能多维度对比表
+
+由Copilot GPT5自动生成，不一定准确，比如yyjson默认复用原始输入或原始输入dup出的字符串并且没有SIMD。
+
+| 对比维度              | LJSON                 | yyjson                | RapidJSON             | cJSON                 |
+| --------------------- | --------------------- | --------------------- | --------------------- | --------------------- |
+| 解析性能     | 高（可编辑复用模式下 547 ms；零堆分配减少 malloc 开销）          | 中高（可编辑模式下 ~1011 ms，不可编辑推迟解析 ~630 ms）           | 较高（模板优化、批量只读解析场景优）                             | 中等（逐节点 malloc 且频繁拷贝）                             |
+| 打印性能     | 高（ldouble 数值转换 + 真流式打印，避免全量缓冲）              | 中等（格式化先生成完整缓冲，再写出；无边写边打印）                   | 中等（无真流式打印，先生成大字符串）                            | 较低（基于 snprintf，拷贝与格式化开销大）                      |
+| 内存占用     | 可常数级（几十 KB 即可，流式读写大文件无峰值）                   | 较低（arena 分配，下轮复用但需一次性读入完整文件）                 | 较高（需要为完整 DOM/SAX 缓冲，峰值内存与文件大小成正比）         | 较高（每个节点 malloc，内存碎片与峰值显著）                   |
+| CPU 特性依赖 | 低（主要靠算法设计和内存管理；无 SIMD/非对齐绑定）             | 高（广泛使用 SIMD 指令、非对齐访问、全部 inline）                | 中等（可选启用 SSE/NEON 优化，但非必需）                         | 低（纯 C 实现，无硬件依赖）                                  |
+| 可扩展性     | 高（真流式解析/打印；DOM/SAX 双模；支持 JSON5；原地复用；网络流扩展） | 中（支持 DOM/SAX，但打印仍需全量缓冲；无原地字符串与真流式写）        | 中（支持 SAX 流式解析；打印模式依赖完整 DOM 或中间缓冲）            | 低（仅 DOM 模式；不支持流式或原地复用）                       |
+| 代码可读性   | 高（结构清晰、模块化；编译速度快；易于调试和二次开发）             | 低（大量宏与 inline；模板化较少；编译慢；可读性差）                | 中（模板元编程复杂；文档与社区丰富；二次开发需要熟悉泛型）           | 高（简洁直观；单文件实现；易上手）                            |
+| 关键机制     | 零堆分配 + 内存池复用；原地字符串；json_items 快速结构；真流式管线；ldouble 数值引擎 | arena 分配；SIMD 加速；不可编辑模式推迟解析；全 inline 减分支；基本无流式写 | 完整 DOM/SAX 双模；模板与 allocators；可选 SSE/NEON 优化            | 单节点 malloc/free；字符串复制；纯 C 实现，零依赖                |
+
 ## 编译运行
 
 ### 编译方法
@@ -743,6 +757,72 @@ make O=obj
 ## 接口说明
 
 见 `json.h`  `jnum.h` 文件。
+
+## 零堆内存分配模式
+
+对于小JSON文件解析打印时，推荐使用零堆内存分配模式，LJSON库只在第一次处理时分配内存，后续处理LJSON库内部可能不会进行任何堆内存分配。
+
+* 解析存储json对象一直复用内存池mem
+* 解析存储字符串值复用原始字符串(即原始字符串会被修改，且使用json过程中不能释放)
+* 获取 `JSON_ARRAY` / `JSON_OBJECT` 下的对象可使用 `json_get_items` 加速，可一直复用此对象内存(每个级别都要有单独的 `json_items_t` )
+* 打印一直复用 `json_print_ptr_t` 的成员 `p`
+
+```c
+size_t len = 0;
+
+// 初始化只做一次(解析)
+json_mem_t mem;
+pjson_memory_init(&mem);
+/* obj_mgr需要设置合适的值以便一个内存块可以存下所有的object, 如果是不复用原始字符串，其它2个mgr也需要设置 */
+mem.valid = true;
+mem.obj_mgr.mem_size = file_size << 1;
+
+// 解析加速复用items
+json_items_t items;
+memset(&items, 0, sizeof(items));
+
+// 初始化只做一次(打印)
+json_print_ptr_t ptr = {PRINT_BUF_LEN, 0};
+
+// 业务循环
+while (1) {
+    /* ---- 接收消息JSON解析 ---- */
+    json_object *json = json_reuse_parse_str(buf, &len, &mem);
+        // 获取某JSON_ARRAY下的所有数据
+        if (json_get_items(array, &items) < 0)
+            return -1;
+        for (size_t i = 0; i < items.count; ++i) {
+            ids.push_back(json_get_lint_value(items.items[i].json));
+        }
+
+    /* ----- 业务处理逻辑 ---- */
+
+    /* ---- 发送消息JSON打印 ----*/
+    json_sax_print_hd hd = json_sax_print_unformat_start(100, &ptr); // 开始打印(复用ptr)
+    json_sax_print_object(hd, NULL, JSON_SAX_START); // 顶层左花括号
+        // 打印某JSON_OBJECT下的数据
+        json_sax_print_string(hd, &key, sval);
+        // 打印某JSON_ARRAY下的所有数据
+        json_sax_print_array(hd, &key, JSON_SAX_START);
+        for (const auto &v : ids) {
+            json_sax_print_lint(hd, NULL, v);
+        }
+        json_sax_print_array(hd, NULL, JSON_SAX_FINISH);
+    ret |= json_sax_print_object(hd, NULL, JSON_SAX_FINISH); // 顶层右花括号
+    json_sax_print_finish(hd, len, &ptr) // 结束打印，生成的字符串位于ptr.p或返回值
+
+    /* ----- JSON内存池处理 ---- */
+    // 不再需要json结构，只保留第一个链表节点
+    pjson_memory_refresh(&mem);
+}
+
+// 销毁资源只做一次(解析)
+json_free_items(&items);
+pjson_memory_free(&mem);
+
+// 销毁资源只做一次(打印)
+json_memory_free(ptr.p);
+```
 
 ## 参考代码
 
