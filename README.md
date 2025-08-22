@@ -178,7 +178,9 @@ Test Mode
 
 ### Json Test Result
 
-Note: 'O2' optimization level and default option compilation, the test files come from the [nativejson-benchmark](https://github.com/miloyip/nativejson-benchmark) project.
+Note 1: 'O2' optimization level and default option compilation, the test files come from the [nativejson-benchmark](https://github.com/miloyip/nativejson-benchmark) project.
+
+Note 2: Due to modifications such as feature additions and logic optimizations, the latest version may not necessarily conform to the test results below. For example, using more precise numerical processing reduces floating-point parsing performance (processing canada.json), and improving branch prediction in reuse mode (mode 3) improves parsing performance.
 
 > Test Platform: ARM64 Development Board | CPU: ARM CortexA53 | OS: Linux-5.15<br>
 > Test Result: LJSON parses 475% faster and prints 2836% faster than cJSON, LJSON parses 131% faster and prints 147% faster than RapidJSON (include file reading and writing)
@@ -791,7 +793,7 @@ pjson_memory_init(&mem);
 /* Obj_mgr needs to be set to a suitable value so that one memory block can store all objects.
    If the original string is not reused, the other two mgrs also need to be set */
 mem.valid = true;
-mem.obj_mgr.mem_size = file_size << 1;
+mem.obj_mgr.mem_size = max_data_size;
 
 // Accelerated parsing by reusing items
 json_items_t items;

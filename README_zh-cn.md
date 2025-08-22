@@ -163,7 +163,9 @@ run_cmd ./strdup $src
 
 ### JSON测试结果
 
-注：主要是测试速度，`O2` 优化等级且默认选项编译，测试文件来自 [nativejson-benchmark](https://github.com/miloyip/nativejson-benchmark) 项目
+注1：主要是测试速度，`O2` 优化等级且默认选项编译，测试文件来自 [nativejson-benchmark](https://github.com/miloyip/nativejson-benchmark) 项目
+
+注2：由于功能增加、逻辑优化等修改，最新版本不一定符合下面测试结果，例如使用了更精确的数字处理，浮点数解析性能会下降(处理canada.json)，优化复用模式(模式3)分支预测，解析性能会上升。
 
 > 测试平台: ARM64开发板 | CPU: ARM CortexA53 | OS: Linux-5.15<br>
 > 测试结果: LJSON 比cJSON 解析最快可达 475%，打印最快可达 2836%，LJSON 比 RapidJSON 解析最快可达 131%，打印最快可达 147% (耗时含文件读写时间)
@@ -775,7 +777,7 @@ json_mem_t mem;
 pjson_memory_init(&mem);
 /* obj_mgr需要设置合适的值以便一个内存块可以存下所有的object, 如果是不复用原始字符串，其它2个mgr也需要设置 */
 mem.valid = true;
-mem.obj_mgr.mem_size = file_size << 1;
+mem.obj_mgr.mem_size = max_data_size;
 
 // 解析加速复用items
 json_items_t items;
