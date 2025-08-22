@@ -1406,6 +1406,53 @@ typedef struct _json_print_t {
 #define GET_BUF_USED_SIZE(bp) ((bp)->cur - (bp)->ptr)
 #define GET_BUF_FREE_SIZE(bp) ((bp)->size - ((bp)->cur - (bp)->ptr))
 
+static inline bool _is_escape_char(uint8_t val)
+{
+    /*
+    // To get char_escape_lut
+    void print_char_escape_lut(void)
+    {
+        int i = 0;
+        for (i = 0; i < 256; ++i) {
+            switch (i) {
+            case '\"': case '\\': case '\b': case '\f': case '\n': case '\r': case '\t': case '\v':
+                printf("%-3d, ", 1 << 0); break;
+            default:
+                printf("%-3d, ", (i < ' ') ? (1 << 1) : (0)); break;
+            }
+            if ((i & 0xF) == 0xF)
+                printf("\n");
+        }
+    }
+    */
+
+    static const uint8_t char_escape_lut[256] = {
+        2  , 2  , 2  , 2  , 2  , 2  , 2  , 2  , 1  , 1  , 1  , 1  , 1  , 1  , 2  , 2  ,
+        2  , 2  , 2  , 2  , 2  , 2  , 2  , 2  , 2  , 2  , 2  , 2  , 2  , 2  , 2  , 2  ,
+        0  , 0  , 1  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  ,
+        0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  ,
+        0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  ,
+        0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 1  , 0  , 0  , 0  ,
+        0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  ,
+        0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  ,
+        0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  ,
+        0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  ,
+        0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  ,
+        0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  ,
+        0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  ,
+        0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  ,
+        0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  ,
+        0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0
+    };
+
+#if JSON_PRINT_UTF16_SUPPORT
+    static uint8_t flag = ((1 << 0) | (1 << 1));
+#else
+    static uint8_t flag = ((1 << 0));
+#endif
+    return (char_escape_lut[val] & flag);
+}
+
 static int _print_file_ptr_realloc(json_print_t *print_ptr, size_t slen)
 {
     size_t len = GET_BUF_USED_SIZE(print_ptr);
@@ -1511,7 +1558,7 @@ static int _json_print_string(json_print_t *print_ptr, json_string_t *jstr)
     bak = str;                          \
 } while(0)
 
-    char ch = '\0';
+    char c = '\0', ch = '\0';
     size_t len = 0, size = 0, alloced = 0;
     const char *str = NULL, *bak = NULL, *end = NULL;
 
@@ -1538,36 +1585,39 @@ static int _json_print_string(json_print_t *print_ptr, json_string_t *jstr)
 
     bak = str;
     while (str < end) {
-        switch ((*str++)) {
-        case '\"': ch = '\"'; break;
-        case '\\': ch = '\\'; break;
-        case '\b': ch = 'b' ; break;
-        case '\f': ch = 'f' ; break;
-        case '\n': ch = 'n' ; break;
-        case '\r': ch = 'r' ; break;
-        case '\t': ch = 't' ; break;
-        case '\v': ch = 'v' ; break;
-        default:
+        c = *str++;
+        if (unlikely(_is_escape_char((uint8_t)c))) {
+            switch (c) {
+            case '\"': ch = '\"'; break;
+            case '\\': ch = '\\'; break;
+            case '\b': ch = 'b' ; break;
+            case '\f': ch = 'f' ; break;
+            case '\n': ch = 'n' ; break;
+            case '\r': ch = 'r' ; break;
+            case '\t': ch = 't' ; break;
+            case '\v': ch = 'v' ; break;
+            default:
 #if JSON_PRINT_UTF16_SUPPORT
-            {
-                unsigned char uc = (unsigned char)(*(str-1));
-                if (uc < ' ') {
-                    _JSON_PRINT_SEGMENT();
-                    *print_ptr->cur++ = '\\';
-                    *print_ptr->cur++ = 'u';
-                    *print_ptr->cur++ = '0';
-                    *print_ptr->cur++ = '0';
-                    *print_ptr->cur++ = hex_array[uc >> 4 & 0xf];
-                    *print_ptr->cur++ = hex_array[uc & 0xf];
+                {
+                    unsigned char uc = c;
+                    if (uc < ' ') {
+                         _JSON_PRINT_SEGMENT();
+                         *print_ptr->cur++ = '\\';
+                         *print_ptr->cur++ = 'u';
+                         *print_ptr->cur++ = '0';
+                         *print_ptr->cur++ = '0';
+                         *print_ptr->cur++ = hex_array[uc >> 4 & 0xf];
+                         *print_ptr->cur++ = hex_array[uc & 0xf];
+                    }
                 }
-            }
 #endif
-            continue;
-        }
+                continue;
+            }
 
-        _JSON_PRINT_SEGMENT();
-        *print_ptr->cur++ = '\\';
-        *print_ptr->cur++ = ch;
+            _JSON_PRINT_SEGMENT();
+            *print_ptr->cur++ = '\\';
+            *print_ptr->cur++ = ch;
+        }
     }
 
     ++str;
@@ -2138,51 +2188,50 @@ typedef struct _json_parse_t {
 #define IS_BLANK(c)      ((((c) + 0xdf) & 0xff) > 0xdf)
 #define IS_DIGIT(c)      ((c) >= '0' && (c) <= '9')
 
-/*
-// To get char_type_lut
-void print_char_type_lut(void)
-{
-    int i = 0;
-    for (i = 0; i < 256; ++i) {
-        switch (i) {
-        case '\0': printf("%-3d, ", 1 << 0); break;
-        case '\"': printf("%-3d, ", 1 << 1); break;
-        case '\'': printf("%-3d, ", 1 << 2); break;
-        case ':' : printf("%-3d, ", 1 << 3); break;
-        case '\\': printf("%-3d, ", 1 << 4); break;
-        case ' ' : printf("%-3d, ", 1 << 5); break;
-        case '\b': case '\f': case '\n': case '\r': case '\t': case '\v':
-                   printf("%-3d, ", 1 << 6); break;
-        default  : printf("%-3d, ", 0); break;
-        }
-        if ((i & 0xF) == 0xF)
-            printf("\n");
-    }
-    return 0;
-}
- */
-
-static const uint8_t char_type_lut[256] = {
-    1  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 64 , 64 , 64 , 64 , 64 , 64 , 0  , 0  ,
-    0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  ,
-    32 , 0  , 2  , 0  , 0  , 0  , 0  , 4  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  ,
-    0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 8  , 0  , 0  , 0  , 0  , 0  ,
-    0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  ,
-    0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 16 , 0  , 0  , 0  ,
-    0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  ,
-    0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  ,
-    0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  ,
-    0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  ,
-    0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  ,
-    0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  ,
-    0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  ,
-    0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  ,
-    0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  ,
-    0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0
-};
-
 static inline bool _is_special_char(uint8_t val)
 {
+    /*
+    // To get char_type_lut
+    void print_char_type_lut(void)
+    {
+        int i = 0;
+        for (i = 0; i < 256; ++i) {
+            switch (i) {
+            case '\0': printf("%-3d, ", 1 << 0); break;
+            case '\"': printf("%-3d, ", 1 << 1); break;
+            case '\'': printf("%-3d, ", 1 << 2); break;
+            case ':' : printf("%-3d, ", 1 << 3); break;
+            case '\\': printf("%-3d, ", 1 << 4); break;
+            case ' ' : printf("%-3d, ", 1 << 5); break;
+            case '\b': case '\f': case '\n': case '\r': case '\t': case '\v':
+                       printf("%-3d, ", 1 << 6); break;
+            default  : printf("%-3d, ", 0); break;
+            }
+            if ((i & 0xF) == 0xF)
+                printf("\n");
+        }
+    }
+    */
+
+    static const uint8_t char_type_lut[256] = {
+        1  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 64 , 64 , 64 , 64 , 64 , 64 , 0  , 0  ,
+        0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  ,
+        32 , 0  , 2  , 0  , 0  , 0  , 0  , 4  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  ,
+        0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 8  , 0  , 0  , 0  , 0  , 0  ,
+        0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  ,
+        0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 16 , 0  , 0  , 0  ,
+        0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  ,
+        0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  ,
+        0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  ,
+        0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  ,
+        0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  ,
+        0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  ,
+        0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  ,
+        0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  ,
+        0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  ,
+        0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0
+    };
+
 #if JSON_PARSE_SPECIAL_QUOTES
 #if JSON_PARSE_SPECIAL_CHAR
     static uint8_t flag = ~((1 << 5) | (1 << 6));
