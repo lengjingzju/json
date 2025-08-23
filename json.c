@@ -1446,9 +1446,9 @@ static inline bool _is_escape_char(uint8_t val)
     };
 
 #if JSON_PRINT_UTF16_SUPPORT
-    static uint8_t flag = ((1 << 0) | (1 << 1));
+    static const uint8_t flag = ((1 << 0) | (1 << 1));
 #else
-    static uint8_t flag = ((1 << 0));
+    static const uint8_t flag = ((1 << 0));
 #endif
     return (char_escape_lut[val] & flag);
 }
@@ -1632,22 +1632,33 @@ err:
 
 static int _json_print_value(json_print_t *print_ptr, json_object *json)
 {
+    json_object *stack_array[JSON_ITEM_NUM_PLUS_DEF];
+    json_object **item_array = stack_array;
     json_object *parent = NULL, *tmp = NULL;
-    json_object **item_array = NULL;
-    int item_depth = -1, item_total = 0;
+    int item_depth = -1, item_total = JSON_ITEM_NUM_PLUS_DEF;
 
     goto next3;
 next1:
     if (unlikely(item_depth >= item_total - 1)) {
         item_total += JSON_ITEM_NUM_PLUS_DEF;
-        json_object **new_array = (json_object **)json_realloc(item_array, sizeof(json_object *) * item_total);
-        if (new_array) {
-            item_array = new_array;
+        if (item_array == stack_array) {
+            item_array = (json_object **)json_malloc(sizeof(json_object *) * item_total);
+            if (item_array) {
+                memcpy(item_array, stack_array, sizeof(stack_array));
+            } else {
+                JsonErr("malloc failed!\n");
+                goto err;
+            }
         } else {
-            JsonErr("malloc failed!\n");
-            json_free(item_array);
-            item_array = NULL;
-            goto err;
+            json_object **new_array = (json_object **)json_realloc(item_array, sizeof(json_object *) * item_total);
+            if (new_array) {
+                item_array = new_array;
+            } else {
+                JsonErr("malloc failed!\n");
+                json_free(item_array);
+                item_array = NULL;
+                goto err;
+            }
         }
     }
     item_array[++item_depth] = json;
@@ -1793,12 +1804,12 @@ next4:
         }
     }
 
-    if (item_array) {
+    if (item_array != NULL && item_array != stack_array) {
         json_free(item_array);
     }
     return 0;
 err:
-    if (item_array) {
+    if (item_array != NULL && item_array != stack_array) {
         json_free(item_array);
     }
     return -1;
@@ -2234,15 +2245,15 @@ static inline bool _is_special_char(uint8_t val)
 
 #if JSON_PARSE_SPECIAL_QUOTES
 #if JSON_PARSE_SPECIAL_CHAR
-    static uint8_t flag = ~((1 << 5) | (1 << 6));
+    static const uint8_t flag = ~((1 << 5) | (1 << 6));
 #else
-    static uint8_t flag = ~((1 << 5));
+    static const uint8_t flag = ~((1 << 5));
 #endif
 #else
 #if JSON_PARSE_SPECIAL_CHAR
-    static uint8_t flag = ~((1 << 2) | (1 << 3) | (1 << 5) | (1 << 6));
+    static const uint8_t flag = ~((1 << 2) | (1 << 3) | (1 << 5) | (1 << 6));
 #else
-    static uint8_t flag = ~((1 << 2) | (1 << 3) | (1 << 5));
+    static const uint8_t flag = ~((1 << 2) | (1 << 3) | (1 << 5));
 #endif
 #endif
     return (char_type_lut[val] & flag);
