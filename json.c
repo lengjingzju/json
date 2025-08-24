@@ -1406,33 +1406,40 @@ typedef struct _json_print_t {
 #define GET_BUF_USED_SIZE(bp) ((bp)->cur - (bp)->ptr)
 #define GET_BUF_FREE_SIZE(bp) ((bp)->size - ((bp)->cur - (bp)->ptr))
 
-static inline bool _is_escape_char(uint8_t val)
+static inline char _is_escape_char(uint8_t val)
 {
+#define ESCAPE_UTF16_VAL    1
     /*
     // To get char_escape_lut
     void print_char_escape_lut(void)
     {
-        int i = 0;
+        int i = 0, ch = 0;
         for (i = 0; i < 256; ++i) {
             switch (i) {
-            case '\"': case '\\': case '\b': case '\f': case '\n': case '\r': case '\t': case '\v':
-                printf("%-3d, ", 1 << 0); break;
-            default:
-                printf("%-3d, ", (i < ' ') ? (1 << 1) : (0)); break;
+            case '\"': ch = '\"'; break;
+            case '\\': ch = '\\'; break;
+            case '\b': ch = 'b' ; break;
+            case '\f': ch = 'f' ; break;
+            case '\n': ch = 'n' ; break;
+            case '\r': ch = 'r' ; break;
+            case '\t': ch = 't' ; break;
+            case '\v': ch = 'v' ; break;
+            default: ch = i < ' ' ? ESCAPE_UTF16_VAL : 0; break;
             }
+            printf("%-3d, ", ch);
             if ((i & 0xF) == 0xF)
                 printf("\n");
         }
     }
     */
 
-    static const uint8_t char_escape_lut[256] = {
-        2  , 2  , 2  , 2  , 2  , 2  , 2  , 2  , 1  , 1  , 1  , 1  , 1  , 1  , 2  , 2  ,
-        2  , 2  , 2  , 2  , 2  , 2  , 2  , 2  , 2  , 2  , 2  , 2  , 2  , 2  , 2  , 2  ,
-        0  , 0  , 1  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  ,
+    static const char char_escape_lut[256] = {
+        1  , 1  , 1  , 1  , 1  , 1  , 1  , 1  , 98 , 116, 110, 118, 102, 114, 1  , 1  ,
+        1  , 1  , 1  , 1  , 1  , 1  , 1  , 1  , 1  , 1  , 1  , 1  , 1  , 1  , 1  , 1  ,
+        0  , 0  , 34 , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  ,
         0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  ,
         0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  ,
-        0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 1  , 0  , 0  , 0  ,
+        0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 92 , 0  , 0  , 0  ,
         0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  ,
         0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  ,
         0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  ,
@@ -1445,12 +1452,7 @@ static inline bool _is_escape_char(uint8_t val)
         0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0
     };
 
-#if JSON_PRINT_UTF16_SUPPORT
-    static const uint8_t flag = ((1 << 0) | (1 << 1));
-#else
-    static const uint8_t flag = ((1 << 0));
-#endif
-    return (char_escape_lut[val] & flag);
+    return char_escape_lut[val];
 }
 
 static int _print_file_ptr_realloc(json_print_t *print_ptr, size_t slen)
@@ -1586,38 +1588,26 @@ static int _json_print_string(json_print_t *print_ptr, json_string_t *jstr)
     bak = str;
     while (str < end) {
         c = *str++;
-        if (unlikely(_is_escape_char((uint8_t)c))) {
-            switch (c) {
-            case '\"': ch = '\"'; break;
-            case '\\': ch = '\\'; break;
-            case '\b': ch = 'b' ; break;
-            case '\f': ch = 'f' ; break;
-            case '\n': ch = 'n' ; break;
-            case '\r': ch = 'r' ; break;
-            case '\t': ch = 't' ; break;
-            case '\v': ch = 'v' ; break;
-            default:
-#if JSON_PRINT_UTF16_SUPPORT
-                {
-                    unsigned char uc = c;
-                    if (uc < ' ') {
-                         _JSON_PRINT_SEGMENT();
-                         *print_ptr->cur++ = '\\';
-                         *print_ptr->cur++ = 'u';
-                         *print_ptr->cur++ = '0';
-                         *print_ptr->cur++ = '0';
-                         *print_ptr->cur++ = hex_array[uc >> 4 & 0xf];
-                         *print_ptr->cur++ = hex_array[uc & 0xf];
-                    }
-                }
-#endif
-                continue;
-            }
-
+        ch = _is_escape_char((uint8_t)c);
+        if (unlikely(ch > ESCAPE_UTF16_VAL)) {
             _JSON_PRINT_SEGMENT();
             *print_ptr->cur++ = '\\';
             *print_ptr->cur++ = ch;
         }
+#if JSON_PRINT_UTF16_SUPPORT
+        else if (unlikely(ch)) {
+            static const char hex_char_lut[] = {
+                '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'a', 'b', 'c', 'd', 'e', 'f'
+            };
+            unsigned char uc = c;
+
+            _JSON_PRINT_SEGMENT();
+            memcpy(print_ptr->cur, "\\u00", 4);
+            print_ptr->cur += 4;
+            *print_ptr->cur++ = hex_char_lut[uc >> 4 & 0xf];
+            *print_ptr->cur++ = hex_char_lut[uc & 0xf];
+        }
+#endif
     }
 
     ++str;
