@@ -172,7 +172,7 @@ extern int dragonbox_dtoa(double num, char *buffer);
 #define JSON_PRINT_NUM_INIT_DEF         1024
 #define JSON_PRINT_NUM_PLUS_DEF         64
 #define JSON_PRINT_DEPTH_DEF            16
-#define JSON_PRINT_SIZE_PLUS_DEF        1024
+#define JSON_PRINT_SIZE_PLUS_DEF        8192
 #define JSON_FORMAT_ITEM_SIZE_DEF       32
 #define JSON_UNFORMAT_ITEM_SIZE_DEF     24
 
@@ -1055,7 +1055,7 @@ static inline void *pjson_memory_alloc(size_t size, json_mem_mgr_t *mgr)
 {
     void *p = NULL;
 
-    if ((mgr->cur_node->cur - mgr->cur_node->ptr) + size > mgr->cur_node->size) {
+    if (unlikely((mgr->cur_node->cur - mgr->cur_node->ptr) + size > mgr->cur_node->size)) {
         if ((_json_mem_new((mgr->mem_size >= size) ? mgr->mem_size : size, mgr) == NULL)) {
             return NULL;
         }
@@ -1545,17 +1545,17 @@ static int _print_str_ptr_realloc(json_print_t *print_ptr, size_t slen)
 }
 
 #define _PRINT_PTR_REALLOC(nz) do {                 \
-    if (unlikely(GET_BUF_FREE_SIZE(print_ptr) < nz  \
+    if (unlikely(GET_BUF_FREE_SIZE(print_ptr) < (nz)\
         && print_ptr->realloc(print_ptr, nz) < 0))  \
         goto err;                                   \
 } while(0)
 
 #define _PRINT_PTR_NUMBER(fname, num) do {          \
-    _PRINT_PTR_REALLOC(129);                        \
+    _PRINT_PTR_REALLOC(64);                         \
     print_ptr->cur += fname(num, print_ptr->cur);   \
 } while(0)
 
-#define _PRINT_PTR_STRNCAT(str, slen)      do {     \
+#define _PRINT_PTR_STRNCAT(str, slen) do {          \
     _PRINT_PTR_REALLOC((slen + 1));                 \
     memcpy(print_ptr->cur, str, slen);              \
     print_ptr->cur += slen;                         \
@@ -1840,7 +1840,6 @@ static int _print_val_release(json_print_t *print_ptr, bool free_all_flag, size_
             if (length)
                 *length = print_ptr->cur - print_ptr->ptr;
             *print_ptr->cur = '\0';
-
 
             if (ptr) {
                 ptr->size = print_ptr->size;
@@ -3559,7 +3558,6 @@ next3:
             _UPDATE_PARSE_OFFSET(1);
         }
         break;
-
 
     case 'f':
         if (likely(parse_ptr->size - parse_ptr->offset >= 5 && memcmp("false", str, 5) == 0)) {

@@ -44,6 +44,26 @@ static unsigned int _system_ms_get(void)
 #endif
 }
 
+static unsigned long long _system_ns_get(void)
+{
+#if !defined(_MSC_VER)
+    struct timespec ts;
+    clock_gettime(CLOCK_MONOTONIC, &ts);
+    return ts.tv_sec * 1000000000 + ts.tv_nsec;
+#else
+    static LARGE_INTEGER freq = {0};
+    static int freq_initialized = 0;
+    if (!freq_initialized) {
+        QueryPerformanceFrequency(&freq);
+        freq_initialized = 1;
+    }
+
+    LARGE_INTEGER counter;
+    QueryPerformanceCounter(&counter);
+    return (unsigned long long)((counter.QuadPart * 1000000000ULL) / freq.QuadPart);
+#endif
+}
+
 int copy_data_to_file(char *data, size_t size, const char *dst)
 {
     int ret = -1;
@@ -109,16 +129,19 @@ int read_file_data_free(char **data, size_t *size)
 static void usage_print(const char *func)
 {
 #define ANY_JSON_NAME "x.json"
-    printf("Usage: %s <%s> <num>\n", func, ANY_JSON_NAME);
-    printf("\t%s %s 1 ==> test json_parse_str()\n", func, ANY_JSON_NAME);
-    printf("\t%s %s 2 ==> test json_fast_parse_str()\n", func, ANY_JSON_NAME);
-    printf("\t%s %s 3 ==> test json_reuse_parse_str()\n", func, ANY_JSON_NAME);
-    printf("\t%s %s 4 ==> test json_parse_file()\n", func, ANY_JSON_NAME);
-    printf("\t%s %s 5 ==> test json_fast_parse_file()\n", func, ANY_JSON_NAME);
+    printf("Usage:  %s <%s> <num>\n", func, ANY_JSON_NAME);
+    printf("\t%s %s  1 ==> test json_parse_str()\n", func, ANY_JSON_NAME);
+    printf("\t%s %s  2 ==> test json_fast_parse_str()\n", func, ANY_JSON_NAME);
+    printf("\t%s %s  3 ==> test json_reuse_parse_str()\n", func, ANY_JSON_NAME);
+    printf("\t%s %s  4 ==> test json_parse_file()\n", func, ANY_JSON_NAME);
+    printf("\t%s %s  5 ==> test json_fast_parse_file()\n", func, ANY_JSON_NAME);
 #if JSON_SAX_APIS_SUPPORT
-    printf("\t%s %s 6 ==> test json_sax_parse_str()\n", func, ANY_JSON_NAME);
-    printf("\t%s %s 7 ==> test json_sax_parse_file()\n", func, ANY_JSON_NAME);
-    printf("Usage: %s 0 ==> test json_sax_print_xxxx()\n", func);
+    printf("\t%s %s  6 ==> test json_sax_parse_str()\n", func, ANY_JSON_NAME);
+    printf("\t%s %s  7 ==> test json_sax_parse_file()\n", func, ANY_JSON_NAME);
+#endif
+    printf("\t%s %s >7 ==> test json_reuse_parse_str() <num> times\n", func, ANY_JSON_NAME);
+#if JSON_SAX_APIS_SUPPORT
+    printf("Usage:  %s 0 ==> test json_sax_print_xxxx()\n", func);
 #endif
 }
 
@@ -244,6 +267,54 @@ json_sax_ret_t _sax_parser_cb(json_sax_parser_t *parser)
 }
 #endif
 
+int test_reuse_parse_repeat(const char *file, int times)
+{
+    int i = 0;
+    size_t size = 0;
+    char *data = NULL, *bak = NULL;
+    json_object *json = NULL;
+    json_mem_t mem = {0};
+    unsigned long long total_ns = 0, last_ns = 0;
+
+    pjson_memory_init(&mem);
+
+    if (read_file_to_data(file, &data, &size) < 0) {
+        printf("read file %s failed!\n", file);
+        return -1;
+    }
+
+    bak = (char *)malloc(size + 1);
+    if (!bak) {
+        printf("malloc (%lu) failed!\n", size + 1);
+        read_file_data_free(&data, &size);
+        return -1;
+    }
+
+    /*
+     * obj_mgr needs to be set to a suitable value so that one memory block
+     * can store all objects.  If the original string is not reused, the other
+     * two mgrs also need to be set.
+     * */
+    mem.valid = 1;
+    mem.obj_mgr.mem_size = size;
+
+    for (i = 0; i < times; ++i) {
+        memcpy(bak, data, size + 1);
+        last_ns = _system_ns_get();
+        json = json_reuse_parse_str(bak, size, &mem);
+        (void)json; // prevent warning
+        pjson_memory_refresh(&mem);
+        total_ns += _system_ns_get() - last_ns;
+    }
+
+    printf("Repeat %d times, LJSON reuse parse costs %llu ns\n", times, total_ns);
+    free(bak);
+    pjson_memory_free(&mem);
+    read_file_data_free(&data, &size);
+
+    return 0;
+}
+
 int main(int argc, char *argv[])
 {
     int ret = 0;
@@ -278,8 +349,12 @@ int main(int argc, char *argv[])
         goto err;
     }
     choice = atoi(argv[2]);
-    if (choice < 1 || choice > 7)
+    if (choice < 1)
         goto err;
+
+    if (choice > 7) {
+        return test_reuse_parse_repeat(file, choice);
+    }
 
     ms[0] = _system_ms_get();
     switch(choice)

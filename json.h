@@ -437,7 +437,7 @@ static inline int json_set_key(json_object *json, json_string_t *jkey)
 /*
  * json_set_string_value - 设置JSON_STRING类型的json对象的值
  * @json: IN, 被设置的json对象
- * @jstr: IN, 要设置的值, 可以预先填好jkey的len/escaped成员接口加快速度
+ * @jstr: IN, 要设置的值, 可以预先填好jstr的len/escaped成员接口加快速度
  * @return: 失败返回-1；成功返回0
  */
 static inline int json_set_string_value(json_object *json, json_string_t *jstr)

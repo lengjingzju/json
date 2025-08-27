@@ -1,79 +1,79 @@
-# A Method for Fast Division Within a Limited Domain
+# 一种有限定义域内快速整除的实现方法
 
-**Translated by Deepseek**
+## 实现原理
 
-## Implementation Principle
+一般CPU整数除法的速度远远慢于整数乘法，那么是否可以将除法形式 `N/D` 换成乘法形式 `((type)N * M) >> K` 呢？假设可行，有如下两种情况：
 
-General CPU integer division is significantly slower than integer multiplication. So, can we transform the division form `N/D` into a multiplication form `((type)N * M) >> K`? Assuming it's possible, there are two cases:
-
-*   D is a power of 2
+* D 是 2 的整数次方
 
     ```sh
-    pow(2, K) = D
+    pow(2,K) = D
+
     K = log2(D)
     M = 1
     ```
 
-    That is, `N/D` can be written as `N >> log2(D)`.
+    即 `N/D` 可以写成 `N >> log2(D)` 的形式
 
-*   D is *not* a power of 2
+* D 不是 2 的整数次方
 
     ```sh
-    N/D = (N / pow(2, K)) * (pow(2, K) / D)
-        = (N * (pow(2, K) / D)) / pow(2, K)
+    N/D = (N / pow(2,K)) * (pow(2,K) / D)
+        = (N * (pow(2,K) / D)) / pow(2,K)
     ```
 
-    `pow(2, K) / D` might not be an integer. We need to add a delta value to make it divisible. Delta must be less than D and greater than or equal to 0.
+    `pow(2,K) / D` 不一定可以整除，我们需要加上一个 delta 值使之整除，delta 值一定小于 D，且大于等于 0。
 
-    Proof by contradiction: If delta were less than 0, when N is exactly divisible by D, the delta's附加 value would be subtracted, making the result smaller than the true value by 1. Therefore, delta cannot be less than 0.
+    反证：如果 delta 小于 0，当 N 刚好被 D 整除时，此时会减去 delta 带来的附加值，整除值就比真正的值小 1，所以 delta 不能小于 0。
 
     ```sh
-    N/D = (N / pow(2, K)) * ((pow(2, K) + delta) / D)
-        = (N / D) * ((pow(2, K) + delta) / pow(2, K))
+    N/D = (N / pow(2,K)) * ((pow(2,K) + delta) / D)
+        = (N / D) * ((pow(2,K) + delta) / pow(2,K))
 
-    N/D = (N * M) >> K    (where M = (pow(2, K) + delta) / D )
-    N/D = (N / D) + ((N * delta) / (D * pow(2, K)))
+    N/D = (N * M) >> K    ( M = (pow(2,K) + delta) / D )
+    N/D = (N / D) + ((N * delta) / (D * pow(2,K)))
     ```
 
-    The fractional part of `N / D` is at most `(D - 1) / D`. For the above equation to yield an integer result (i.e., for the transformation to work exactly), the *total* fractional part must be less than 1.
+    `N / D` 的小数部分最大为 `(D - 1) / D`，要保证上述式子成立，则小数部分小于 1。
 
     ```sh
-    ((D - 1) / D) + ((N * delta) / (D * pow(2, K))) < 1
-    ((N * delta) / (D * pow(2, K))) < (1 / D)
-    (N * delta) / pow(2, K) < 1
+    ((D - 1) / D) + ((N * delta) / (D * pow(2,K))) < 1
+    ((N * delta) / (D * pow(2,K))) < (1 / D)
+    (N * delta) / pow(2,K) < 1
     log2(N) + log2(delta) - K < 0
     K > log2(N) + log2(delta)
     ```
 
-    In summary, we get the following constraints:
+    综上，我们可以得到如下限制条件：
 
-    *   `K > log2(N)`
-    *   `K <= log2(N) + log2(D - 1) + 1`  : (because the maximum value of delta is `D - 1`)
-    *   `delta = D - (pow(2, K) % D)` (or equivalently `(-pow(2, K)) % D`)
-    *   `M = (pow(2, K) + delta) / D` (This M will be an integer)
-    *   `N * M < pow(2, bits)` : where `bits` is the size of the largest integer type available (e.g., 64 or 128 bits).
+    * `K > log2(N)`
+    * `K <= log2(N) + log2(D - 1) + 1`  : delta 的最大值为 `D - 1`
+    * `delta = D - (pow(2,K) % D)`
+    * `M = (pow(2,K) + delta) / D`
+    * `N * M < pow(2,bits)`             : bits 为计算机最大能表示的整数(64或128)
 
-    Given the range of N and the value of D, the range for K can be calculated. For a chosen K and D, M can be derived.
-    When these constraints are satisfied, `N/D` can be replaced by the multiplication form `((type)N * M) >> K`.
+    已知 N 的范围和 D 的值，则 K 的范围就可以算出，从一个确定的 K 和 D 就可以得到 M。
+    符合上述限制条件时 `N/D` 换成乘法形式 `((type)N * M) >> K` 。
 
-*   D has a common factor which is a power of 2 (i.e., `D = DS * 2^S` where DS is odd)
+* D 存在 2 的 S 次方的公因子
 
-    The value `N * M` from the above constraints might exceed the maximum representable integer. If D has a factor of `2^S`, `N * M` can be scaled down.
-    I.e., `((type)N * M) >> K` can be written as `((type)(N >> S) * M) >> (K - S)` or often reparameterized as `((type)(N >> S) * M) >> K` where K is chosen anew for the reduced divisor DS. The constraints then become:
+    上面限制条件的 `N * M` 可能超出计算机最大能表示的整数，如果 D 存在 2 的 S 次方的公因子，`N * M` 就可以缩小。
+    即 `((type)N * M) >> K` 可写成 `((type)(N >> S) * M) >> K` 的形式，则限制条件变为：
 
     ```sh
-    NS = N >> S          # Reduced numerator
-    DS = D >> S          # Reduced divisor (now odd)
-    K > log2(NS)         # K is now chosen for NS and DS
+    NS = N >> S
+    DS = D >> S
+    K > log2(NS)
     K <= log2(NS) + log2(DS - 1) + 1
-    delta = DS - (pow(2, K) % DS) # or (-pow(2, K)) % DS
-    M = (pow(2, K) + delta) / DS
-    NS * M < pow(2, bits)
+    delta = DS - (pow(2,K) % DS)
+    M = (pow(2,K) + delta) / DS
+    NS * M < pow(2,bits)
     ```
 
-    If `((type)(N >> S) * M)` still exceeds the maximum representable integer, the multiplication of N and M must be decomposed (e.g., using a wider type or multi-word arithmetic).
+    如果 `((type)(N >> S) * M)` 还是超出计算机最大能表示的整数，此时只能分解 N 和 M 再相乘了。
 
-## Python Implementation
+
+## python 实现
 
 ```python
 import math, sys
@@ -82,46 +82,35 @@ max16 = 1<<16
 max32 = 1<<32
 max64 = 1<<64
 max128 = 1<<128
-en128 = False # Flag to enable 128-bit uint consideration
+en128 = False
 
 def fast_div(D, maxN, S):
-    """
-    Finds parameters M, K for fast division N/D ≈ ((N >> S) * M) >> K
-    for all N in [0, maxN], where D is effectively reduced by factor 2^S.
-    """
-    DS = D >> S # Reduce divisor by factor 2^S
-    maxNS = maxN >> S # Reduce maximum N accordingly
+    DS = D >> S
+    maxNS = maxN >> S
 
     logn = math.log(maxNS, 2)
-    mink = int(logn) + 1 # Minimum K based on reduced N
-    # Maximum K based on reduced N and reduced divisor DS
-    maxk = int(logn + math.log(DS - 1, 2)) + 1 if DS > 1 else mink
+    mink = int(logn) + 1
+    maxk = int(logn + math.log(DS - 1, 2)) + 1
 
     for K in range(mink, maxk + 1):
-        # Calculate the delta required to make (2^K + delta) divisible by DS
-        delta = DS - ((1 << K) % DS)
-        if delta == DS: delta = 0 # If modulo was 0, delta is 0
-
-        # Check if K is large enough to handle the error term (N * delta / 2^K < 1)
+        delta = DS - (1<<K) % DS
         if delta:
-            # Required K based on maxN and delta
-            deltak = int(math.log(maxNS * delta, 2)) + 1
+            deltak = int(logn + math.log(delta, 2)) + 1
         else:
             deltak = mink
         if K < deltak:
-            continue # Skip if K is too small for accuracy
+            continue
 
-        M = ((1 << K) + delta) // DS # Calculate the multiplier
-        maxV = maxNS * M # Maximum value in the intermediate multiplication
+        M = ((1<<K) + delta) // DS
+        maxV = maxNS * M
         bits = 0
-        # Determine the required integer type based on maxV
         if maxV >= max128:
-            print('%d\t%d\t%d\t%d\t%d\tinf\t: max value (%d) exceeds uint128_t' % (D, maxN, S, M, K, maxV))
+            print('%d\t%d\t%d\t%d\t%d\tinf\t: maxinum value (%d) exceeds uint128_t' % (D, maxN, S, M, K, maxV))
             return False
         elif maxV >= max64:
             bits = 128
-            if not en128: # If 128-bit isn't enabled, report failure
-                print('%d\t%d\t%d\t%d\t%d\tu%d\t: max value (%d) exceeds uint64_t' % (D, maxN, S, M, K, bits, maxV))
+            if not en128:
+                print('%d\t%d\t%d\t%d\t%d\tu%d\t: maxinum value (%d) exceeds uint64_t' % (D, maxN, S, M, K, bits, maxV))
                 return False
         elif maxV >= max32:
             bits = 64
@@ -130,61 +119,48 @@ def fast_div(D, maxN, S):
         else:
             bits = 16
 
-        # Print the successful parameters
         print('%d\t%d\t%d\t%d\t%d\tu%d' % (D, maxN, S, M, K, bits))
         return True
-    return False # No valid K found
+    return False
 
 def get_fast_div(D, maxN):
-    """Finds parameters for fast division by D for N in [0, maxN]."""
     logd = math.log(D, 2)
-    if logd == int(logd): # If D is power of 2
-        K_val = int(logd)
-        print('%d\tany\t0\t1\t%d\tany' % (D, K_val))
+    if logd == int(logd):
+        print('%d\tany\t0\t1\t%d\tany' % (D, int(logd)))
         return True
 
-    # Try without reducing S first
     if fast_div(D, maxN, 0):
         return True
 
-    # Find the largest S such that 2^S divides D
     S = 0
-    tempD = D
-    while tempD % 2 == 0:
+    while D % (2 ** (S + 1)) == 0:
         S += 1
-        tempD //= 2
-    # Try again with the reduced divisor (DS = D / 2^S)
-    if S > 0:
-        return fast_div(D, maxN, S)
-    return False
+    if not S:
+        return False
+    return fast_div(D, maxN, S)
 
 def print_div_table():
-    """Prints a table of parameters for various divisors and ranges."""
-    # ... (Logic for generating the example table shown below)
     for i in range(1, 20):
         for j in range(i+1, 21):
             n = 10 ** j - 1
             d = 10 ** i
             if j == 10:
-                get_fast_div(d, max32 - 1) # max uint32_t
+                get_fast_div(d, max32 - 1)
             if j == 20:
-                get_fast_div(d, max64 - 1) # max uint64_t
-            get_fast_div(d, n) # Specific range 10^j - 1
+                get_fast_div(d, max64 - 1)
+            get_fast_div(d, n)
 
-# Main execution
 print('D\tmaxN\tS\tM\tK\ttype')
 if len(sys.argv) != 3:
     print_div_table()
 else:
-    D_val = int(sys.argv[1])
-    maxN_val = int(sys.argv[2])
-    get_fast_div(D_val, maxN_val)
+    get_fast_div(int(sys.argv[1]), int(sys.argv[2]))
 print('#define FAST_DIV(N) ((((type)(N) >> S) * M) >> K)')
 ```
 
-Run `python3 fastdiv.py` or `python3 fastdiv.py <D> <maxN>`
+运行 `python3 fastdiv.py` 或 `python3 fastdiv.py <D> <maxN>`
 
-## Common Fast Division Parameters Table
+## 常用快速除法表
 
 | D                   | maxN                 | S   | M                    | K   | type |
 | ------------------- | -------------------- | --- | -------------------- | --- | ---- |
