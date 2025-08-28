@@ -16,6 +16,8 @@ LJSON is a dual-mode data processing engine designed for extreme performance, se
     * Comprehensive JSON Processing: Full compliance with JSON5 specification, offering DOM/SAX dual parsing modes and file stream processing capabilities
     * Numerical Conversion Engine: Proprietary ldouble algorithm enabling bidirectional floating-point string conversion, outperforming traditional solutions
 
+> Note: On the 64-bit operating system, from the version v5.0.0, the object byte size has been reduced from 40 bytes to 32 bytes, resulting in a 5% to 10% improvement in parsing speed. However, it is not compatible with the version v3.x.x series.
+
 ## Key Features
 
 ### LJSON Features

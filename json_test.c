@@ -153,21 +153,21 @@ int test_json_sax_print(void)
 
     handle = json_sax_print_format_start(10, NULL);
     json_sax_print_object_start(handle, NULL);
-    jkey.str = (char *)"Name", jkey.len = 4;
-    jstr.str = (char *)"LengJing", jstr.len = 8;
+    jkey.str = (char *)"Name", jkey.info.len = 4;
+    jstr.str = (char *)"LengJing", jstr.info.len = 8;
     json_sax_print_object_item(handle, &jkey, &jstr);
-    jkey.str = (char *)"Age", jkey.len = 3;
+    jkey.str = (char *)"Age", jkey.info.len = 3;
     json_sax_print_object_item(handle, &jkey, 30);
-    jkey.str = (char *)"Phone", jkey.len = 5;
-    jstr.str = (char *)"18368887550", jstr.len = 11;
+    jkey.str = (char *)"Phone", jkey.info.len = 5;
+    jstr.str = (char *)"18368887550", jstr.info.len = 11;
     json_sax_print_object_item(handle, &jkey, &jstr);
-    jkey.str = (char *)"Hobby", jkey.len = 5;
+    jkey.str = (char *)"Hobby", jkey.info.len = 5;
     json_sax_print_array_start(handle, &jkey);
-    jstr.str = (char *)"Reading", jstr.len = 7;
+    jstr.str = (char *)"Reading", jstr.info.len = 7;
     json_sax_print_array_item(handle, &jstr);
-    jstr.str = (char *)"Walking", jstr.len = 7;
+    jstr.str = (char *)"Walking", jstr.info.len = 7;
     json_sax_print_array_item(handle, &jstr);
-    jstr.str = (char *)"Thinking", jstr.len = 8;
+    jstr.str = (char *)"Thinking", jstr.info.len = 8;
     json_sax_print_array_item(handle, &jstr);
     json_sax_print_array_finish(handle);
     json_sax_print_object_finish(handle);
@@ -187,7 +187,7 @@ json_sax_ret_t _sax_parser_cb(json_sax_parser_t *parser)
     json_string_t *jkey = &parser->array[parser->index];
 
     if (parser->index == 0) {
-        switch (parser->array[parser->index].type) {
+        switch (parser->array[parser->index].info.type) {
         case JSON_ARRAY:
         case JSON_OBJECT:
             if (parser->value.vcmd == JSON_SAX_START) {
@@ -206,7 +206,7 @@ json_sax_ret_t _sax_parser_cb(json_sax_parser_t *parser)
         }
     }
 
-    switch (parser->array[parser->index].type) {
+    switch (parser->array[parser->index].info.type) {
     case JSON_NULL:
         json_sax_print_null(handle, jkey);
         break;
@@ -242,7 +242,7 @@ json_sax_ret_t _sax_parser_cb(json_sax_parser_t *parser)
     }
 
     if (parser->index == 0) {
-        switch (parser->array[parser->index].type) {
+        switch (parser->array[parser->index].info.type) {
         case JSON_ARRAY:
         case JSON_OBJECT:
             if (parser->value.vcmd == JSON_SAX_FINISH) {

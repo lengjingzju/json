@@ -14,7 +14,7 @@
 extern "C" {
 #endif
 
-#define JSON_VERSION                    0x030307
+#define JSON_VERSION                    0x050000
 #define JSON_SAX_APIS_SUPPORT           1
 
 /**************** json object structure / json对象结构 ****************/
@@ -31,22 +31,6 @@ extern "C" {
  */
 struct json_list {
     struct json_list *next;
-};
-
-/*
- * struct json_list_head - the head of json list
- * @next: the next list
- * @prev: the last list
- * @description: LJSON uses it to manage json objects and memory blocks
- */
-/*
- * struct json_list_head - 挂载链表的头
- * @next: 指向头对象的链表节点
- * @prev: 指向尾对象的链表节点
- * @description: LJSON使用它管理JSON对象和内存块的节点
- */
-struct json_list_head {
-    struct json_list *next, *prev;
 };
 
 /*
@@ -71,21 +55,19 @@ typedef enum {
 } json_type_t;
 
 /*
- * json_string_t - the json string object value or type-key value
+ * json_strinfo_t - the information of json string object value or type-key value
  * @type: the json object type (json_type_t), it is only valid when used as a key
  * @escaped: whether the string contains characters that need to be escaped
  * @alloced: whether the string is alloced, it is only valid for SAX APIs
  * @len: the length of string
- * @str: the value of string
  * @description: LJSON uses string with information to accelerate printing.
  */
 /*
- * json_string_t - json对象的键或字符串类型的值
+ * json_strinfo_t - json对象的键或字符串类型的值的信息
  * @type: json对象的类型，只在作为json对象的键时才有效
  * @escaped: 是否含转义字符
  * @alloced: 是否是在堆中分配，只在SAX接口中有效
  * @len: 字符串长度
- * @str: 字符串数据
  * @description: LJSON使用此结构就知道了字符串长度，可以加快数据处理
  */
 typedef struct {
@@ -94,7 +76,23 @@ typedef struct {
     uint32_t alloced:1;
     uint32_t reserved:2;
     uint32_t len:24;
+} json_strinfo_t;
+
+/*
+ * json_string_t - the json string with information
+ * @str: the value of string
+ * @info: the information of string
+ * @description: LJSON uses string with information to accelerate printing.
+ */
+/*
+ * json_string_t - 带信息的字符串
+ * @str: 字符串数据
+ * @info: 字符串信息
+ * @description: LJSON使用此结构就知道了字符串长度，可以加快数据处理
+ */
+typedef struct {
     char *str;
+    json_strinfo_t info;
 } json_string_t;
 
 /*
@@ -114,27 +112,10 @@ typedef union {
     double vdbl;
 } json_number_t;
 
-#if JSON_SAX_APIS_SUPPORT
-/*
- * json_sax_cmd_t - the beginning and end of JSON_ARRAY or JSON_OBJECT object
- * @description: We know that parentheses have two sides, `JSON_SAX_START` indicates left side,
- *   and `JSON_SAX_FINISH` indicates right side.
- */
-/*
- * json_sax_cmd_t - SAX APIs中指示JSON_ARRAY或JSON_OBJECT的开始和结束
- * @description: 集合类型是括号包起来的，JSON_SAX_START表示左边括号, JSON_SAX_FINISH指示右边括号
- */
-typedef enum {
-    JSON_SAX_START = 0,
-    JSON_SAX_FINISH
-} json_sax_cmd_t;
-#endif
-
 /*
  * json_value_t - the json object value
  * @vnum: the numerical value
  * @vstr: the string value
- * @vcmd: the SAX array or object value, only for SAX APIs
  * @head: the DOM array or object value, LJSON manages child json objects through the list head
  * @description: LJSON uses union to manage the value of different objects to save memory.
  */
@@ -142,37 +123,39 @@ typedef enum {
  * json_value_t - json对象的值
  * @vnum: 数字类型的值
  * @vstr: 字符串类型的值
- * @vcmd: SAX APIs指示集合对象的开始和结束
- * @head: 集合对象的子节点挂载的链表头
+ * @head: 集合对象的子节点挂载的链表头，指向最后一个元素(非空时)或自己(空时)
  * @description: LJSON使用union管理对象的值从而节省内存空间
  */
 typedef union {
     json_number_t vnum;
-    json_string_t vstr;
-#if JSON_SAX_APIS_SUPPORT
-    json_sax_cmd_t vcmd;
-#endif
-    struct json_list_head head;
+    char *vstr;
+    struct json_list head;
 } json_value_t;
 
 /*
  * json_object - the json object
  * @list: the list value, LJSON associates `list` to the `head` of parent json object
  *   or the `list` of brother json objects
- * @jkey: the json object type and key, only the child objects of JSON_OBJECT have key
+ * @key: the json object key, only the child objects of JSON_OBJECT have key
+ * @ikey: the information of key (contains json object type)
+ * @istr: the information of value.str
  * @value: the json object value
  * @description: LJSON uses union to manage the value of different objects to save memory.
  */
 /*
  * json_object - json对象
  * @list: 链表节点，指向下一个对象或父对象的链表头
- * @jkey: json对象的类型和键值，只有JSON_OBJECT的子对象才有键值
+ * @key: json对象的键值，只有JSON_OBJECT的子对象才有键值
+ * @ikey: key字符串信息(含json类型)
+ * @istr: value.str字符串信息
  * @value: json对象的值
  * @description: LJSON使用更紧凑的内存结构以节省内存
  */
 typedef struct {
     struct json_list list;
-    json_string_t jkey;
+    char *key;
+    json_strinfo_t ikey;
+    json_strinfo_t istr;
     json_value_t value;
 } json_object;
 
@@ -369,20 +352,38 @@ json_string_t*  : json_create_string_array)(values, count)
 #endif
 
 /*
+ * json_string_info_get - Get the information for json string
+ * @str: IN, the string
+ * @orig: IN, the original information of the string, can be NULL
+ * @return: the information of the string
+ * @description: if str contains `"  \  \b  \f  \n  \r  \t  \v`, escaped will be set
+ */
+/*
+ * json_string_info_get - 获取json_string_t的信息
+ * @str: IN, 要处理的字符串
+ * @orig: IN, 字符串原始信息，可以为NULL
+ * @return: 字符串信息
+ * @description: str含有 `"  \  \b  \f  \n  \r  \t  \v` 字符时会设置escaped
+ */
+json_strinfo_t json_string_info_get(const char *str, const json_strinfo_t *orig);
+
+/*
  * json_string_info_update - Update the parameters for json string
  * @jstr: INOUT, the LJSON string
  * @return: None
- * @description: If jstr->len is not equal to 0, the parameters will not be updated
- *   if jstr->str contains `"  \  \b  \f  \n  \r  \t  \v`, v->escaped will be set
+ * @description: If jstr->info.len is not equal to 0, the parameters will not be updated
  */
 /*
  * json_string_info_update - 更新json_string_t的信息
  * @jstr: INOUT, 要处理的对象
  * @return: 无返回值
- * @description: jstr->len是0时数据才会更新
- *   含有 `"  \  \b  \f  \n  \r  \t  \v` 字符时会设置v->escaped
+ * @description: jstr->info.len是0时数据才会更新
  */
-void json_string_info_update(json_string_t *jstr);
+static inline void json_string_info_update(json_string_t *jstr)
+{
+    if (!jstr->info.len)
+        jstr->info = json_string_info_get(jstr->str, &jstr->info);
+}
 
 /*
  * json_string_hash_code - Calculate the hash code of json string
@@ -397,19 +398,45 @@ void json_string_info_update(json_string_t *jstr);
 uint32_t json_string_hash_code(json_string_t *jstr);
 
 /*
+ * json_get_string_value - Get the string of JSON_STRING object
+ * @json: IN, the json object to be get
+ * @jstr: OUT, store the LJSON string value
+ * @return: NULL on failure, 0 on success
+ */
+/*
+ * json_get_string_value - 获取JSON_STRING类型的json对象的值
+ * @json: IN, 被获取值的json对象
+ * @jstr: OUT, 存储获取到的值
+ * @return: 失败返回NULL；成功返回jstr
+ */
+static inline json_string_t *json_get_string_value(json_object *json, json_string_t *jstr)
+{
+    if (json->ikey.type == JSON_STRING) {
+        jstr->info = json->istr;
+        jstr->str = json->value.vstr;
+        return jstr;
+    }
+    return NULL;
+}
+
+/*
  * json_string_strdup - Strdup the LJSON string src to dst
  * @src: IN, the source string
+ * @isrc: INOUT, the information of the source string, can be NULL
  * @dst: OUT, the destination string
+ * @idst: OUT, the information of the destination string, can not be NULL
  * @return: -1 on failure, 0 on success
  */
 /*
  * json_string_strdup - 复制字符串数据
- * @src: IN, 源
- * @dst: OUT, 目标
+ * @src: IN, 源字符串
+ * @isrc: INOUT, 源字符串信息，可以为NULL
+ * @dst: OUT, 目标字符串
+ * @idst: OUT, 目标字符串信息，不能为NULL
  * @return: 失败返回-1；成功返回0
  * @description: 如果dst足够容纳src的数据，将不会进行内存分配
  */
-int json_string_strdup(json_string_t *src, json_string_t *dst);
+int json_string_strdup(const char *src, json_strinfo_t *isrc, char **dst, json_strinfo_t *idst);
 
 /*
  * json_set_key - Set the key of json object
@@ -425,7 +452,7 @@ int json_string_strdup(json_string_t *src, json_string_t *dst);
  */
 static inline int json_set_key(json_object *json, json_string_t *jkey)
 {
-    return json_string_strdup(jkey, &json->jkey);
+    return json_string_strdup(jkey->str, &jkey->info, &json->key, &json->ikey);
 }
 
 /*
@@ -442,8 +469,8 @@ static inline int json_set_key(json_object *json, json_string_t *jkey)
  */
 static inline int json_set_string_value(json_object *json, json_string_t *jstr)
 {
-    if (json->jkey.type == JSON_STRING) {
-        return json_string_strdup(jstr, &json->value.vstr);
+    if (json->ikey.type == JSON_STRING) {
+        return json_string_strdup(jstr->str, &jstr->info, &json->value.vstr, &json->istr);
     }
     return -1;
 }
@@ -902,6 +929,7 @@ json_string_t*  : json_add_string_to_object)(object, jkey, value)
  * The below APIs are also available to pool json / 下面的接口也可用于pjson:
  * json_item_total_get
  * json_string_info_update
+ * json_get_string_value
  * json_get_number_value / ...
  * json_set_number_value / ...
  * json_get_array_size
@@ -958,7 +986,7 @@ typedef struct {
  * @description: 该管理节点管理一组块内存节点
  */
 typedef struct {
-    struct json_list_head head;
+    struct json_list head;
     size_t mem_size;
     json_mem_node_t *cur_node;
 } json_mem_mgr_t;
@@ -1155,17 +1183,23 @@ json_string_t*  : pjson_create_string_array)(values, count, mem)
 /*
  * pjson_string_strdup - Strdup the LJSON string src to dst
  * @src: IN, the source string
+ * @isrc: INOUT, the information of the source string, can be NULL
  * @dst: OUT, the destination string
+ * @idst: OUT, the information of the destination string, can not be NULL
+ * @mgr: IN, block memory manager
  * @return: -1 on failure, 0 on success
  */
 /*
- * pjson_string_strdup - 复制LJSON字符串src到dst
+ * pjson_string_strdup - 复制字符串数据
  * @src: IN, 源字符串
+ * @isrc: INOUT, 源字符串信息，可以为NULL
  * @dst: OUT, 目标字符串
+ * @idst: OUT, 目标字符串信息，不能为NULL
  * @mgr: IN, 块内存管理器
- * @return: 失败返回 -1；成功返回 0
+ * @return: 失败返回-1；成功返回0
+ * @description: 如果dst足够容纳src的数据，将不会进行内存分配
  */
-int pjson_string_strdup(json_string_t *src, json_string_t *dst, json_mem_mgr_t *mgr);
+int pjson_string_strdup(const char *src, json_strinfo_t *isrc, char **dst, json_strinfo_t *idst, json_mem_mgr_t *mgr);
 
 /*
  * pjson_set_key - Set the key of json object
@@ -1183,7 +1217,7 @@ int pjson_string_strdup(json_string_t *src, json_string_t *dst, json_mem_mgr_t *
  */
 static inline int pjson_set_key(json_object *json, json_string_t *jkey, json_mem_t *mem)
 {
-    return pjson_string_strdup(jkey, &json->jkey, &mem->key_mgr);
+    return pjson_string_strdup(jkey->str, &jkey->info, &json->key, &json->ikey, &mem->key_mgr);
 }
 
 /*
@@ -1202,8 +1236,8 @@ static inline int pjson_set_key(json_object *json, json_string_t *jkey, json_mem
  */
 static inline int pjson_set_string_value(json_object *json, json_string_t *jstr, json_mem_t *mem)
 {
-    if (json->jkey.type == JSON_STRING) {
-        return pjson_string_strdup(jstr, &json->value.vstr, &mem->str_mgr);
+    if (json->ikey.type == JSON_STRING) {
+        return pjson_string_strdup(jstr->str, &jstr->info, &json->value.vstr, &json->istr, &mem->str_mgr);
     }
     return -1;
 }
@@ -1783,6 +1817,20 @@ static inline json_object *json_fast_parse_file(const char *path, json_mem_t *me
 #if JSON_SAX_APIS_SUPPORT
 
 /*
+ * json_sax_cmd_t - the beginning and end of JSON_ARRAY or JSON_OBJECT object
+ * @description: We know that parentheses have two sides, `JSON_SAX_START` indicates left side,
+ *   and `JSON_SAX_FINISH` indicates right side.
+ */
+/*
+ * json_sax_cmd_t - SAX APIs中指示JSON_ARRAY或JSON_OBJECT的开始和结束
+ * @description: 集合类型是括号包起来的，JSON_SAX_START表示左边括号, JSON_SAX_FINISH指示右边括号
+ */
+typedef enum {
+    JSON_SAX_START = 0,
+    JSON_SAX_FINISH
+} json_sax_cmd_t;
+
+/*
  * json_sax_print_hd - the handle of SAX printer
  * @description: It is a pointer of `json_sax_print_t`
  */
@@ -2010,6 +2058,26 @@ char *json_sax_print_finish(json_sax_print_hd handle, size_t *length, json_print
 /**************** json SAX parser / SAX解析器 ****************/
 
 /*
+ * json_sax_value_t - the json object value
+ * @vnum: the numerical value
+ * @vstr: the string value
+ * @vcmd: the SAX array or object value, only for SAX APIs
+ * @description: LJSON uses union to manage the value of different objects to save memory.
+ */
+/*
+ * json_value_t - json对象的值
+ * @vnum: 数字类型的值
+ * @vstr: 字符串类型的值
+ * @vcmd: SAX APIs指示集合对象的开始和结束
+ * @description: LJSON使用union管理对象的值从而节省内存空间
+ */
+typedef union {
+    json_number_t vnum;
+    json_string_t vstr;
+    json_sax_cmd_t vcmd;
+} json_sax_value_t;
+
+/*
  * json_sax_parser_t - the description passed by SAX parser to the callback function
  * @total: the size of depth array
  * @index: the current index of JSON type and key
@@ -2029,7 +2097,7 @@ typedef struct {
     int total;
     int index;
     json_string_t *array;
-    json_value_t value;
+    json_sax_value_t value;
 } json_sax_parser_t;
 
 /*
