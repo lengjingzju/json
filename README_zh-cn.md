@@ -4,6 +4,8 @@
 
 [LJSON：全能、高性能、真流式的 C 语言 JSON 引擎和数值引擎](./notes/introduction_zh-cn.md)
 
+[LJSON 高性能优化的平衡之道：哲学思维与工程实践](./notes/optimization_zh-cn.md)
+
 [yyjson ≠ 万能王者：它只是 LJSON DOM 复用模式的一个特化版本](./notes/cmp_yyjson_zh-cn.md)
 
 [一种有限定义域内快速整除的实现方法](./notes/fastdiv_zh-cn.md)

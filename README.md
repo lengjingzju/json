@@ -4,6 +4,8 @@
 
 [LJSON: The Versatile, High-Performance, Truly Streaming C Language JSON and Numerical Engine](./notes/introduction.md)
 
+[LJSON's Balancing Act for High-Performance Optimization: Philosophical Thinking and Engineering Practice](./notes/optimization.md)
+
 [yyjson ≠ The Universal Champion: It's Just a Specialized Instance of LJSON's DOM Reuse Mode](./notes/cmp_yyjson.md)
 
 [A Method for Fast Division Within a Limited Domain](./notes/fastdiv.md)
