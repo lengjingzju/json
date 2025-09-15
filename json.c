@@ -55,6 +55,11 @@ extern int dragonbox_dtoa(double num, char *buffer);
 #define json_dtoa                       jnum_dtoa
 #endif
 
+/* Whether to use manual loop unfolding */
+#ifndef JSON_MANUAL_LOOP_UNFOLD
+#define JSON_MANUAL_LOOP_UNFOLD         1
+#endif
+
 /* Whether to allow C-like single-line comments and multi-line comments */
 #ifndef JSON_PARSE_SKIP_COMMENT
 #define JSON_PARSE_SKIP_COMMENT         0
@@ -1526,7 +1531,13 @@ typedef struct _json_print_t {
 
 static inline char _is_escape_char(uint8_t val)
 {
-#define ESCAPE_UTF16_VAL    1
+#define ESCAPE_UTF16_VAL        1
+#if JSON_PRINT_UTF16_SUPPORT
+#define PRINT_STR_CMP_VAL       0
+#else
+#define PRINT_STR_CMP_VAL       ESCAPE_UTF16_VAL
+#endif
+
     /*
     // To get char_escape_lut
     void print_char_escape_lut(void)
@@ -1694,12 +1705,13 @@ err:
 
 static inline int _json_print_string(json_print_t *print_ptr, const char *val, json_strinfo_t *info)
 {
-#define _JSON_PRINT_SEGMENT()     do {  \
-    size = str - bak - 1;               \
-    memcpy(cur, bak, size);             \
-    cur += size;                        \
-    bak = str;                          \
+#define _JSON_PRINT_SEGMENT()   do {  \
+    size = str - bak - 1;             \
+    memcpy(cur, bak, size);           \
+    cur += size;                      \
+    bak = str;                        \
 } while(0)
+
 
     char c = '\0', ch = '\0';
     size_t len = 0, size = 0, alloced = 0;
@@ -1729,37 +1741,54 @@ static inline int _json_print_string(json_print_t *print_ptr, const char *val, j
     _PRINT_PTR_REALLOC(alloced);
     cur = print_ptr->cur;
     *cur++ = '\"';
-
     bak = str;
-    while (str < end) {
-        c = *str++;
-        ch = _is_escape_char((uint8_t)c);
-        if (unlikely(ch > ESCAPE_UTF16_VAL)) {
-            _JSON_PRINT_SEGMENT();
-            *cur++ = '\\';
-            *cur++ = ch;
-        }
-#if JSON_PRINT_UTF16_SUPPORT
-        else if (unlikely(ch)) {
-            static const char hex_char_lut[] = {
-                '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'a', 'b', 'c', 'd', 'e', 'f'
-            };
-            unsigned char uc = c;
 
-            _JSON_PRINT_SEGMENT();
-            memcpy(cur, "\\u00", 4);
-            cur += 4;
-            *cur++ = hex_char_lut[uc >> 4 & 0xf];
-            *cur++ = hex_char_lut[uc & 0xf];
-        }
-#endif
+loop:
+#if JSON_MANUAL_LOOP_UNFOLD
+    while (end - str >= 8) {
+        c = *str++; ch = _is_escape_char((uint8_t)c); if (unlikely(ch > PRINT_STR_CMP_VAL)) goto next;
+        c = *str++; ch = _is_escape_char((uint8_t)c); if (unlikely(ch > PRINT_STR_CMP_VAL)) goto next;
+        c = *str++; ch = _is_escape_char((uint8_t)c); if (unlikely(ch > PRINT_STR_CMP_VAL)) goto next;
+        c = *str++; ch = _is_escape_char((uint8_t)c); if (unlikely(ch > PRINT_STR_CMP_VAL)) goto next;
+        c = *str++; ch = _is_escape_char((uint8_t)c); if (unlikely(ch > PRINT_STR_CMP_VAL)) goto next;
+        c = *str++; ch = _is_escape_char((uint8_t)c); if (unlikely(ch > PRINT_STR_CMP_VAL)) goto next;
+        c = *str++; ch = _is_escape_char((uint8_t)c); if (unlikely(ch > PRINT_STR_CMP_VAL)) goto next;
+        c = *str++; ch = _is_escape_char((uint8_t)c); if (unlikely(ch > PRINT_STR_CMP_VAL)) goto next;
     }
+#endif
+    while (end > str) {
+        c = *str++; ch = _is_escape_char((uint8_t)c); if (unlikely(ch > PRINT_STR_CMP_VAL)) goto next;
+    }
+    goto end;
 
+next:
+    _JSON_PRINT_SEGMENT();
+#if JSON_PRINT_UTF16_SUPPORT
+    if (unlikely(ch == ESCAPE_UTF16_VAL)) {
+        static const char hex_char_lut[] = {
+            '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'a', 'b', 'c', 'd', 'e', 'f'
+        };
+        unsigned char uc = c;
+        memcpy(cur, "\\u00", 4);
+        cur += 4;
+        *cur++ = hex_char_lut[uc >> 4 & 0xf];
+        *cur++ = hex_char_lut[uc & 0xf];
+    }
+    else
+#endif
+    {
+        *cur++ = '\\';
+        *cur++ = ch;
+    }
+    goto loop;
+
+end:
     ++str;
     _JSON_PRINT_SEGMENT();
     *cur++ = '\"';
     print_ptr->cur = cur;
     return 0;
+
 err:
     JsonErr("malloc failed!\n");
     return -1;
@@ -3210,8 +3239,19 @@ next:
 #endif
     str = (unsigned char *)(parse_ptr->str + parse_ptr->offset);
     bak = str;
-    while (IS_BLANK(*str))
-        ++str;
+    while (1) {
+        if (IS_BLANK(*str)) ++str; else break;
+#if JSON_MANUAL_LOOP_UNFOLD
+        if (IS_BLANK(*str)) ++str; else break;
+        if (IS_BLANK(*str)) ++str; else break;
+        if (IS_BLANK(*str)) ++str; else break;
+        if (IS_BLANK(*str)) ++str; else break;
+        if (IS_BLANK(*str)) ++str; else break;
+        if (IS_BLANK(*str)) ++str; else break;
+        if (IS_BLANK(*str)) ++str; else break;
+#endif
+    }
+
     _UPDATE_PARSE_OFFSET(str - bak);
 
 #if JSON_PARSE_SKIP_COMMENT
@@ -3243,123 +3283,142 @@ static int _json_parse_string_reuse(json_parse_t *parse_ptr, char end_ch UNUSED_
     ptr = str;
     *ppstr = str;
 
+loop1:
     while (1) {
-        c = *str++;
-        if (unlikely(_is_special_char((uint8_t)c))) {
-            switch (c) {
-            case '\"':
-#if JSON_PARSE_SPECIAL_QUOTES
-            case '\'':
-            case ':':
-                if (c == end_ch)
+        c = *str++; if (unlikely(_is_special_char((uint8_t)c))) goto next1;
+#if JSON_MANUAL_LOOP_UNFOLD
+        c = *str++; if (unlikely(_is_special_char((uint8_t)c))) goto next1;
+        c = *str++; if (unlikely(_is_special_char((uint8_t)c))) goto next1;
+        c = *str++; if (unlikely(_is_special_char((uint8_t)c))) goto next1;
+        c = *str++; if (unlikely(_is_special_char((uint8_t)c))) goto next1;
+        c = *str++; if (unlikely(_is_special_char((uint8_t)c))) goto next1;
+        c = *str++; if (unlikely(_is_special_char((uint8_t)c))) goto next1;
+        c = *str++; if (unlikely(_is_special_char((uint8_t)c))) goto next1;
 #endif
-                {
-                    len = (int)(str - bak - 1);
-                    _UPDATE_PARSE_OFFSET(len);
-                    ptr[len] = '\0';
-                    pinfo->escaped = escaped != 0;
-                    pinfo->len = len;
-                    return len;
-                }
-#if JSON_PARSE_SPECIAL_QUOTES
-                if (c == '\"' && !escaped)
-                    escaped = -1;
-                break;
-#endif
-
-            case '\0':
-                goto err;
-            case '\\':
-                --str;
-                last = str;
-                ptr += str - bak;
-                c = *str++;
-                goto next;
-            default:
-#if !JSON_PARSE_SPECIAL_CHAR
-                /* case '\b': case '\f': case '\n': case '\r': case '\t': case '\v': */
-                JsonErr("tab and linebreak can't be existed in string in standard json!\n");
-                goto err;
-#else
-                break;
-#endif
-            }
-        }
     }
 
-    while (1) {
-        c = *str++;
-        if (unlikely(_is_special_char((uint8_t)c))) {
-next:
-            switch (c) {
-            case '\"':
+next1:
+    switch (c) {
+    case '\"':
 #if JSON_PARSE_SPECIAL_QUOTES
-            case '\'':
-            case ':':
-                if (c == end_ch)
+    case '\'':
+    case ':':
+        if (c == end_ch)
 #endif
-                {
-                    size = (int)(str - last - 1);
-                    memmove(ptr, last, size);
-                    ptr += size;
-                    *ptr = '\0';
-                    len = (int)(str - bak - 1);
-                    _UPDATE_PARSE_OFFSET(len);
-                    pinfo->escaped = 1;
-                    pinfo->len = (uint32_t)(ptr - bak);
-                    return pinfo->len;
-                }
-                break;
-
-            case '\0':
-                goto err;
-            case '\\':
-                size = (int)(str - last - 1);
-                memmove(ptr, last, size);
-                ptr += size;
-
-                switch ((*str++)) {
-                case 'b' : *ptr++ = '\b'; break;
-                case 'f' : *ptr++ = '\f'; break;
-                case 'n' : *ptr++ = '\n'; break;
-                case 'r' : *ptr++ = '\r'; break;
-                case 't' : *ptr++ = '\t'; break;
-                case 'v' : *ptr++ = '\v'; break;
-                case '\"': *ptr++ = '\"'; break;
-                case '\'': *ptr++ = '\''; break;
-                case '\\': *ptr++ = '\\'; break;
-                case '/' : *ptr++ = '/' ; break;
-#if JSON_PARSE_SPECIAL_CHAR
-                case '\r': if (*str == '\n') ++str; break;
-                case '\n': break;
-#endif
-                case 'u' :
-                    str -= 2;
-                    if (unlikely((seq_len = utf16_literal_to_utf8((unsigned char*)str,
-                                    (unsigned char*)end, (unsigned char**)&ptr)) == 0)) {
-                        JsonErr("invalid utf16 code(\\u%c)!\n", str[2]);
-                        goto err;
-                    }
-                    str += seq_len;
-                    break;
-
-                default :
-                    JsonErr("invalid escape character(\\%c)!\n", str[1]);
-                    goto err;
-                }
-
-                last = str;
-                break;
-            default:
-#if !JSON_PARSE_SPECIAL_CHAR
-                /* case '\b': case '\f': case '\n': case '\r': case '\t': case '\v': */
-                JsonErr("tab and linebreak can't be existed in string in standard json!\n");
-                goto err;
-#else
-                break;
-#endif
-            }
+        {
+            len = (int)(str - bak - 1);
+            _UPDATE_PARSE_OFFSET(len);
+            ptr[len] = '\0';
+            pinfo->escaped = escaped != 0;
+            pinfo->len = len;
+            return len;
         }
+#if JSON_PARSE_SPECIAL_QUOTES
+        if (c == '\"' && !escaped)
+            escaped = -1;
+        goto loop1;
+#endif
+
+    case '\0':
+        goto err;
+    case '\\':
+        --str;
+        last = str;
+        ptr += str - bak;
+        c = *str++;
+        goto next2;
+    default:
+#if !JSON_PARSE_SPECIAL_CHAR
+        /* case '\b': case '\f': case '\n': case '\r': case '\t': case '\v': */
+        JsonErr("tab and linebreak can't be existed in string in standard json!\n");
+        goto err;
+#else
+        goto loop1;
+#endif
+    }
+
+loop2:
+    while (1) {
+        c = *str++; if (unlikely(_is_special_char((uint8_t)c))) goto next2;
+#if JSON_MANUAL_LOOP_UNFOLD
+        c = *str++; if (unlikely(_is_special_char((uint8_t)c))) goto next2;
+        c = *str++; if (unlikely(_is_special_char((uint8_t)c))) goto next2;
+        c = *str++; if (unlikely(_is_special_char((uint8_t)c))) goto next2;
+        c = *str++; if (unlikely(_is_special_char((uint8_t)c))) goto next2;
+        c = *str++; if (unlikely(_is_special_char((uint8_t)c))) goto next2;
+        c = *str++; if (unlikely(_is_special_char((uint8_t)c))) goto next2;
+        c = *str++; if (unlikely(_is_special_char((uint8_t)c))) goto next2;
+#endif
+    }
+
+next2:
+    switch (c) {
+    case '\"':
+#if JSON_PARSE_SPECIAL_QUOTES
+    case '\'':
+    case ':':
+        if (c == end_ch)
+#endif
+        {
+            size = (int)(str - last - 1);
+            memmove(ptr, last, size);
+            ptr += size;
+            *ptr = '\0';
+            len = (int)(str - bak - 1);
+            _UPDATE_PARSE_OFFSET(len);
+            pinfo->escaped = 1;
+            pinfo->len = (uint32_t)(ptr - bak);
+            return pinfo->len;
+        }
+        goto loop2;
+
+    case '\0':
+        goto err;
+    case '\\':
+        size = (int)(str - last - 1);
+        memmove(ptr, last, size);
+        ptr += size;
+
+        switch ((*str++)) {
+        case 'b' : *ptr++ = '\b'; break;
+        case 'f' : *ptr++ = '\f'; break;
+        case 'n' : *ptr++ = '\n'; break;
+        case 'r' : *ptr++ = '\r'; break;
+        case 't' : *ptr++ = '\t'; break;
+        case 'v' : *ptr++ = '\v'; break;
+        case '\"': *ptr++ = '\"'; break;
+        case '\'': *ptr++ = '\''; break;
+        case '\\': *ptr++ = '\\'; break;
+        case '/' : *ptr++ = '/' ; break;
+#if JSON_PARSE_SPECIAL_CHAR
+        case '\r': if (*str == '\n') ++str; break;
+        case '\n': break;
+#endif
+        case 'u' :
+            str -= 2;
+            if (unlikely((seq_len = utf16_literal_to_utf8((unsigned char*)str,
+                            (unsigned char*)end, (unsigned char**)&ptr)) == 0)) {
+                JsonErr("invalid utf16 code(\\u%c)!\n", str[2]);
+                goto err;
+            }
+            str += seq_len;
+            break;
+
+        default :
+            JsonErr("invalid escape character(\\%c)!\n", str[1]);
+            goto err;
+        }
+
+        last = str;
+        goto loop2;
+    default:
+#if !JSON_PARSE_SPECIAL_CHAR
+        /* case '\b': case '\f': case '\n': case '\r': case '\t': case '\v': */
+        JsonErr("tab and linebreak can't be existed in string in standard json!\n");
+        goto err;
+#else
+        goto loop2;
+#endif
     }
 
 err:

@@ -617,7 +617,7 @@ endef
 define compile_cmd
 	$(PREAT)mkdir -p $$(dir $$@)
 ifeq ($(filter $(1),$(ASM_SUFFIX)), )
-	$(PREAT)$(2) -c $(if $(filter $(1),$(CXX_SUFFIX)),$$(CXXFLAGS),$$(CFLAGS)) $$(imake_cpflags) $$(CPFLAGS) $$(CFLAGS_$$(patsubst $$(OBJ_PREFIX)/%,%,$$@)) $$(PRIVATE_CPFLAGS) -MM -MT $$@ -MF $$(patsubst %.o,%.d,$$@) $$<
+	$(PREAT)$(2) $(if $(filter $(1),$(CXX_SUFFIX)),$$(CXXFLAGS),$$(CFLAGS)) $$(imake_cpflags) $$(CPFLAGS) $$(CFLAGS_$$(patsubst $$(OBJ_PREFIX)/%,%,$$@)) $$(PRIVATE_CPFLAGS) -MM -MT $$@ -MF $$(patsubst %.o,%.d,$$@) $$<
 	$(PREAT)cat $$(patsubst %.o,%.d,$$@) | sed -e 's/#.*//' -e 's/^[^:]*:\s*//' -e 's/\s*\\$$$$//' -e 's/[ \t\v][ \t\v]*/\n/g' | sed -e '/^$$$$/ d' -e 's/$$$$/:/g' >> $$(patsubst %.o,%.d,$$@)
 endif
 	$(PREAT)$(COLORECHO) "\033[032m$(2)\033[0m	$$<" $(TOLOG)
