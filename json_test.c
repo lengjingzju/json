@@ -285,7 +285,7 @@ int test_reuse_parse_repeat(const char *file, int times)
 
     bak = (char *)malloc(size + 1);
     if (!bak) {
-        printf("malloc (%lu) failed!\n", size + 1);
+        printf("malloc (%u) failed!\n", (unsigned int)(size + 1));
         read_file_data_free(&data, &size);
         return -1;
     }

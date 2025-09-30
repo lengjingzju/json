@@ -19,11 +19,14 @@
 #endif
 #else
 #include <io.h>
+#include <BaseTsd.h>     // for SSIZE_T
+#ifndef ssize_t
+typedef SSIZE_T ssize_t;
+#endif
 #define open                            _open
 #define close                           _close
 #define read                            _read
 #define write                           _write
-#define ssize_t                         int
 #pragma warning(disable: 4996)
 #endif
 
@@ -213,7 +216,7 @@ static inline bool json_list_empty(struct json_list *head)
 
 static inline void json_list_add_tail(struct json_list *list, struct json_list *head)
 {
-    if (json_list_empty(head)) {
+    if (unlikely(json_list_empty(head))) {
         list->next = list;
         head->next = list;
     } else {
@@ -2464,7 +2467,7 @@ static int _get_file_parse_ptr(json_parse_t *parse_ptr, int read_offset, size_t 
         size = (ssize_t)(parse_ptr->readed - read_offset);
     }
 
-    return size;
+    return (int)size;
 }
 
 static inline int _get_str_parse_ptr(json_parse_t *parse_ptr, int read_offset, size_t read_size UNUSED_ATTR, char **sstr)
