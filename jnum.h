@@ -109,11 +109,39 @@ next:
     return (int)(jnum_parse_num(s, type, value) + (s - str));
 }
 
+#define jnum_to_func(rtype, fname)                      \
+rtype fname(const char *str)                            \
+{                                                       \
+    jnum_type_t type;                                   \
+    jnum_value_t value;                                 \
+    rtype val = 0;                                      \
+    jnum_parse(str, &type, &value);                     \
+    switch (type) {                                     \
+    case JNUM_BOOL:   val = (rtype)value.vbool;break;   \
+    case JNUM_INT:    val = (rtype)value.vint; break;   \
+    case JNUM_HEX:    val = (rtype)value.vhex; break;   \
+    case JNUM_LINT:   val = (rtype)value.vlint;break;   \
+    case JNUM_LHEX:   val = (rtype)value.vlhex;break;   \
+    case JNUM_DOUBLE: val = (rtype)value.vdbl; break;   \
+    default:          val = 0;                 break;   \
+    }                                                   \
+    return val;                                         \
+}
+
+#if defined(_MSC_VER)
+/* MSVC's performance deteriorates after using inline */
 int32_t jnum_atoi(const char *str);
 int64_t jnum_atol(const char *str);
 uint32_t jnum_atoh(const char *str);
 uint64_t jnum_atolh(const char *str);
 double jnum_atod(const char *str);
+#else
+static inline jnum_to_func(int32_t, jnum_atoi)
+static inline jnum_to_func(int64_t, jnum_atol)
+static inline jnum_to_func(uint32_t, jnum_atoh)
+static inline jnum_to_func(uint64_t, jnum_atolh)
+static inline jnum_to_func(double, jnum_atod)
+#endif
 
 #ifdef __cplusplus
 }

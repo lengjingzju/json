@@ -14,7 +14,7 @@
 extern "C" {
 #endif
 
-#define JSON_VERSION                    0x030308
+#define JSON_VERSION                    0x030309
 #define JSON_SAX_APIS_SUPPORT           1
 
 /**************** json object structure / json对象结构 ****************/
