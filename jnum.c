@@ -169,8 +169,8 @@ static inline int32_t fill_t_8_digits(char *buffer, uint32_t digits, int32_t *pt
 
         fill_t_4_digits(s, q, ptz);
         if (!r) {
-            memset(s + 4, '0', 4);
             *ptz += 4;
+            memset(s + 4, '0', 4);
         } else {
             fill_t_4_digits(s + 4, r, ptz);
         }
@@ -192,8 +192,8 @@ static inline int32_t fill_t_16_digits(char *buffer, uint64_t digits, int32_t *p
 
         fill_t_8_digits(s, q, ptz);
         if (!r) {
-            memset(s + 8, '0', 8);
             *ptz += 8;
+            memset(s + 8, '0', 8);
         } else {
             fill_t_8_digits(s + 8, r, ptz);
         }
@@ -300,9 +300,9 @@ static inline int32_t fill_1_20_digits(char *buffer, uint64_t digits, int32_t *p
 
         s += fill_1_4_digits(s, q, ptz);
         if (!r) {
+            *ptz += 16;
             memset(s, '0', 16);
             s += 16;
-            *ptz += 16;
         } else {
             s += fill_t_16_digits(s, r, ptz);
         }
@@ -782,15 +782,15 @@ static inline int32_t fill_significand(char *buffer, uint64_t digits, int32_t *p
     }
 
     if (!r1) {
-        memset(s + 4, '0', 4);
         *ptz += 4;
+        memset(s + 4, '0', 4);
     } else {
         fill_t_4_digits(s + 4, r1, ptz);
     }
 
     if (!r) {
-        memset(s + 8, '0', 8);
         *ptz += 8;
+        memset(s + 8, '0', 8);
     } else {
         fill_t_8_digits(s + 8, r, ptz);
     }
@@ -1128,16 +1128,6 @@ end:
 # python to get lut
 
 def print_lut():
-    # compute negative array
-    # 1 * (2 ** -4) = 0.625 * (10 ** -1)
-    # 625 = 0.625 * (10 ** 3)
-    # 272 = (1022 + 52 + 11) / 4 + 1
-
-    # compute positive array
-    # 1 * (2 ** 4) = 1.6 * (10 ** 1)
-    # 16 = 1.6 * (10 ** 1)
-    # 243 = (1023 - 52) / 4 + 1
-
     minv = -324 - 20  # 1e-324 = 0.0
     maxv = 309        # 1e309 = inf
 
@@ -1406,12 +1396,8 @@ static inline double ldouble_rconvert(uint64_t f, int32_t e)
     double d = 0;
     uint64_t *v = (uint64_t *)&d;
 
-    if (e <= POW2_LUT_MIN_IDX) {
-        *v = 0;
-        return d;
-    }
-    if (e >= POW2_LUT_MAX_IDX) {
-        *v = DP_EXPONENT_MASK;
+    if (e <= POW2_LUT_MIN_IDX || e >= POW2_LUT_MAX_IDX) {
+        *v = e <= POW2_LUT_MIN_IDX ? 0 : DP_EXPONENT_MASK;
         return d;
     }
 
@@ -1458,6 +1444,7 @@ static inline double ldouble_rconvert(uint64_t f, int32_t e)
 }
 
 #define IS_DIGIT(c)     ((c) >= '0' && (c) <= '9')
+
 #if JNUM_MANUAL_LOOP_UNFOLD
 static inline const char *_parse_19_digits(const char *str, uint64_t *value)
 {
@@ -1537,7 +1524,12 @@ int jnum_parse_num(const char *str, jnum_type_t *type, jnum_value_t *value)
 {
     const char *s = str, *t = NULL;
     int32_t eneg = 0, e = 0, k = 0, i = 0;
-    uint64_t neg = 0, m = 0, n = 0;
+    uint64_t neg = 0, m = 0;
+#if JNUM_MANUAL_LOOP_UNFOLD
+    uint64_t n = 0;
+#else
+    int32_t idx = 0, max = 0;
+#endif
 
     switch (*s) {
     case '-':
@@ -1547,7 +1539,7 @@ int jnum_parse_num(const char *str, jnum_type_t *type, jnum_value_t *value)
         ++s;
         break;
     case '0':
-        if ((*(s + 1) == 'x' || *(s + 1) == 'X')) {
+        if (*(s + 1) == 'x' || *(s + 1) == 'X') {
             int len = jnum_parse_hex(s, type, value);
             if (len == 2) {
                 *type = JNUM_INT;
@@ -1570,34 +1562,21 @@ int jnum_parse_num(const char *str, jnum_type_t *type, jnum_value_t *value)
     /* ---------- Parse integer ---------- */
     while (*s == '0')
         ++s;
-
 #if JNUM_MANUAL_LOOP_UNFOLD
     t = _parse_19_digits(s, &m);
-    k = (int)(t - s);
-    s = t;
-    if (unlikely(IS_DIGIT(*s)))
-        goto overflow1;
 #else
     t = s;
-    while (IS_DIGIT(*t)) {
+    for (idx = 0; IS_DIGIT(*t) && (idx < 19); ++idx) {
         m = (m << 3) + (m << 1) + (*t++ - '0');
     }
-    if (unlikely((int)(t - s) >= 20)) {
-        m = 0;
-        goto overflow1;
-    }
+#endif
     k = (int)(t - s);
     s = t;
-#endif
 
-    if (*s != '.') {
-        if (*s != 'e' && *s != 'E') {
-            goto end1;
-        }
-    } else {
+    switch (*s) {
+    case '.':
         /* ---------- Parse decimal ---------- */
         ++s;
-        n = m;
         if (m == 0) {
             while (*s == '0') {
                 ++s;
@@ -1606,76 +1585,94 @@ int jnum_parse_num(const char *str, jnum_type_t *type, jnum_value_t *value)
         }
 
 #if JNUM_MANUAL_LOOP_UNFOLD
+        n = m;
         t = _parse_19_digits(s, &m);
-        if (unlikely(k + (int)(t - s) >= 20 || IS_DIGIT(*t))) {
+        if (k + (int)(t - s) < 20 && !IS_DIGIT(*t)) {
+            k += (int)(t - s);
+            i -= (int)(t - s);
+            s = t;
+        } else {
             m = n;
-            goto overflow2;
+            while (IS_DIGIT(*s) && (k != 19)) {
+                m = (m << 3) + (m << 1) + (*s++ - '0');
+                ++k;
+                --i;
+            }
+            while (IS_DIGIT(*s))
+                ++s;
         }
 #else
         t = s;
-        while (IS_DIGIT(*t)) {
+        max = 19 - k;
+        for (idx = 0; IS_DIGIT(*t) && (idx < max); ++idx) {
             m = (m << 3) + (m << 1) + (*t++ - '0');
         }
-        if (unlikely(k + (int)(t - s) >= 20)) {
-            m = n;
-            goto overflow2;
-        }
-#endif
         k += (int)(t - s);
         i -= (int)(t - s);
         s = t;
 
-        if (*s != 'e' && *s != 'E') {
-            goto end2;
+        if (unlikely(IS_DIGIT(*s))) {
+            while (IS_DIGIT(*s))
+                ++s;
         }
-    }
+#endif
+        break;
 
-end3:
-    /* ---------- Parse Exponent ---------- */
-    switch (*(s + 1)) {
-    case '-':
-        eneg = 1;
-        FALLTHROUGH_ATTR;
-    case '+':
-        if (IS_DIGIT(*(s + 2))) {
-            s += 2;
-            break;
-        }
-        if (i)
-            goto end2;
-        else
-            goto end1;
     case '0': case '1': case '2': case '3': case '4':
     case '5': case '6': case '7': case '8': case '9':
-        ++s;
+        /* ---------- Parse very large integer ---------- */
+        while (IS_DIGIT(*s)) {
+            ++s;
+            ++i;
+        }
+        if (*s == '.') {
+            ++s;
+            while (IS_DIGIT(*s))
+                ++s;
+        }
+        break;
+    case 'e': case 'E':
         break;
     default:
-        if (i)
-            goto end2;
-        else
-            goto end1;
+        goto end1;
     }
 
-    while (*s == '0')
-        ++s;
+    if (*s == 'e' || *s == 'E') {
+        /* ---------- Parse exponent ---------- */
+        t = s;
+        ++t;
+        eneg = *t == '-';
+        if (*t == '-' || *t == '+')
+            ++t;
+        if (unlikely(!IS_DIGIT(*t))) {
+            if (i)
+                goto end2;
+            else
+                goto end1;
+        }
+        s = t;
 
-    do {
-        if (!IS_DIGIT(*s))
-            break;
-        e = (e << 3) + (e << 1) + (*s++ - '0');
-        if (!IS_DIGIT(*s))
-            break;
-        e = (e << 3) + (e << 1) + (*s++ - '0');
-        if (!IS_DIGIT(*s))
-            break;
-        e = (e << 3) + (e << 1) + (*s++ - '0');
-        if (!IS_DIGIT(*s))
-            break;
-        e = (e << 3) + (e << 1) + (*s++ - '0');
-        while (IS_DIGIT(*s))
+        while (*s == '0')
             ++s;
-    } while (0);
-    i += eneg == 0 ? e : -e;
+
+        do {
+            if (!IS_DIGIT(*s))
+                break;
+            e = (e << 3) + (e << 1) + (*s++ - '0');
+            if (!IS_DIGIT(*s))
+                break;
+            e = (e << 3) + (e << 1) + (*s++ - '0');
+            if (!IS_DIGIT(*s))
+                break;
+            e = (e << 3) + (e << 1) + (*s++ - '0');
+            if (!IS_DIGIT(*s))
+                break;
+            e = (e << 3) + (e << 1) + (*s++ - '0');
+            while (IS_DIGIT(*s))
+                ++s;
+        } while (0);
+        i += eneg == 0 ? e : -e;
+    }
 
 end2:
     *type = JNUM_DOUBLE;
@@ -1708,53 +1705,6 @@ end1:
         }
     }
     return (int)(s - str);
-
-overflow1:
-#if !JNUM_MANUAL_LOOP_UNFOLD
-    while (IS_DIGIT(*s)) {
-        m = (m << 3) + (m << 1) + (*s++ - '0');
-        ++k;
-        if (k == 19)
-            break;
-    }
-#endif
-    while (1) {
-        switch (*s) {
-        case '0': case '1': case '2': case '3': case '4':
-        case '5': case '6': case '7': case '8': case '9':
-            ++s;
-            ++i;
-            break;
-        case '.':
-            ++s;
-            while (IS_DIGIT(*s))
-                ++s;
-            if (*s == 'e' || *s == 'E') {
-                goto end3;
-            }
-            goto end2;
-        case 'e': case 'E':
-            goto end3;
-        default:
-            goto end2;
-        }
-    }
-
-overflow2:
-    while (IS_DIGIT(*s)) {
-        if (k == 19)
-            break;
-        m = (m << 3) + (m << 1) + (*s++ - '0');
-        ++k;
-        --i;
-    }
-    while (IS_DIGIT(*s))
-        ++s;
-
-    if (*s == 'e' || *s == 'E') {
-        goto end3;
-    }
-    goto end2;
 }
 
 #if defined(_MSC_VER)
