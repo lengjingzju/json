@@ -60,7 +60,12 @@ extern int dragonbox_dtoa(double num, char *buffer);
 
 /* Whether to use manual loop unfolding */
 #ifndef JSON_MANUAL_LOOP_UNFOLD
+#if defined(_MSC_VER)
+/* MSVC's performance deteriorates after using unfolding */
+#define JSON_MANUAL_LOOP_UNFOLD         0
+#else
 #define JSON_MANUAL_LOOP_UNFOLD         1
+#endif
 #endif
 
 /* Whether to allow C-like single-line comments and multi-line comments */
@@ -306,6 +311,10 @@ void json_del_object(json_object *json)
         if (json->value.vstr)
             json_free(json->value.vstr);
         break;
+    case JSON_BINARY:
+        if (json->value.vbin)
+            json_free(json->value.vbin);
+        break;
     case JSON_ARRAY:
     case JSON_OBJECT:
         {
@@ -371,6 +380,10 @@ json_object *json_create_item(json_type_t type, void *value)
         if (json_set_string_value(json, (json_string_t *)value) < 0)
             return NULL;
         break;
+    case JSON_BINARY:
+        if (json_set_binary_value(json, (json_binary_t *)value) < 0)
+            return NULL;
+        break;
     case JSON_ARRAY:
     case JSON_OBJECT:
         INIT_JSON_LIST_HEAD(&json->value.head);
@@ -402,6 +415,7 @@ json_object *json_create_item_array(json_type_t type, void *values, int count)
         case JSON_LHEX:   value = ((uint64_t *)values) + i;     break;
         case JSON_DOUBLE: value = ((double *)values) + i;       break;
         case JSON_STRING: value = ((json_string_t *)values) + i;break;
+        case JSON_BINARY: value = ((json_binary_t *)values) + i;break;
         default:          JsonErr("not support json type.\n");  goto err;
         }
 
@@ -504,6 +518,39 @@ int json_string_strdup(const char *src, json_strinfo_t *isrc, char **dst, json_s
         if (*dst) {
             json_free(*dst);
             *dst = NULL;
+        }
+    }
+
+    return 0;
+}
+
+int json_set_binary_value(json_object *json, json_binary_t *jbin)
+{
+    json_strinfo_t *isrc = &jbin->info;
+    json_strinfo_t *idst = &json->istr;
+
+    if (isrc->len) {
+        if (idst->len < isrc->len) {
+            char *new_str = (char *)json_realloc(json->value.vbin, isrc->len + 1);
+            if (new_str) {
+                json->value.vbin = new_str;
+            } else {
+                JsonErr("malloc failed!\n");
+                json_free(json->value.vbin);
+                json->value.vbin = NULL;
+                idst->len = 0;
+                return -1;
+            }
+        }
+        *idst = *isrc;
+        memcpy(json->value.vbin, jbin->bin, isrc->len);
+        ((char *)json->value.vbin)[idst->len] = '\0';
+    } else {
+        idst->escaped = 0;
+        idst->len = 0;
+        if (json->value.vbin) {
+            json_free(json->value.vbin);
+            json->value.vbin = NULL;
         }
     }
 
@@ -945,6 +992,7 @@ json_object *json_deepcopy(json_object *json)
 {
     json_object *new_json = NULL;
     json_string_t jstr;
+    json_binary_t jbin;
 
     switch (json->ikey.type) {
     case JSON_NULL:   new_json = json_create_null();                        break;
@@ -956,6 +1004,8 @@ json_object *json_deepcopy(json_object *json)
     case JSON_DOUBLE: new_json = json_create_double(json->value.vnum.vdbl); break;
     case JSON_STRING: jstr.str = json->value.vstr; jstr.info = json->istr;
                       new_json = json_create_string(&jstr);                 break;
+    case JSON_BINARY: jbin.bin = json->value.vbin; jbin.info = json->istr;
+                      new_json = json_create_binary(&jbin);                 break;
     case JSON_ARRAY:  new_json = json_create_array();                       break;
     case JSON_OBJECT: new_json = json_create_object();                      break;
     default:                                                                break;
@@ -1037,6 +1087,7 @@ json_object *json_add_new_item_to_array(json_object *array, json_type_t type, vo
         case JSON_LHEX:
         case JSON_DOUBLE:
         case JSON_STRING:
+        case JSON_BINARY:
         case JSON_ARRAY:
         case JSON_OBJECT:
             if ((item = json_create_item(type, value)) == NULL) {
@@ -1068,6 +1119,7 @@ json_object *json_add_new_item_to_object(json_object *object, json_type_t type, 
         case JSON_LHEX:
         case JSON_DOUBLE:
         case JSON_STRING:
+        case JSON_BINARY:
         case JSON_ARRAY:
         case JSON_OBJECT:
             if ((item = json_create_item(type, value)) == NULL) {
@@ -1257,6 +1309,10 @@ json_object *pjson_create_item(json_type_t type, void *value, json_mem_t *mem)
         if (pjson_set_string_value(json, (json_string_t *)value, mem) < 0)
             return NULL;
         break;
+    case JSON_BINARY:
+        if (pjson_set_binary_value(json, (json_binary_t *)value, mem) < 0)
+            return NULL;
+        break;
     case JSON_ARRAY:
     case JSON_OBJECT:
         INIT_JSON_LIST_HEAD(&json->value.head);
@@ -1288,6 +1344,7 @@ json_object *pjson_create_item_array(json_type_t item_type, void *values, int co
         case JSON_LHEX:   value = ((uint64_t *)values) + i;     break;
         case JSON_DOUBLE: value = ((double *)values) + i;       break;
         case JSON_STRING: value = ((json_string_t *)values) + i;break;
+        case JSON_BINARY: value = ((json_binary_t *)values) + i;break;
         default: JsonErr("not support json type.\n");     return NULL;
         }
 
@@ -1333,6 +1390,31 @@ int pjson_string_strdup(const char *src, json_strinfo_t *isrc, char **dst, json_
     return 0;
 }
 
+int pjson_set_binary_value(json_object *json, json_binary_t *jbin, json_mem_t *mem)
+{
+    json_strinfo_t *isrc = &jbin->info;
+    json_strinfo_t *idst = &json->istr;
+
+    if (isrc->len) {
+        if (idst->len < isrc->len) {
+            if ((json->value.vbin = (char *)pjson_memory_alloc(isrc->len + 1, &mem->str_mgr)) == NULL) {
+                JsonErr("malloc failed!\n");
+                idst->len = 0;
+                return -1;
+            }
+        }
+        *idst = *isrc;
+        memcpy(json->value.vbin, jbin->bin, isrc->len);
+        ((char *)json->value.vbin)[idst->len] = '\0';
+    } else {
+        idst->escaped = 0;
+        idst->len = 0;
+        json->value.vbin = NULL;
+    }
+
+    return 0;
+}
+
 int pjson_replace_item_in_array(json_object *array, int seq, json_object *new_item)
 {
     json_object *item = NULL, *pitem = NULL;
@@ -1371,6 +1453,7 @@ json_object *pjson_deepcopy(json_object *json, json_mem_t *mem)
 {
     json_object *new_json = NULL;
     json_string_t jstr;
+    json_binary_t jbin;
 
     switch (json->ikey.type) {
     case JSON_NULL:   new_json = pjson_create_null(mem);                          break;
@@ -1382,6 +1465,8 @@ json_object *pjson_deepcopy(json_object *json, json_mem_t *mem)
     case JSON_DOUBLE: new_json = pjson_create_double(json->value.vnum.vdbl, mem); break;
     case JSON_STRING: jstr.str = json->value.vstr; jstr.info = json->istr;
                       new_json = pjson_create_string(&jstr, mem);                 break;
+    case JSON_BINARY: jbin.bin = json->value.vbin; jbin.info = json->istr;
+                      new_json = pjson_create_binary(&jbin, mem);                 break;
     case JSON_ARRAY:  new_json = pjson_create_array(mem);                         break;
     case JSON_OBJECT: new_json = pjson_create_object(mem);                        break;
     default:                                                                      break;
@@ -1461,6 +1546,7 @@ json_object *pjson_add_new_item_to_array(json_object *array, json_type_t type, v
         case JSON_LHEX:
         case JSON_DOUBLE:
         case JSON_STRING:
+        case JSON_BINARY:
         case JSON_ARRAY:
         case JSON_OBJECT:
             if ((item = pjson_create_item(type, value, mem)) == NULL) {
@@ -1492,6 +1578,7 @@ json_object *pjson_add_new_item_to_object(json_object *object, json_type_t type,
         case JSON_LHEX:
         case JSON_DOUBLE:
         case JSON_STRING:
+        case JSON_BINARY:
         case JSON_ARRAY:
         case JSON_OBJECT:
             if ((item = pjson_create_item(type, value, mem)) == NULL) {
@@ -1798,6 +1885,27 @@ err:
 }
 #define _JSON_PRINT_STRING(ptr, val, info) do { if (unlikely(_json_print_string(ptr, val, info) < 0)) goto err; } while(0)
 
+static inline int _json_print_binary(json_print_t *print_ptr, const void *val, json_strinfo_t *info)
+{
+    size_t alloced = info->len + 24;
+
+    _PRINT_PTR_REALLOC(alloced);
+    char *cur = print_ptr->cur;
+    *cur++ = '<';
+    cur += jnum_itoa(info->len, cur);
+    *cur++ = ':';
+    memcpy(cur, val, info->len);
+    cur += info->len;
+    *cur++ = '>';
+    print_ptr->cur = cur;
+    return 0;
+
+err:
+    JsonErr("malloc failed!\n");
+    return -1;
+}
+#define _JSON_PRINT_BINARY(ptr, val, info) do { if (unlikely(_json_print_binary(ptr, val, info) < 0)) goto err; } while(0)
+
 static int _json_print_value(json_print_t *print_ptr, json_object *json)
 {
     json_object *stack_array[JSON_ITEM_NUM_PLUS_DEF];
@@ -1896,6 +2004,9 @@ next3:
         } else {
             _JSON_PRINT_STRING(print_ptr, json->value.vstr, &json->istr);
         }
+        break;
+    case JSON_BINARY:
+        _JSON_PRINT_BINARY(print_ptr, json->value.vbin, &json->istr);
         break;
     case JSON_OBJECT:
         if (unlikely(json_list_empty(&json->value.head))) {
@@ -2099,6 +2210,7 @@ int json_sax_print_value(json_sax_print_hd handle, json_type_t type, json_string
     json_sax_print_t *print_handle = (json_sax_print_t *)handle;
     json_print_t *print_ptr = &print_handle->print_val;
     json_string_t *jstr = NULL;
+    json_binary_t *jbin = NULL;
     int cur_pos = print_handle->count - 1;
 
     if (unlikely(print_handle->error_flag)) {
@@ -2194,6 +2306,10 @@ int json_sax_print_value(json_sax_print_hd handle, json_type_t type, json_string
             json_string_info_update(jstr);
             _JSON_PRINT_STRING(print_ptr, jstr->str, &jstr->info);
         }
+        break;
+    case JSON_BINARY:
+        jbin = (json_binary_t*)value;
+        _JSON_PRINT_BINARY(print_ptr, jbin->bin, &jbin->info);
         break;
 
     case JSON_ARRAY:
@@ -2334,6 +2450,7 @@ typedef struct _json_parse_t {
 
     char *str;
     json_mem_t *mem;
+    json_mem_mgr_t *bin_mgr;
 
     void (*skip_blank)(struct _json_parse_t *parse_ptr);
     int (*parse_string)(struct _json_parse_t *parse_ptr, char end_ch, char **ppstr,
@@ -2930,6 +3047,105 @@ err:
     return -1;
 }
 
+static inline const char *_parse_8_digits(const char *str, int32_t *value)
+{
+#define IS_DIGIT(c)     ((c) >= '0' && (c) <= '9')
+#define MAX_BIN_LEN     (1 << 26)
+    const char *s = str;
+    int32_t m = *value;
+
+#if JSON_MANUAL_LOOP_UNFOLD
+    do {
+        if (!IS_DIGIT(*s))
+            break;
+        m = (m << 3) + (m << 1) + (*s++ - '0');
+        if (!IS_DIGIT(*s))
+            break;
+        m = (m << 3) + (m << 1) + (*s++ - '0');
+        if (!IS_DIGIT(*s))
+            break;
+        m = (m << 3) + (m << 1) + (*s++ - '0');
+        if (!IS_DIGIT(*s))
+            break;
+        m = (m << 3) + (m << 1) + (*s++ - '0');
+
+        if (!IS_DIGIT(*s))
+            break;
+        m = (m << 3) + (m << 1) + (*s++ - '0');
+        if (!IS_DIGIT(*s))
+            break;
+        m = (m << 3) + (m << 1) + (*s++ - '0');
+        if (!IS_DIGIT(*s))
+            break;
+        m = (m << 3) + (m << 1) + (*s++ - '0');
+        if (!IS_DIGIT(*s))
+            break;
+        m = (m << 3) + (m << 1) + (*s++ - '0');
+    } while (0);
+
+#else
+
+    int i = 0;
+    for (i = 0; IS_DIGIT(*s) && (i < 8); ++i) {
+        m = (m << 3) + (m << 1) + (*s++ - '0');
+    }
+#endif
+
+    if (m >= MAX_BIN_LEN || *s != ':')
+        return NULL;
+    *value = m;
+    return s;
+}
+
+static int _json_parse_binary(json_parse_t *parse_ptr, void **ppbin, json_strinfo_t *pinfo, json_mem_mgr_t *mgr)
+{
+    char *ptr = NULL, *str = NULL, *tmp = NULL;
+    int32_t len = 0;
+
+    *ppbin = NULL;
+    memset(pinfo, 0, sizeof(*pinfo));
+
+    _get_parse_ptr(parse_ptr, 0, 32, &str);
+    if (unlikely(!(tmp = (char *)_parse_8_digits(str + 1, &len))))
+        goto err;
+    _UPDATE_PARSE_OFFSET((int)(tmp - str + 1));
+
+    if (_get_parse_ptr(parse_ptr, 0, len + 1, &str) < len + 1) {
+        JsonErr("data is not complete!\n");
+        goto err;
+    }
+    if (str[len] != '>') {
+        JsonErr("data is not end with '>'!\n");
+        goto err;
+    }
+
+    if (len) {
+        if (mgr) {
+            if (unlikely((ptr = (char *)_parse_alloc(parse_ptr, len + 1, mgr)) == NULL)) {
+                JsonErr("malloc failed!\n");
+                goto err;
+            }
+            memcpy(ptr, str, len);
+        } else {
+            ptr = str;
+        }
+#if JSON_SAX_APIS_SUPPORT
+        if (!parse_ptr->cb)
+            ptr[len] = '\0';
+#else
+        ptr[len] = '\0';
+#endif
+    }
+    _UPDATE_PARSE_OFFSET(len + 1);
+
+    pinfo->len = len;
+    *ppbin = ptr;
+    return len;
+
+err:
+    return -1;
+}
+
 static int _json_parse_single_value(json_parse_t *parse_ptr, char *str, json_strinfo_t *kinfo,
     json_number_t *pnum, char **ppstr, json_strinfo_t *pinfo)
 {
@@ -2954,6 +3170,13 @@ static int _json_parse_single_value(json_parse_t *parse_ptr, char *str, json_str
                 goto err;
             }
             _UPDATE_PARSE_OFFSET(1);
+        }
+        break;
+
+     case '<':
+        kinfo->type = JSON_BINARY;
+        if (unlikely(_json_parse_binary(parse_ptr, (void **)ppstr, pinfo, parse_ptr->bin_mgr) < 0)) {
+            goto err;
         }
         break;
 
@@ -3630,6 +3853,13 @@ next3:
         }
         break;
 
+     case '<':
+        item->ikey.type = JSON_BINARY;
+        if (unlikely(_json_parse_binary(parse_ptr, &item->value.vbin, &item->istr, parse_ptr->bin_mgr) < 0)) {
+            goto err;
+        }
+        break;
+
 #if JSON_PARSE_SPECIAL_NUM
     case '+':
 #endif
@@ -3831,6 +4061,7 @@ json_object *json_parse_common(json_parse_choice_t *choice)
         }
         parse_val.parse_value = _json_parse_value_rapid;
     }
+    parse_val.bin_mgr = parse_val.reuse_flag ? NULL : &parse_val.mem->str_mgr;
 
     if (choice->mem && !choice->mem->valid) {
         pjson_memory_init(choice->mem);
@@ -4121,6 +4352,7 @@ int json_sax_parse_common(json_sax_parse_choice_t *choice)
     }
     parse_val.parse_string = _json_sax_parse_string;
     parse_val.cb = choice->cb;
+    parse_val.bin_mgr = NULL;
 
 #if !JSON_PARSE_SINGLE_VALUE
     parse_val.skip_blank(&parse_val);

@@ -150,17 +150,27 @@ int test_json_sax_print(void)
 {
     json_sax_print_hd handle = NULL;
     json_string_t jkey = {0}, jstr = {0};
+    json_binary_t jbin = {0};
+    char narray[8] = {1, 2, 3, 4, 5, 6, 7, 8};
 
     handle = json_sax_print_format_start(10, NULL);
     json_sax_print_object_start(handle, NULL);
+
     jkey.str = (char *)"Name", jkey.info.len = 4;
     jstr.str = (char *)"LengJing", jstr.info.len = 8;
     json_sax_print_object_item(handle, &jkey, &jstr);
+
     jkey.str = (char *)"Age", jkey.info.len = 3;
     json_sax_print_object_item(handle, &jkey, 30);
+
     jkey.str = (char *)"Phone", jkey.info.len = 5;
     jstr.str = (char *)"18368887550", jstr.info.len = 11;
     json_sax_print_object_item(handle, &jkey, &jstr);
+
+    jkey.str = (char *)"Binary", jkey.info.len = 6;
+    jbin.bin = (void *)narray, jbin.info.len = 8;
+    json_sax_print_object_item(handle, &jkey, &jbin);
+
     jkey.str = (char *)"Hobby", jkey.info.len = 5;
     json_sax_print_array_start(handle, &jkey);
     jstr.str = (char *)"Reading", jstr.info.len = 7;
@@ -170,8 +180,8 @@ int test_json_sax_print(void)
     jstr.str = (char *)"Thinking", jstr.info.len = 8;
     json_sax_print_array_item(handle, &jstr);
     json_sax_print_array_finish(handle);
-    json_sax_print_object_finish(handle);
 
+    json_sax_print_object_finish(handle);
     s_print_str = json_sax_print_finish(handle, NULL, NULL);
     printf("%s\n", s_print_str);
     json_memory_free(s_print_str);
@@ -230,6 +240,9 @@ json_sax_ret_t _sax_parser_cb(json_sax_parser_t *parser)
         break;
     case JSON_STRING:
         json_sax_print_string(handle, jkey, &parser->value.vstr);
+        break;
+    case JSON_BINARY:
+        json_sax_print_binary(handle, jkey, &parser->value.vbin);
         break;
     case JSON_ARRAY:
         json_sax_print_array(handle, jkey, parser->value.vcmd);

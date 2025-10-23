@@ -14,7 +14,7 @@
 extern "C" {
 #endif
 
-#define JSON_VERSION                    0x050001
+#define JSON_VERSION                    0x050002
 #define JSON_SAX_APIS_SUPPORT           1
 
 /**************** json object structure / json对象结构 ****************/
@@ -50,6 +50,7 @@ typedef enum {
     JSON_LHEX,                  /* Its value variable is vlhex */
     JSON_DOUBLE,                /* Its value variable is vdbl */
     JSON_STRING,                /* Its value variable is vstr */
+    JSON_BINARY,                /* Its value variable is vbin, value format is `<len:data>` */
     JSON_ARRAY,                 /* Its value variable is head */
     JSON_OBJECT                 /* Its value variable is head */
 } json_type_t;
@@ -74,8 +75,7 @@ typedef struct {
     uint32_t type:4;
     uint32_t escaped:1;
     uint32_t alloced:1;
-    uint32_t reserved:2;
-    uint32_t len:24;
+    uint32_t len:26;
 } json_strinfo_t;
 
 /*
@@ -94,6 +94,23 @@ typedef struct {
     char *str;
     json_strinfo_t info;
 } json_string_t;
+
+/*
+ * json_binary_t - the json binary with information
+ * @bin: the value of binary
+ * @info: the information of binary
+ * @description: LJSON uses binary to extend JSON functionality
+ */
+/*
+ * json_binary_t - 带信息的二进制数据
+ * @bin: 二进制数据
+ * @info: 二进制信息，主要是长度
+ * @description: LJSON使用此结构扩展JSON功能
+ */
+typedef struct {
+    void *bin;
+    json_strinfo_t info;
+} json_binary_t;
 
 /*
  * json_number_t - the json number object value
@@ -116,6 +133,7 @@ typedef union {
  * json_value_t - the json object value
  * @vnum: the numerical value
  * @vstr: the string value
+ * @vbin: the binary value
  * @head: the DOM array or object value, LJSON manages child json objects through the list head
  * @description: LJSON uses union to manage the value of different objects to save memory.
  */
@@ -123,12 +141,14 @@ typedef union {
  * json_value_t - json对象的值
  * @vnum: 数字类型的值
  * @vstr: 字符串类型的值
+ * @vbin: 二进制类型的值
  * @head: 集合对象的子节点挂载的链表头，指向最后一个元素(非空时)或自己(空时)
  * @description: LJSON使用union管理对象的值从而节省内存空间
  */
 typedef union {
     json_number_t vnum;
     char *vstr;
+    void *vbin;
     struct json_list head;
 } json_value_t;
 
@@ -138,7 +158,7 @@ typedef union {
  *   or the `list` of brother json objects
  * @key: the json object key, only the child objects of JSON_OBJECT have key
  * @ikey: the information of key (contains json object type)
- * @istr: the information of value.str
+ * @istr: the information of value.vstr/vbin
  * @value: the json object value
  * @description: LJSON uses union to manage the value of different objects to save memory.
  */
@@ -147,7 +167,7 @@ typedef union {
  * @list: 链表节点，指向下一个对象或父对象的链表头
  * @key: json对象的键值，只有JSON_OBJECT的子对象才有键值
  * @ikey: key字符串信息(含json类型)
- * @istr: value.str字符串信息
+ * @istr: value.vstr/vbin信息
  * @value: json对象的值
  * @description: LJSON使用更紧凑的内存结构以节省内存
  */
@@ -281,6 +301,7 @@ static inline json_object *json_create_lint(int64_t value) { return json_create_
 static inline json_object *json_create_lhex(uint64_t value) { return json_create_item(JSON_LHEX, &value); }
 static inline json_object *json_create_double(double value) { return json_create_item(JSON_DOUBLE, &value); }
 static inline json_object *json_create_string(json_string_t *value) { return json_create_item(JSON_STRING, value); }
+static inline json_object *json_create_binary(json_binary_t *value) { return json_create_item(JSON_BINARY, value); }
 static inline json_object *json_create_array(void) { return json_new_object(JSON_ARRAY); }
 static inline json_object *json_create_object(void) { return json_new_object(JSON_OBJECT); }
 
@@ -293,6 +314,7 @@ static inline json_object *json_create_unit(int64_t value) { return json_create_
 static inline json_object *json_create_unit(uint64_t value) { return json_create_item(JSON_LHEX, &value); }
 static inline json_object *json_create_unit(double value) { return json_create_item(JSON_DOUBLE, &value); }
 static inline json_object *json_create_unit(json_string_t *value) { return json_create_item(JSON_STRING, value); }
+static inline json_object *json_create_unit(json_binary_t *value) { return json_create_item(JSON_BINARY, value); }
 extern "C" {
 #else
 /* C11泛型选择(Generic selection) */
@@ -303,7 +325,8 @@ uint32_t        : json_create_hex                , \
 int64_t         : json_create_lint               , \
 uint64_t        : json_create_lhex               , \
 double          : json_create_double             , \
-json_string_t*  : json_create_string)(value)
+json_string_t*  : json_create_string             , \
+json_binary_t*  : json_create_binary)(value)
 #endif
 
 /*
@@ -328,6 +351,7 @@ static inline json_object *json_create_lint_array(int64_t *values, int count) { 
 static inline json_object *json_create_lhex_array(uint64_t *values, int count) { return json_create_item_array(JSON_LHEX, values, count); }
 static inline json_object *json_create_double_array(double *values, int count) { return json_create_item_array(JSON_DOUBLE, values, count); }
 static inline json_object *json_create_string_array(json_string_t *values, int count) { return json_create_item_array(JSON_STRING, values, count); }
+static inline json_object *json_create_binary_array(json_binary_t *values, int count) { return json_create_item_array(JSON_BINARY, values, count); }
 
 #ifdef __cplusplus
 }
@@ -338,6 +362,7 @@ static inline json_object *json_create_units(int64_t *values, int count) { retur
 static inline json_object *json_create_units(uint64_t *values, int count) { return json_create_item_array(JSON_LHEX, values, count); }
 static inline json_object *json_create_units(double *values, int count) { return json_create_item_array(JSON_DOUBLE, values, count); }
 static inline json_object *json_create_units(json_string_t *values, int count) { return json_create_item_array(JSON_STRING, values, count); }
+static inline json_object *json_create_units(json_binary_t *values, int count) { return json_create_item_array(JSON_BINARY, values, count); }
 extern "C" {
 #else
 /* C11泛型选择(Generic selection) */
@@ -348,7 +373,8 @@ uint32_t*       : json_create_hex_array                    , \
 int64_t*        : json_create_lint_array                   , \
 uint64_t*       : json_create_lhex_array                   , \
 double*         : json_create_double_array                 , \
-json_string_t*  : json_create_string_array)(values, count)
+json_string_t*  : json_create_string_array                 , \
+json_binary_t*  : json_create_binary_array)(values, count)
 #endif
 
 /*
@@ -474,6 +500,42 @@ static inline int json_set_string_value(json_object *json, json_string_t *jstr)
     }
     return -1;
 }
+
+/*
+ * json_get_binary_value - Get the binary of JSON_BINARY object
+ * @json: IN, the json object to be get
+ * @jbin: OUT, store the LJSON binary value
+ * @return: NULL on failure, 0 on success
+ */
+/*
+ * json_get_binary_value - 获取JSON_BINARY类型的json对象的值
+ * @json: IN, 被获取值的json对象
+ * @jbin: OUT, 存储获取到的值
+ * @return: 失败返回NULL；成功返回jbin
+ */
+static inline json_binary_t *json_get_binary_value(json_object *json, json_binary_t *jbin)
+{
+    if (json->ikey.type == JSON_BINARY) {
+        jbin->info = json->istr;
+        jbin->bin = json->value.vbin;
+        return jbin;
+    }
+    return NULL;
+}
+
+/*
+ * json_set_binary_value - Set the binary of JSON_BINARY object
+ * @json: IN, the json object to be set
+ * @jbin: IN, the LJSON binary value
+ * @return: -1 on failure, 0 on success
+ */
+/*
+ * json_set_binary_value - 设置JSON_BINARY类型的json对象的值
+ * @json: IN, 被设置的json对象
+ * @jbin: IN, 要设置的值
+ * @return: 失败返回-1；成功返回0
+ */
+int json_set_binary_value(json_object *json, json_binary_t *jbin);
 
 /*
  * json_get_number_value - Get the value of numerical object
@@ -841,6 +903,7 @@ static inline json_object *json_add_lint_to_array(json_object *array, int64_t va
 static inline json_object *json_add_lhex_to_array(json_object *array, uint64_t value) { return json_add_new_item_to_array(array, JSON_LHEX, &value); }
 static inline json_object *json_add_double_to_array(json_object *array, double value) { return json_add_new_item_to_array(array, JSON_DOUBLE, &value); }
 static inline json_object *json_add_string_to_array(json_object *array, json_string_t *value) { return json_add_new_item_to_array(array, JSON_STRING, value); }
+static inline json_object *json_add_binary_to_array(json_object *array, json_binary_t *value) { return json_add_new_item_to_array(array, JSON_BINARY, value); }
 static inline json_object *json_add_array_to_array(json_object *array) { return json_add_new_item_to_array(array, JSON_ARRAY, NULL); }
 static inline json_object *json_add_object_to_array(json_object *array) { return json_add_new_item_to_array(array, JSON_OBJECT, NULL); }
 
@@ -853,6 +916,7 @@ static inline json_object *json_array_append(json_object *array, int64_t value) 
 static inline json_object *json_array_append(json_object *array, uint64_t value) { return json_add_new_item_to_array(array, JSON_LHEX, &value); }
 static inline json_object *json_array_append(json_object *array, double value) { return json_add_new_item_to_array(array, JSON_DOUBLE, &value); }
 static inline json_object *json_array_append(json_object *array, json_string_t *value) { return json_add_new_item_to_array(array, JSON_STRING, value); }
+static inline json_object *json_array_append(json_object *array, json_binary_t *value) { return json_add_new_item_to_array(array, JSON_BINARY, value); }
 extern "C" {
 #else
 /* C11泛型选择(Generic selection) */
@@ -863,7 +927,8 @@ uint32_t        : json_add_hex_to_array                  , \
 int64_t         : json_add_lint_to_array                 , \
 uint64_t        : json_add_lhex_to_array                 , \
 double          : json_add_double_to_array               , \
-json_string_t*  : json_add_string_to_array)(array, value)
+json_string_t*  : json_add_string_to_array               , \
+json_binary_t*  : json_add_binary_to_array)(array, value)
 #endif
 
 #define json_array_append_null(array)   json_add_null_to_array  (array)
@@ -896,6 +961,7 @@ static inline json_object *json_add_lint_to_object(json_object *object, json_str
 static inline json_object *json_add_lhex_to_object(json_object *object, json_string_t *jkey, uint64_t value) { return json_add_new_item_to_object(object, JSON_LHEX, jkey, &value); }
 static inline json_object *json_add_double_to_object(json_object *object, json_string_t *jkey, double value) { return json_add_new_item_to_object(object, JSON_DOUBLE, jkey, &value); }
 static inline json_object *json_add_string_to_object(json_object *object, json_string_t *jkey, json_string_t *value) { return json_add_new_item_to_object(object, JSON_STRING, jkey, value); }
+static inline json_object *json_add_binary_to_object(json_object *object, json_string_t *jkey, json_binary_t *value) { return json_add_new_item_to_object(object, JSON_BINARY, jkey, value); }
 static inline json_object *json_add_array_to_object(json_object *object, json_string_t *jkey) { return json_add_new_item_to_object(object, JSON_ARRAY, jkey, NULL); }
 static inline json_object *json_add_object_to_object(json_object *object, json_string_t *jkey) { return json_add_new_item_to_object(object, JSON_OBJECT, jkey, NULL); }
 
@@ -908,6 +974,7 @@ static inline json_object *json_object_append(json_object *object, json_string_t
 static inline json_object *json_object_append(json_object *object, json_string_t *jkey, uint64_t value) { return json_add_new_item_to_object(object, JSON_LHEX, jkey, &value); }
 static inline json_object *json_object_append(json_object *object, json_string_t *jkey, double value) { return json_add_new_item_to_object(object, JSON_DOUBLE, jkey, &value); }
 static inline json_object *json_object_append(json_object *object, json_string_t *jkey, json_string_t *value) { return json_add_new_item_to_object(object, JSON_STRING, jkey, value); }
+static inline json_object *json_object_append(json_object *object, json_string_t *jkey, json_binary_t *value) { return json_add_new_item_to_object(object, JSON_BINARY, jkey, value); }
 extern "C" {
 #else
 /* C11泛型选择(Generic selection) */
@@ -918,7 +985,8 @@ uint32_t        : json_add_hex_to_object,                          \
 int64_t         : json_add_lint_to_object,                         \
 uint64_t        : json_add_lhex_to_object,                         \
 double          : json_add_double_to_object,                       \
-json_string_t*  : json_add_string_to_object)(object, jkey, value)
+json_string_t*  : json_add_string_to_object,                       \
+json_binary_t*  : json_add_binary_to_object)(object, jkey, value)
 #endif
 
 #define json_object_append_null(object, jkey)   json_add_null_to_object  (object, jkey)
@@ -930,6 +998,7 @@ json_string_t*  : json_add_string_to_object)(object, jkey, value)
  * json_item_total_get
  * json_string_info_update
  * json_get_string_value
+ * json_get_binary_value
  * json_get_number_value / ...
  * json_set_number_value / ...
  * json_get_array_size
@@ -1108,6 +1177,7 @@ static inline json_object *pjson_create_lint(int64_t value, json_mem_t *mem) { r
 static inline json_object *pjson_create_lhex(uint64_t value, json_mem_t *mem) { return pjson_create_item(JSON_LHEX, &value, mem); }
 static inline json_object *pjson_create_double(double value, json_mem_t *mem) { return pjson_create_item(JSON_DOUBLE, &value, mem); }
 static inline json_object *pjson_create_string(json_string_t *value, json_mem_t *mem) { return pjson_create_item(JSON_STRING, value, mem); }
+static inline json_object *pjson_create_binary(json_binary_t *value, json_mem_t *mem) { return pjson_create_item(JSON_BINARY, value, mem); }
 static inline json_object *pjson_create_array(json_mem_t *mem) { return pjson_new_object(JSON_ARRAY, mem); }
 static inline json_object *pjson_create_object(json_mem_t *mem) { return pjson_new_object(JSON_OBJECT, mem); }
 
@@ -1120,6 +1190,7 @@ static inline json_object *pjson_create_unit(int64_t value, json_mem_t *mem) { r
 static inline json_object *pjson_create_unit(uint64_t value, json_mem_t *mem) { return pjson_create_item(JSON_LHEX, &value, mem); }
 static inline json_object *pjson_create_unit(double value, json_mem_t *mem) { return pjson_create_item(JSON_DOUBLE, &value, mem); }
 static inline json_object *pjson_create_unit(json_string_t *value, json_mem_t *mem) { return pjson_create_item(JSON_STRING, value, mem); }
+static inline json_object *pjson_create_unit(json_binary_t *value, json_mem_t *mem) { return pjson_create_item(JSON_BINARY, value, mem); }
 extern "C" {
 #else
 /* C11泛型选择(Generic selection) */
@@ -1130,7 +1201,8 @@ uint32_t        : pjson_create_hex                     , \
 int64_t         : pjson_create_lint                    , \
 uint64_t        : pjson_create_lhex                    , \
 double          : pjson_create_double                  , \
-json_string_t*  : pjson_create_string)(value, mem)
+json_string_t*  : pjson_create_string                  , \
+json_binary_t*  : pjson_create_binary)(value, mem)
 #endif
 
 /*
@@ -1157,6 +1229,7 @@ static inline json_object *pjson_create_lint_array(int64_t *values, int count, j
 static inline json_object *pjson_create_lhex_array(uint64_t *values, int count, json_mem_t *mem) { return pjson_create_item_array(JSON_LHEX, values, count, mem); }
 static inline json_object *pjson_create_double_array(double *values, int count, json_mem_t *mem) { return pjson_create_item_array(JSON_DOUBLE, values, count, mem); }
 static inline json_object *pjson_create_string_array(json_string_t *values, int count, json_mem_t *mem) { return pjson_create_item_array(JSON_STRING, values, count, mem); }
+static inline json_object *pjson_create_binary_array(json_binary_t *values, int count, json_mem_t *mem) { return pjson_create_item_array(JSON_BINARY, values, count, mem); }
 
 #ifdef __cplusplus
 }
@@ -1167,6 +1240,7 @@ static inline json_object *pjson_create_units(int64_t *values, int count, json_m
 static inline json_object *pjson_create_units(uint64_t *values, int count, json_mem_t *mem) { return pjson_create_item_array(JSON_LHEX, values, count, mem); }
 static inline json_object *pjson_create_units(double *values, int count, json_mem_t *mem) { return pjson_create_item_array(JSON_DOUBLE, values, count, mem); }
 static inline json_object *pjson_create_units(json_string_t *values, int count, json_mem_t *mem) { return pjson_create_item_array(JSON_STRING, values, count, mem); }
+static inline json_object *pjson_create_units(json_binary_t *values, int count, json_mem_t *mem) { return pjson_create_item_array(JSON_BINARY, values, count, mem); }
 extern "C" {
 #else
 /* C11泛型选择(Generic selection) */
@@ -1177,7 +1251,8 @@ uint32_t*       : pjson_create_hex_array                         , \
 int64_t*        : pjson_create_lint_array                        , \
 uint64_t*       : pjson_create_lhex_array                        , \
 double*         : pjson_create_double_array                      , \
-json_string_t*  : pjson_create_string_array)(values, count, mem)
+json_string_t*  : pjson_create_string_array                      , \
+json_binary_t*  : pjson_create_binary_array)(values, count, mem)
 #endif
 
 /*
@@ -1228,7 +1303,7 @@ static inline int pjson_set_key(json_object *json, json_string_t *jkey, json_mem
  * @return: -1 on failure, 0 on success
  */
 /*
- * pjson_set_string_value - 设置 JSON_STRING 对象的字符串值
+ * pjson_set_string_value - 设置JSON_STRING对象的字符串值
  * @json: IN, 要设置的json对象
  * @jstr: IN, LJSON字符串值，允许长度未预先通过 json_string_info_update 设置
  * @mem: IN, 块内存管理器
@@ -1241,6 +1316,22 @@ static inline int pjson_set_string_value(json_object *json, json_string_t *jstr,
     }
     return -1;
 }
+
+/*
+ * pjson_set_binary_value - Set the binary of JSON_BINARY object
+ * @json: IN, the json object to be set
+ * @jbin: IN, the LJSON binary value
+ * @mem: IN, the block memory manager
+ * @return: -1 on failure, 0 on success
+ */
+/*
+ * pjson_set_binary_value - 设置JSON_BINARY类型的json对象的值
+ * @json: IN, 被设置的json对象
+ * @jbin: IN, 要设置的值
+ * @mem: IN, 块内存管理器
+ * @return: 失败返回-1；成功返回0
+ */
+int pjson_set_binary_value(json_object *json, json_binary_t *jbin, json_mem_t *mem);
 
 /*
  * pjson_replace_item_in_array - Replace the specified object in JSON_ARRAY object with new json object
@@ -1353,6 +1444,7 @@ static inline json_object *pjson_add_lint_to_array(json_object *array, int64_t v
 static inline json_object *pjson_add_lhex_to_array(json_object *array, uint64_t value, json_mem_t *mem) { return pjson_add_new_item_to_array(array, JSON_LHEX, &value, mem); }
 static inline json_object *pjson_add_double_to_array(json_object *array, double value, json_mem_t *mem) { return pjson_add_new_item_to_array(array, JSON_DOUBLE, &value, mem); }
 static inline json_object *pjson_add_string_to_array(json_object *array, json_string_t *value, json_mem_t *mem) { return pjson_add_new_item_to_array(array, JSON_STRING, value, mem); }
+static inline json_object *pjson_add_binary_to_array(json_object *array, json_binary_t *value, json_mem_t *mem) { return pjson_add_new_item_to_array(array, JSON_BINARY, value, mem); }
 static inline json_object *pjson_add_array_to_array(json_object *array, json_mem_t *mem) { return pjson_add_new_item_to_array(array, JSON_ARRAY, NULL, mem); }
 static inline json_object *pjson_add_object_to_array(json_object *array, json_mem_t *mem) { return pjson_add_new_item_to_array(array, JSON_OBJECT, NULL, mem); }
 
@@ -1365,6 +1457,7 @@ static inline json_object *pjson_array_append(json_object *array, int64_t value,
 static inline json_object *pjson_array_append(json_object *array, uint64_t value, json_mem_t *mem) { return pjson_add_new_item_to_array(array, JSON_LHEX, &value, mem); }
 static inline json_object *pjson_array_append(json_object *array, double value, json_mem_t *mem) { return pjson_add_new_item_to_array(array, JSON_DOUBLE, &value, mem); }
 static inline json_object *pjson_array_append(json_object *array, json_string_t *value, json_mem_t *mem) { return pjson_add_new_item_to_array(array, JSON_STRING, value, mem); }
+static inline json_object *pjson_array_append(json_object *array, json_binary_t *value, json_mem_t *mem) { return pjson_add_new_item_to_array(array, JSON_BINARY, value, mem); }
 extern "C" {
 #else
 /* C11泛型选择(Generic selection) */
@@ -1375,7 +1468,8 @@ uint32_t        : pjson_add_hex_to_array                       , \
 int64_t         : pjson_add_lint_to_array                      , \
 uint64_t        : pjson_add_lhex_to_array                      , \
 double          : pjson_add_double_to_array                    , \
-json_string_t*  : pjson_add_string_to_array)(array, value, mem)
+json_string_t*  : pjson_add_string_to_array                    , \
+json_binary_t*  : pjson_add_binary_to_array)(array, value, mem)
 #endif
 
 #define pjson_array_append_null(array, mem)   pjson_add_null_to_array  (array, mem)
@@ -1411,6 +1505,7 @@ static inline json_object *pjson_add_lint_to_object(json_object *object, json_st
 static inline json_object *pjson_add_lhex_to_object(json_object *object, json_string_t *jkey, uint64_t value, json_mem_t *mem) { return pjson_add_new_item_to_object(object, JSON_LHEX, jkey, &value, mem); }
 static inline json_object *pjson_add_double_to_object(json_object *object, json_string_t *jkey, double value, json_mem_t *mem) { return pjson_add_new_item_to_object(object, JSON_DOUBLE, jkey, &value, mem); }
 static inline json_object *pjson_add_string_to_object(json_object *object, json_string_t *jkey, json_string_t *value, json_mem_t *mem) { return pjson_add_new_item_to_object(object, JSON_STRING, jkey, value, mem); }
+static inline json_object *pjson_add_binary_to_object(json_object *object, json_string_t *jkey, json_binary_t *value, json_mem_t *mem) { return pjson_add_new_item_to_object(object, JSON_BINARY, jkey, value, mem); }
 static inline json_object *pjson_add_array_to_object(json_object *object, json_string_t *jkey, json_mem_t *mem) { return pjson_add_new_item_to_object(object, JSON_ARRAY, jkey, NULL, mem); }
 static inline json_object *pjson_add_object_to_object(json_object *object, json_string_t *jkey, json_mem_t *mem) { return pjson_add_new_item_to_object(object, JSON_OBJECT, jkey, NULL, mem); }
 
@@ -1423,6 +1518,7 @@ static inline json_object *pjson_object_append(json_object *object, json_string_
 static inline json_object *pjson_object_append(json_object *object, json_string_t *jkey, uint64_t value, json_mem_t *mem) { return pjson_add_new_item_to_object(object, JSON_LHEX, jkey, &value, mem); }
 static inline json_object *pjson_object_append(json_object *object, json_string_t *jkey, double value, json_mem_t *mem) { return pjson_add_new_item_to_object(object, JSON_DOUBLE, jkey, &value, mem); }
 static inline json_object *pjson_object_append(json_object *object, json_string_t *jkey, json_string_t *value, json_mem_t *mem) { return pjson_add_new_item_to_object(object, JSON_STRING, jkey, value, mem); }
+static inline json_object *pjson_object_append(json_object *object, json_string_t *jkey, json_binary_t *value, json_mem_t *mem) { return pjson_add_new_item_to_object(object, JSON_BINARY, jkey, value, mem); }
 extern "C" {
 #else
 /* C11泛型选择(Generic selection) */
@@ -1433,7 +1529,8 @@ uint32_t        : pjson_add_hex_to_object                              , \
 int64_t         : pjson_add_lint_to_object                             , \
 uint64_t        : pjson_add_lhex_to_object                             , \
 double          : pjson_add_double_to_object                           , \
-json_string_t*  : pjson_add_string_to_object)(object, jkey, value, mem)
+json_string_t*  : pjson_add_string_to_object                           , \
+json_binary_t*  : pjson_add_binary_to_object)(object, jkey, value, mem)
 #endif
 
 #define pjson_object_append_null(object, jkey, mem)   pjson_add_null_to_object  (object, jkey, mem)
@@ -1981,6 +2078,7 @@ static inline int json_sax_print_lint(json_sax_print_hd handle, json_string_t *j
 static inline int json_sax_print_lhex(json_sax_print_hd handle, json_string_t *jkey, uint64_t value) { return json_sax_print_value(handle, JSON_LHEX, jkey, &value); }
 static inline int json_sax_print_double(json_sax_print_hd handle, json_string_t *jkey, double value) { return json_sax_print_value(handle, JSON_DOUBLE, jkey, &value); }
 static inline int json_sax_print_string(json_sax_print_hd handle, json_string_t *jkey, json_string_t *value) { return json_sax_print_value(handle, JSON_STRING, jkey, value); }
+static inline int json_sax_print_binary(json_sax_print_hd handle, json_string_t *jkey, json_binary_t *value) { return json_sax_print_value(handle, JSON_BINARY, jkey, value); }
 static inline int json_sax_print_array(json_sax_print_hd handle, json_string_t *jkey, json_sax_cmd_t value) { return json_sax_print_value(handle, JSON_ARRAY, jkey, &value); }
 static inline int json_sax_print_object(json_sax_print_hd handle, json_string_t *jkey, json_sax_cmd_t value) { return json_sax_print_value(handle, JSON_OBJECT, jkey, &value); }
 
@@ -1993,6 +2091,7 @@ static inline int json_sax_print_array_item(json_sax_print_hd handle, int64_t va
 static inline int json_sax_print_array_item(json_sax_print_hd handle, uint64_t value) { return json_sax_print_value(handle, JSON_LHEX, NULL, &value); }
 static inline int json_sax_print_array_item(json_sax_print_hd handle, double value) { return json_sax_print_value(handle, JSON_DOUBLE, NULL, &value); }
 static inline int json_sax_print_array_item(json_sax_print_hd handle, json_string_t *value) { return json_sax_print_value(handle, JSON_STRING, NULL, value); }
+static inline int json_sax_print_array_item(json_sax_print_hd handle, json_binary_t *value) { return json_sax_print_value(handle, JSON_BINARY, NULL, value); }
 extern "C" {
 #else
 /* C11泛型选择(Generic selection) */
@@ -2003,7 +2102,8 @@ uint32_t        : json_sax_print_hex                              , \
 int64_t         : json_sax_print_lint                             , \
 uint64_t        : json_sax_print_lhex                             , \
 double          : json_sax_print_double                           , \
-json_string_t*  : json_sax_print_string)(handle, NULL, value)
+json_string_t*  : json_sax_print_string                           , \
+json_binary_t*  : json_sax_print_binary)(handle, NULL, value)
 #endif
 
 #define json_sax_print_array_null(handle)         json_sax_print_null  (handle, NULL, NULL)
@@ -2019,6 +2119,7 @@ static inline int json_sax_print_object_item(json_sax_print_hd handle, json_stri
 static inline int json_sax_print_object_item(json_sax_print_hd handle, json_string_t *jkey, uint64_t value) { return json_sax_print_value(handle, JSON_LHEX, jkey, &value); }
 static inline int json_sax_print_object_item(json_sax_print_hd handle, json_string_t *jkey, double value) { return json_sax_print_value(handle, JSON_DOUBLE, jkey, &value); }
 static inline int json_sax_print_object_item(json_sax_print_hd handle, json_string_t *jkey, json_string_t *value) { return json_sax_print_value(handle, JSON_STRING, jkey, value); }
+static inline int json_sax_print_object_item(json_sax_print_hd handle, json_string_t *jkey, json_binary_t *value) { return json_sax_print_value(handle, JSON_BINARY, jkey, value); }
 extern "C" {
 #else
 /* C11泛型选择(Generic selection) */
@@ -2029,7 +2130,8 @@ uint32_t        : json_sax_print_hex                              , \
 int64_t         : json_sax_print_lint                             , \
 uint64_t        : json_sax_print_lhex                             , \
 double          : json_sax_print_double                           , \
-json_string_t*  : json_sax_print_string)(handle, jkey, value)
+json_string_t*  : json_sax_print_string                           , \
+json_binary_t*  : json_sax_print_binary)(handle, jkey, value)
 #endif
 
 #define json_sax_print_object_null(handle, jkey)  json_sax_print_null  (handle, jkey, NULL)
@@ -2061,6 +2163,7 @@ char *json_sax_print_finish(json_sax_print_hd handle, size_t *length, json_print
  * json_sax_value_t - the json object value
  * @vnum: the numerical value
  * @vstr: the string value
+ * @vbin: the binary value
  * @vcmd: the SAX array or object value, only for SAX APIs
  * @description: LJSON uses union to manage the value of different objects to save memory.
  */
@@ -2068,12 +2171,14 @@ char *json_sax_print_finish(json_sax_print_hd handle, size_t *length, json_print
  * json_value_t - json对象的值
  * @vnum: 数字类型的值
  * @vstr: 字符串类型的值
+ * @vbin: 二进制类型的值
  * @vcmd: SAX APIs指示集合对象的开始和结束
  * @description: LJSON使用union管理对象的值从而节省内存空间
  */
 typedef union {
     json_number_t vnum;
     json_string_t vstr;
+    json_binary_t vbin;
     json_sax_cmd_t vcmd;
 } json_sax_value_t;
 

@@ -42,6 +42,7 @@ LJSON is a dual-mode data processing engine designed for extreme performance, se
     * SAX + streaming combination enables constant memory usage (KB-level for 1GB JSON files)
 * Extended Data Type Support:
     * Long integers, hexadecimal numbers, and other extended types
+    * **Binary data extension, it format is `<len:data>`**
 * Developer-Friendly:
     * cJSON-inspired API design
     * Pure C implementation with no third-party dependencies
