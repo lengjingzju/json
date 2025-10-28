@@ -52,7 +52,7 @@ LJSON is a dual-mode data processing engine designed for extreme performance, se
 
 * String-to-Number Conversion: 1-10x faster than standard libraries
 * Number-to-String Conversion:
-    * Not fully comply with the IEEE-754 standard for best performance, only has 16-digits precision
+    * Not fully comply with the IEEE-754 standard for best performance, only has 17-digits precision
     * Always outputs shortest precise representation
     * Performance benchmarks:
         * 1.5%-10% of sprintf's execution time (10-70x faster)
@@ -79,11 +79,16 @@ make O=<output path> && make O=<output path> DESTDIR=<install path>
 make O=<output path> CROSS_COMPILE=<tool prefix> && make O=<output path> DESTDIR=<install path>
 ```
 
-* Select double to string algorithm `gcc -DJSON_DTOA_ALGORITHM=n` or `make DTOA=n`, n may be 0 / 1 / 2 / 3
+* Choose double to string algorithm: `gcc -DJSON_DTOA_ALGORITHM=n` or `make DTOA=n`, n may be 0 / 1 / 2 / 3
     * 0: Personal implementation of ldouble algorithm
     * 1: C standard library sprintf
     * 2: Personal optimized grisu2 algorithm
     * 3: Personal optimized dragonbox algorithm
+<br>
+
+* Choose between a large lookup table or a small lookup table: `gcc -DUSING_SMALL_LUT=n` or `make SMALL=n`, n may be 0 / 1
+    * 0: Large lookup table, it may be a little fast
+    * 1: Small lookup table, it reduces the code segment size to approximately 5KB
 <br>
 
 * Windows MSC

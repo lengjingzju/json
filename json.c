@@ -1888,9 +1888,10 @@ err:
 static inline int _json_print_binary(json_print_t *print_ptr, const void *val, json_strinfo_t *info)
 {
     size_t alloced = info->len + 24;
+    char *cur = NULL;
 
     _PRINT_PTR_REALLOC(alloced);
-    char *cur = print_ptr->cur;
+    cur = print_ptr->cur;
     *cur++ = '<';
     cur += jnum_itoa(info->len, cur);
     *cur++ = ':';
