@@ -50,6 +50,11 @@ __extension__ typedef unsigned __int128 u128;
 #endif
 #endif
 
+/* Whether to use small lut to convert double to string */
+#ifndef USING_SMALL_LUT
+#define USING_SMALL_LUT             0
+#endif
+
 typedef struct {
     uint64_t f;
     int32_t e;
@@ -146,13 +151,7 @@ static inline int32_t fill_t_4_digits(char *buffer, uint32_t digits, int32_t *pt
 
     memcpy(s, &ch_100_lut[q<<1], 2);
     memcpy(s + 2, &ch_100_lut[r<<1], 2);
-
-    if (!r) {
-        *ptz = tz_100_lut[q] + 2;
-    } else {
-        *ptz = tz_100_lut[r];
-    }
-
+    *ptz = r ? tz_100_lut[r] : tz_100_lut[q] + 2;
     return 4;
 }
 
@@ -619,8 +618,89 @@ def print_pow10(step):
             print()
             print('};')
 
+print('#if USING_SMALL_LUT')
+print_pow10(8)
+print('\n#else\n')
 print_pow10(4)
+print('#endif')
 */
+
+#if USING_SMALL_LUT
+#define POW10_EXP_LUT_POS    136 // From the pos, the value of pow10_exp_lut is negitive.
+#define POW10_LUT_MIN_IDX    -136
+#define POW10_LUT_MAX_IDX    122
+static const uint64_t pow10_mul_lut[POW10_LUT_MAX_IDX - POW10_LUT_MIN_IDX + 1] = {
+    0x4d32a036a252e482, 0xc5a05277621be294, 0x3297a26c62d808db, 0x81842f29f2cce376, 0x2127fbb0a075fccb,
+    0x54e13ca571d1e34e, 0xd94ad8b1c7380875, 0x37a0790280d2f3d4, 0x8e679c2f5e44ff90, 0x2474a2dd05b374a0,
+    0x5d538c7341cb67ff, 0xeeea5d5004981479, 0x3d2990b8531898b3, 0x9c935e00d4b9d8d3, 0x2815578d865470da,
+    0x669d0918621fd938, 0x1a44df832b8d45f2, 0x433facd4ea5f6b61, 0xac2820d9623bf42a, 0x2c1277005aaf1798,
+    0x70d31c29dde93229, 0x1ce2137f74338194, 0x49f0d5c129799da3, 0xbd49d14aa79dbc83, 0x30753387d8fd5f5d,
+    0x7c0d50b7ee0dc0ee, 0x1fc1df6a7a61ba9b, 0x514c796280fa2fa2, 0xd01fef10a657842d, 0x3547a9bea15e158d,
+    0x8865899617fb1872, 0x22eae3bbed902707, 0x59638eade54811fd, 0xe4d5e82392a40516, 0x3a94f7d7f4635545,
+    0x95f83d0a1fb69cda, 0x266469bcf5afc5da, 0x6248bcc5045156a8, 0xfb9b7cd9a4a7443d, 0x40695741f4e73c7a,
+    0xa4e4b66b68b65d61, 0x2a367454d738ece6, 0x6c1085f7e9877d2e, 0x1baa1e332d728ea4, 0x46d238d4ef39bf13,
+    0xb54d5e4a127f59c9, 0x2e69d2818df38bb9, 0x76d1770e38320987, 0x1e6adefd7f06aa60, 0x4dde63d0a158be66,
+    0xc75809c42c684dd2, 0x330833a6f4d71e2a, 0x82a45b450226b39d, 0x2171c159589d5d16, 0x559e17eef755692e,
+    0xdb2e51bfe9d0696b, 0x381c3de34e49d55b, 0x8fa475791a569d11, 0x24c5bfdd7761f2f7, 0x5e2332dacb38308b,
+    0xf0fdf2d3f3c30ba0, 0x3db1a69ca8e627d7, 0x9defbf01b061adac, 0x286e86e9e7858cb8, 0x678159610903f798,
+    0x1a7f5245e5a2cebf, 0x43d54d7fbc821144, 0xada72ccc20054aea, 0x2c7486591eb9acc8, 0x71ce24bb2fefcecb,
+    0x1d22573a28f19d63, 0x4a955a2e7d4bd05a, 0xbeeefb584aff8604, 0x30e104f3c978b5c4, 0x7d21545b9d5dfa47,
+    0x200888489af9569a, 0x52015ce2d469d374, 0xd1ef0244af236500, 0x35be35d424a4b581, 0x899504ae72497ebb,
+    0x233894a789cd2ec8, 0x5a2a7250bcee8c3c, 0xe6d3102ad96cec1e, 0x3b174fea33909ec0, 0x9745eb4d50ce6333,
+    0x26b9d5d65a5181d8, 0x63236b1a80d0a88f, 0xfdcb4fa002162a64, 0x40f8a7d70ac62fb8, 0xa6539930bf6bff46,
+    0x2a94608f8d29fbb8, 0x6d00f7320d3846f5, 0x1be7abd3781eca7d, 0x476fcc5acd1b9ff7, 0xb6e0c377cfa2e12f,
+    0x2ed1176a72984a08, 0x77d9d58b62cd8a52, 0x1eae8caef261aca1, 0x4e8ba596e760723e, 0xc913936dd571c84d,
+    0x3379bf57826af3ca, 0x83c7088e1aab65dc, 0x21bc2b266d3a36c0, 0x565c976c9cbdfccc, 0xdd15fe86affad913,
+    0x3899162693736ac6, 0x90e40fbeea1d3a4b, 0x25179157c93ec73f, 0x5ef4a74721e86477, 0xf316271c7fc3908b,
+    0x3e3aeb4ae1383563, 0x9f4f2726179a2246, 0x28c87cb5c89a2572, 0x6867a5a867f103b3, 0x1aba4714957d300e,
+    0x446c3b15f9926688, 0xaf298d050e4395d7, 0x2cd76fe086b93ce3, 0x72cb5bd86321e38d, 0x1d6329f1c35ca4c0,
+    0x4b3b4ca85a86c47b, 0xc097ce7bc90715b4, 0x314dc6448d9338c2, 0x7e37be2022c0914c, 0x204fce5e3e250262,
+    0x52b7d2dcc80cd2e4, 0xd3c21bcecceda100, 0x3635c9adc5dea000, 0x8ac7230489e80000, 0x2386f26fc1000000,
+    0x5af3107a40000000, 0xe8d4a51000000000, 0x3b9aca0000000000, 0x9896800000000000, 0x2710000000000000,
+    0x6400000000000000, 0x199999999999999a, 0x4189374bc6a7ef9e, 0xa7c5ac471b478424, 0x2af31dc4611873c0,
+    0x6df37f675ef6eae0, 0x1c25c268497681c3, 0x480ebe7b9d58566d, 0xb877aa3236a4b44a, 0x2f394219248446bb,
+    0x78e480405d7b9659, 0x1ef2d0f5da7dd8ab, 0x4f3a68dbc8f03f25, 0xcad2f7f5359a3b3f, 0x33ec47ab514e652f,
+    0x84ec3c97da624ab5, 0x22073a8515171d5e, 0x571cbec554b60dbc, 0xdf01e85f912e37a4, 0x391704310a8acec2,
+    0x9226712162ab070e, 0x256a18dd89e626ac, 0x5fc7edbc424d2fcc, 0xf53304714d9265e0, 0x3ec56164af81a34c,
+    0xa0b19d2ab70e6ed7, 0x29233aaaadd6a38b, 0x694ff258c7443208, 0x1af5bf109550f22f, 0x4504787c5f878ab6,
+    0xb0af48ec79ace838, 0x2d3b357c0692aa0b, 0x73cac65c39c96162, 0x1da48ce468e7c703, 0x4be2b05d35848cd3,
+    0xc24452da229b021c, 0x31bb798fe8174c51, 0x7f50935bebc0c35f, 0x2097b309321cde0c, 0x536fdecfdc72dc48,
+    0xd59944a37c0752a3, 0x36ae679665622172, 0x8bfbea76c619ef37, 0x23d5fe9530aa7aae, 0x5bbd6d030bf1dde6,
+    0xeadab0aba3b2dbe6, 0x3c1f689ea0b0dc23, 0x99ea0196163fa42f, 0x2766e9e0ca4dbb71, 0x64de7fb01a60982a,
+    0x19d28f47b4d524e8, 0x421b0865a5f8b066, 0xa93af6c6c79b5d2e, 0x2b52adc44bace4a8, 0x6ee8233e325e7251,
+    0x1c6463225ab7ec1d, 0x48af1243779966b1, 0xba121a4650e4ddec, 0x2fa2548ce182451a, 0x79f17c49ef61f894,
+    0x1f37ad21436d0c70, 0x4feab0f8fe87cdea, 0xcc963fee10b7d1b4, 0x345fced47f28e9e9, 0x8613fd0145877586,
+    0x2252f0e5b39769dd, 0x57de91a832277568, 0xe0f218b8d25088b9, 0x39960a6cc11ac2bf, 0x936b9fcebb25c996,
+    0x25bd5803c569edfa, 0x609d0a4718196b74, 0xf7549530e188c129, 0x3f510b91a22f4c13, 0xa21727db38cb0030,
+    0x297ec285f1ddf3c3, 0x6a3a43e642383296, 0x1b31bb5dc320d18f, 0x459e089e1c7cf9c0, 0xb23867fb2a35b28e,
+    0x2d9fd9154a4b2fc3, 0x74cc692c434fd66c, 0x1de6815302e5559d, 0x4c8b888296c5f9e3, 0xc3f490aa77bd60fd,
+    0x322a20f03f6bdf7d, 0x806bd9714632dff7, 0x20e037aa4f692f19, 0x542984435aa6def6, 0xd77485cb25823ac8,
+    0x372811ddfd50715a, 0x8d3360f09cf6e4be, 0x2425ba9bce122614, 0x5c898bcc4cfb42c3, 0xece53cec4a314ebe,
+    0x3ca52e50f85e8af2, 0x9b407691d7fc44f9, 0x27be952349b969b9, 0x65beee6ed136d135, 0x1a0c03b1df8af612,
+    0x42ae1df050bfe694, 0xaab37fd7d8f58179, 0x2bb31264501e14dc, 0x6fdee76733803565, 0x1ca38f350b22de91,
+    0x4950cac53b3a8bb0, 0xbbb01b9283253ca3, 0x300c50c958de864f, 0x7b00ced03faa4d96, 0x1f7d228322baf525,
+    0x509c814fb511cfba, 0xce5d73ff402d98e4, 0x34d4570a0c5566a1, 0x873e4f75e2224e69, 0x229f4fbbdfc73f15,
+    0x58a213cc7a4ffda6, 0xe2e69915b3fff9fa, 0x3a162b4923d708b3, 0x94b3a202eb1c3f3a, 0x261150630d159136,
+    0x617400fd9222bb6b, 0xf97ae3d0d2446f26, 0x3fddec7f2faf3714, 0xa37fce126597973d
+};
+
+static const uint8_t pow10_exp_lut[POW10_LUT_MAX_IDX - POW10_LUT_MIN_IDX + 1] = {
+    191, 190, 188, 187, 185, 184, 183, 181, 180, 178, 177, 176, 174, 173, 171, 170, 168, 167, 166, 164,
+    163, 161, 160, 159, 157, 156, 154, 153, 152, 150, 149, 147, 146, 145, 143, 142, 140, 139, 138, 136,
+    135, 133, 132, 130, 129, 128, 126, 125, 123, 122, 121, 119, 118, 116, 115, 114, 112, 111, 109, 108,
+    107, 105, 104, 102, 101, 99 , 98 , 97 , 95 , 94 , 92 , 91 , 90 , 88 , 87 , 85 , 84 , 83 , 81 , 80 ,
+    78 , 77 , 76 , 74 , 73 , 71 , 70 , 69 , 67 , 66 , 64 , 63 , 61 , 60 , 59 , 57 , 56 , 54 , 53 , 52 ,
+    50 , 49 , 47 , 46 , 45 , 43 , 42 , 40 , 39 , 38 , 36 , 35 , 33 , 32 , 30 , 29 , 28 , 26 , 25 , 23 ,
+    22 , 21 , 19 , 18 , 16 , 15 , 14 , 12 , 11 , 9  , 8  , 7  , 5  , 4  , 2  , 1  , 1  , 2  , 3  , 5  ,
+    6  , 8  , 9  , 10 , 12 , 13 , 15 , 16 , 17 , 19 , 20 , 22 , 23 , 24 , 26 , 27 , 29 , 30 , 31 , 33 ,
+    34 , 36 , 37 , 39 , 40 , 41 , 43 , 44 , 46 , 47 , 48 , 50 , 51 , 53 , 54 , 55 , 57 , 58 , 60 , 61 ,
+    62 , 64 , 65 , 67 , 68 , 70 , 71 , 72 , 74 , 75 , 77 , 78 , 79 , 81 , 82 , 84 , 85 , 86 , 88 , 89 ,
+    91 , 92 , 93 , 95 , 96 , 98 , 99 , 100, 102, 103, 105, 106, 108, 109, 110, 112, 113, 115, 116, 117,
+    119, 120, 122, 123, 124, 126, 127, 129, 130, 131, 133, 134, 136, 137, 139, 140, 141, 143, 144, 146,
+    147, 148, 150, 151, 153, 154, 155, 157, 158, 160, 161, 162, 164, 165, 167, 168, 169, 171, 172
+};
+
+#else
 
 #define POW10_LUT_MIN_IDX    -272
 #define POW10_LUT_MAX_IDX    243
@@ -759,6 +839,7 @@ static const int8_t pow10_exp_lut[POW10_LUT_MAX_IDX - POW10_LUT_MIN_IDX + 1] = {
     -43, -43, -43, -44, -44, -44, -44, -44, -45, -45, -45, -45, -45, -46, -46, -46, -46, -46, -47, -47,
     -47, -47, -47, -48, -48, -48, -48, -48, -49, -49, -49, -49, -49, -50, -50, -50
 };
+#endif
 
 static inline int32_t fill_significand(char *buffer, uint64_t digits, int32_t *ptz)
 {
@@ -767,94 +848,106 @@ static inline int32_t fill_significand(char *buffer, uint64_t digits, int32_t *p
     uint32_t q = (uint32_t)(digits / 100000000);
     uint32_t r = (uint32_t)(digits - (uint64_t)q * 100000000);
 
-    uint32_t q1 = FAST_DIV10000(q);
-    uint32_t r1 = q - q1 * 10000;
-
-    uint32_t q2 = FAST_DIV100(q1);
-    uint32_t r2 = q1 - q2 * 100;
-
-    memcpy(s, &ch_100_lut[q2<<1], 2);
-    memcpy(s + 2, &ch_100_lut[r2<<1], 2);
-    if (!r2) {
-        *ptz = tz_100_lut[q2] + 2;
-    } else {
-        *ptz = tz_100_lut[r2];
+#if USING_SMALL_LUT
+    if (q < 10000)
+    {
+        s += fill_t_4_digits(s, q, ptz);
     }
+    else
+#endif
+    {
+        uint32_t q1 = FAST_DIV10000(q);
+        uint32_t r1 = q - q1 * 10000;
+        if (q1 < 100) {
+            if (q1 >= 10) {
+                *ptz = tz_100_lut[q1];
+                memcpy(s, &ch_100_lut[q1<<1], 2);
+                s += 2;
+            } else {
+                *ptz = 0;
+                *s++ = q1 + '0';
+            }
+        } else {
+            uint32_t q2 = FAST_DIV100(q1);
+            uint32_t r2 = q1 - q2 * 100;
 
-    if (!r1) {
-        *ptz += 4;
-        memset(s + 4, '0', 4);
-    } else {
-        fill_t_4_digits(s + 4, r1, ptz);
+            *ptz = tz_100_lut[r2];
+            *s++ = q2 + '0';
+            memcpy(s, &ch_100_lut[r2<<1], 2);
+            s += 2;
+        }
+
+        if (!r1) {
+            *ptz += 4;
+            memset(s, '0', 4);
+            s += 4;
+        } else {
+            s += fill_t_4_digits(s, r1, ptz);
+        }
     }
 
     if (!r) {
         *ptz += 8;
-        memset(s + 8, '0', 8);
+        memset(s, '0', 8);
+        s += 8;
     } else {
-        fill_t_8_digits(s + 8, r, ptz);
+        s += fill_t_8_digits(s, r, ptz);
     }
 
-    return 16;
+    return (int32_t)(s - buffer);
 }
 
 static inline int32_t ldouble_convert(diy_fp_t *v, char *buffer, int32_t *vnum_digits)
 {
+#if USING_SMALL_LUT
+    const uint8_t s_lut[8] = {8, 9, 10, 3, 4, 5, 6, 7};
+    int32_t s = s_lut[v->e & 0x7];
+    v->f = (v->f << s) + ((uint64_t)1 << (s - 1));
+    v->e -= s;
+    v->e >>= 3;
+#else
     const uint8_t s_lut[4] = {8, 9, 6, 7};
     int32_t s = s_lut[v->e & 0x3];
     v->f = (v->f << s) + ((uint64_t)1 << (s - 1));
     v->e -= s;
     v->e >>= 2;
+#endif
 
     uint32_t index = v->e - POW10_LUT_MIN_IDX;
     uint64_t pow10 = pow10_mul_lut[index];
+    int32_t exp10 = pow10_exp_lut[index];
+#if USING_SMALL_LUT
+    exp10 = index < POW10_EXP_LUT_POS ? exp10 : -exp10;
+#endif
 
-    v->e -= pow10_exp_lut[index];
+    v->e -= exp10;
     v->f = u128_mul(pow10, v->f).hi;
     uint32_t delta = (uint32_t)(pow10 >> (64 - s));
     uint32_t remainder = 0;
     uint64_t orig = v->f;
 
-    if (orig < 100000000000000000llu) {
-        v->f = orig / 10;
-        remainder = (uint32_t)(orig - v->f * 10);
-        v->e += 1;
-        if (delta < 20) {
-            if ((v->f & 1) && (10 + remainder <= delta)) {
-                v->f -= 1;
-            }
-        } else {
-            uint16_t t = v->f % 10;
-            if (t * 10 + remainder <= delta) {
-                v->f -= t;
-            }
-        }
-    } else if (orig < 1000000000000000000llu) {
-        v->f = orig / 100;
-        remainder = (uint32_t)(orig - v->f * 100);
-        v->e += 2;
-        if (delta < 200) {
-            if ((v->f & 1) && (100 + remainder <= delta)) {
-                v->f -= 1;
-            }
-        } else {
-            uint16_t t = v->f % 10;
-            if (t * 100 + remainder <= delta) {
-                v->f -= t;
-            }
-        }
-    } else {
-        v->f = orig / 1000;
-        remainder = (uint32_t)(orig - v->f * 1000);
-        v->e += 3;
-        if ((v->f & 1) && (1000 + remainder <= delta)) {
-            v->f -= 1;
-        }
-    }
+    v->f = orig / 10000;
+    remainder = (uint32_t)(orig - v->f * 10000);
+    v->e += 4;
 
     int32_t num_digits, trailing_zeros;
     num_digits = fill_significand(buffer, v->f, &trailing_zeros);
     *vnum_digits = num_digits - trailing_zeros;
+
+    if (remainder > delta) {
+        uint32_t q = FAST_DIV100(remainder);
+        uint32_t r = remainder - q * 100;
+        char *tails = buffer + num_digits;
+
+        memcpy(tails, &ch_100_lut[q<<1], 2);
+        memcpy(tails + 2, &ch_100_lut[r<<1], 2);
+        trailing_zeros =  ((uint32_t)(tails[1] - '0') * 100 + r <= delta) ? 3 : \
+                          ((r <= delta) ? 2 : (((uint32_t)(tails[3] - '0') <= delta) ? 1 : 0));
+        v->e -= 4 - trailing_zeros;
+        num_digits += 4 - trailing_zeros;
+        *vnum_digits = num_digits;
+    }
+
     return num_digits;
 }
 
@@ -1127,19 +1220,28 @@ end:
 /*
 # python to get lut
 
-def print_lut():
+def print_lut(step):
     minv = -324 - 20  # 1e-324 = 0.0
     maxv = 309        # 1e309 = inf
+
+    if step == 1:
+        pass
+    elif step == 2:
+        minv = (minv // 2) - 1
+        maxv = (maxv // 2) + 1
+    else:
+        print('Only step 2 or 1 are supported.')
+        return
 
     mul_lut = []
     exp_lut = []
     mask = 1 << 64
 
     for i in range(minv, maxv + 1):
-        exp = i
+        exp = i * step
         val = 0
         if i < 0:
-            val = 5 ** (-i)
+            val = 5 ** (-i * step)
             j = 0
             while (1 << j) // val < mask:
                 j += 1
@@ -1147,7 +1249,7 @@ def print_lut():
             exp -= j
             val = (1 << j) // val
         else:
-            val = 5 ** i
+            val = 5 ** (i * step)
             if val < mask:
                 while val < mask:
                     val <<= 1
@@ -1191,8 +1293,111 @@ def print_lut():
             print()
             print('};')
 
-print_lut()
+print('#if USING_SMALL_LUT')
+print_lut(2)
+print('\n#else\n')
+print_lut(1)
+print('#endif')
 */
+
+#if USING_SMALL_LUT
+#define POW2_LUT_MIN_IDX    -173
+#define POW2_LUT_MAX_IDX    155
+static const uint64_t pow2_mul_lut[POW2_LUT_MAX_IDX - POW2_LUT_MIN_IDX + 1] = {
+    0xc3c05ee50655e1fa, 0x98ee4a22ecf3188b, 0xeef453d6923bd65a, 0xbaaee17fa23ebf76, 0x91d8a02bb6c10594,
+    0xe3e27a444d8d98b7, 0xb208ef855c969f4f, 0x8b16fb203055ac76, 0xd953e8624b85dd78, 0xa9c98d8ccb009506,
+    0x84a57695fe98746d, 0xcf42894a5dce35ea, 0xa1ebfb4219491a1f, 0xfd00b897478238d0, 0xc5a890362fddbc62,
+    0x9a6bb0aa55653b2d, 0xf148440a256e2c76, 0xbc807527ed3e12bc, 0x93445b8731587ea3, 0xe61acf033d1a45df,
+    0xb3c4f1ba87bc8696, 0x8c71dcd9ba0b4925, 0xdb71e91432b1a24a, 0xab70fe17c79ac6ca, 0x85f0468293f0eb4e,
+    0xd1476e2c07286faa, 0xa37fce126597973c, 0xff77b1fcbebcdc4f, 0xc795830d75038c1d, 0x9becce62836ac577,
+    0xf3a20279ed56d48a, 0xbe5691ef416bd60c, 0x94b3a202eb1c3f39, 0xe858ad248f5c22c9, 0xb58547448ffffb2d,
+    0x8dd01fad907ffc3b, 0xdd95317f31c7fa1d, 0xad1c8eab5ee43b66, 0x873e4f75e2224e68, 0xd3515c2831559a83,
+    0xa5178fff668ae0b6, 0x80fa687f881c7f8e, 0xc987434744ac874e, 0x9d71ac8fada6c9b5, 0xf6019da07f549b2b,
+    0xc0314325637a1939, 0x96267c7535b763b5, 0xea9c227723ee8bcb, 0xb749faed14125d36, 0x8f31cc0937ae58d2,
+    0xdfbdcece67006ac9, 0xaecc49914078536d, 0x888f99797a5e012d, 0xd5605fcdcf32e1d6, 0xa6b34ad8c9dfc06f,
+    0x823c12795db6ce57, 0xcb7ddcdda26da268, 0x9efa548d26e5a6e1, 0xf867241c8cc6d4c0, 0xc21094364dfb5636,
+    0x979cf3ca6cec5b5a, 0xece53cec4a314ebd, 0xb913179899f68584, 0x9096ea6f3848984f, 0xe1ebce4dc7f16dfb,
+    0xb080392cc4349dec, 0x89e42caaf9491b60, 0xd77485cb25823ac7, 0xa8530886b54dbdeb, 0x8380dea93da4bc60,
+    0xcd795be870516656, 0xa086cfcd97bf97f3, 0xfad2a4b13d1b5d6c, 0xc3f490aa77bd60fc, 0x991711052d8bf3c5,
+    0xef340a98172aace4, 0xbae0a846d2195712, 0x91ff83775423cc06, 0xe41f3d6a7377eeca, 0xb23867fb2a35b28d,
+    0x8b3c113c38f9f37e, 0xd98ddaee19068c76, 0xa9f6d30a038d1dbc, 0x84c8d4dfd2c63f3b, 0xcf79cc9db955c2cc,
+    0xa21727db38cb002f, 0xfd442e4688bd304a, 0xc5dd44271ad3cdba, 0x9a94dd3e8cf578b9, 0xf18899b1bc3f8ca1,
+    0xbcb2b812db11a5de, 0x936b9fcebb25c995, 0xe65829b3046b0afa, 0xb3f4e093db73a093, 0x8c974f7383725573,
+    0xdbac6c247d62a583, 0xab9eb47c81f5114f, 0x8613fd0145877585, 0xd17f3b51fca3a7a0, 0xa3ab66580d5fdaf5,
+    0xffbbcfe994e5c61f, 0xc7caba6e7c5382c8, 0x9c1661a651213e2d, 0xf3e2f893dec3f126, 0xbe89523386091465,
+    0x94db483840b717ef, 0xe896a0d7e51e1566, 0xb5b5ada8aaff80b8, 0x8df5efabc5979c8f, 0xddd0467c64bce4a0,
+    0xad4ab7112eb3929d, 0x87625f056c7c4a8b, 0xd389b47879823479, 0xa54394fe1eedb8fe, 0x811ccc668829b887,
+    0xc9bcff6034c13052, 0x9d9ba7832936edc0, 0xf64335bcf065d37d, 0xc06481fb9bcf8d39, 0x964e858c91ba2655,
+    0xeadab0aba3b2dbe5, 0xb77ada0617e3bbcb, 0x8f57fa54c2a9eab6, 0xdff9772470297ebd, 0xaefae51477a06b03,
+    0x88b402f7fd75539b, 0xd59944a37c0752a2, 0xa6dfbd9fb8e5b88e, 0x825ecc24c873782f, 0xcbb41ef979346bca,
+    0x9f24b832e6b0f436, 0xf8a95fcf88747d94, 0xc24452da229b021b, 0x97c560ba6b0919a5, 0xed246723473e3813,
+    0xb94470938fa89bce, 0x90bd77f3483bb9b9, 0xe2280b6c20dd5232, 0xb0af48ec79ace837, 0x8a08f0f8bf0f156b,
+    0xd7adf884aa879177, 0xa87fea27a539e9a5, 0x83a3eeeef9153e89, 0xcdb02555653131b6, 0xa0b19d2ab70e6ed6,
+    0xfb158592be068d2e, 0xc428d05aa4751e4c, 0x993fe2c6d07b7fab, 0xef73d256a5c0f77c, 0xbb127c53b17ec159,
+    0x9226712162ab070d, 0xe45c10c42a2b3b05, 0xb267ed1940f1c61c, 0x8b61313bbabce2c6, 0xd9c7dced53c72255,
+    0xaa242499697392d2, 0x84ec3c97da624ab4, 0xcfb11ead453994ba, 0xa2425ff75e14fc31, 0xfd87b5f28300ca0d,
+    0xc612062576589dda, 0x9abe14cd44753b52, 0xf1c90080baf72cb1, 0xbce5086492111aea, 0x9392ee8e921d5d07,
+    0xe69594bec44de15b, 0xb424dc35095cd80f, 0x8cbccc096f5088cb, 0xdbe6fecebdedd5be, 0xabcc77118461cefc,
+    0x8637bd05af6c69b5, 0xd1b71758e219652b, 0xa3d70a3d70a3d70a, 0x8000000000000000, 0xc800000000000000,
+    0x9c40000000000000, 0xf424000000000000, 0xbebc200000000000, 0x9502f90000000000, 0xe8d4a51000000000,
+    0xb5e620f480000000, 0x8e1bc9bf04000000, 0xde0b6b3a76400000, 0xad78ebc5ac620000, 0x878678326eac9000,
+    0xd3c21bcecceda100, 0xa56fa5b99019a5c8, 0x813f3978f8940984, 0xc9f2c9cd04674ede, 0x9dc5ada82b70b59d,
+    0xf684df56c3e01bc6, 0xc097ce7bc90715b3, 0x96769950b50d88f4, 0xeb194f8e1ae525fd, 0xb7abc627050305ad,
+    0x8f7e32ce7bea5c6f, 0xe0352f62a19e306e, 0xaf298d050e4395d6, 0x88d8762bf324cd0f, 0xd5d238a4abe98068,
+    0xa70c3c40a64e6c51, 0x82818f1281ed449f, 0xcbea6f8ceb02bb39, 0x9f4f2726179a2245, 0xf8ebad2b84e0d58b,
+    0xc2781f49ffcfa6d5, 0x97edd871cfda3a56, 0xed63a231d4c4fb27, 0xb975d6b6ee39e436, 0x90e40fbeea1d3a4a,
+    0xe264589a4dcdab14, 0xb0de65388cc8ada8, 0x8a2dbf142dfcc7ab, 0xd7e77a8f87daf7fb, 0xa8acd7c0222311bc,
+    0x83c7088e1aab65db, 0xcde6fd5e09abcf26, 0xa0dc75f1778e39d6, 0xfb5878494ace3a5f, 0xc45d1df942711d9a,
+    0x9968bf6abbe85f20, 0xefb3ab16c59b14a2, 0xbb445da9ca61281f, 0x924d692ca61be758, 0xe498f455c38b997a,
+    0xb2977ee300c50fe7, 0x8b865b215899f46c, 0xda01ee641a708de9, 0xaa51823e34a7eede, 0x850fadc09923329e,
+    0xcfe87f7cef46ff16, 0xa26da3999aef7749, 0xfdcb4fa002162a63, 0xc646d63501a1511d, 0x9ae757596946075f,
+    0xf209787bb47d6b84, 0xbd176620a501fbff, 0x93ba47c980e98cdf, 0xe6d3102ad96cec1d, 0xb454e4a179dd1877,
+    0x8ce2529e2734bb1d, 0xdc21a1171d42645d, 0xabfa45da0edbde69, 0x865b86925b9bc5c2, 0xd1ef0244af2364ff,
+    0xa402b9c5a8d3a6e7, 0x802221226be55a64, 0xc83553c5c8965d3d, 0x9c69a97284b578d7, 0xf46518c2ef5b8cd1,
+    0xbeeefb584aff8603, 0x952ab45cfa97a0b2, 0xe912b9d1478ceb17, 0xb616a12b7fe617aa, 0x8e41ade9fbebc27d,
+    0xde469fbd99a05fe3, 0xada72ccc20054ae9, 0x87aa9aff79042286, 0xd3fa922f2d1675f2, 0xa59bc234db398c25,
+    0x8161afb94b44f57d, 0xca28a291859bbf93, 0x9defbf01b061adab, 0xf6c69a72a3989f5b, 0xc0cb28a98fcf3c7f,
+    0x969eb7c47859e743, 0xeb57ff22fc0c7959, 0xb7dcbf5354e9bece, 0x8fa475791a569d10, 0xe070f78d3927556a,
+    0xaf58416654a6babb, 0x88fcf317f22241e2, 0xd60b3bd56a5586f1, 0xa738c6bebb12d16c, 0x82a45b450226b39c,
+    0xcc20ce9bd35c78a5, 0x9f79a169bd203e41, 0xf92e0c3537826145, 0xc2abf989935ddbfe, 0x98165af37b2153de,
+    0xeda2ee1c7064130c, 0xb9a74a0637ce2ee1, 0x910ab1d4db9914a0, 0xe2a0b5dc971f303a, 0xb10d8e1456105dad,
+    0x8a5296ffe33cc92f, 0xd8210befd30efa5a, 0xa8d9d1535ce3b396, 0x83ea2b892091e44d, 0xce1de40642e3f4b9,
+    0xa1075a24e4421730, 0xfb9b7cd9a4a7443c, 0xc491798a08a2ad4e, 0x9991a6f3d6bf1765, 0xeff394dcff8a948e,
+    0xbb764c4ca7a4440f, 0x92746b9be2f8552c, 0xe4d5e82392a40515, 0xb2c71d5bca9023f8, 0x8bab8eefb6409c1a,
+    0xda3c0f568cc4f3e8, 0xaa7eebfb9df9de8d, 0x8533285c936b35de, 0xd01fef10a657842c, 0xa298f2c501f45f42,
+    0xfe0efb53d30dd4d7, 0xc67bb4597ce2ce48, 0x9b10a4e5e9913128, 0xf24a01a73cf2dccf, 0xbd49d14aa79dbc82,
+    0x93e1ab8252f33b45, 0xe7109bfba19c0c9d, 0xb484f9dc9641e9da, 0x8d07e33455637eb2, 0xdc5c5301c56b75f7,
+    0xac2820d9623bf429, 0x867f59a9d4bed6c0, 0xd226fc195c6a2f8c, 0xa42e74f3d032f525, 0x80444b5e7aa7cf85,
+    0xc86ab5c39fa63440, 0x9c935e00d4b9d8d2, 0xf4a642e14c6262c8, 0xbf21e44003acdd2c, 0x95527a5202df0ccb,
+    0xe950df20247c83fd, 0xb6472e511c81471d, 0x8e679c2f5e44ff8f, 0xde81e40a034bcf4f
+};
+
+static const int16_t pow2_exp_lut[POW2_LUT_MAX_IDX - POW2_LUT_MIN_IDX + 1] = {
+    -1213, -1206, -1200, -1193, -1186, -1180, -1173, -1166, -1160, -1153, -1146, -1140, -1133, -1127, -1120,
+    -1113, -1107, -1100, -1093, -1087, -1080, -1073, -1067, -1060, -1053, -1047, -1040, -1034, -1027, -1020,
+    -1014, -1007, -1000, -994 , -987 , -980 , -974 , -967 , -960 , -954 , -947 , -940 , -934 , -927 , -921 ,
+    -914 , -907 , -901 , -894 , -887 , -881 , -874 , -867 , -861 , -854 , -847 , -841 , -834 , -828 , -821 ,
+    -814 , -808 , -801 , -794 , -788 , -781 , -774 , -768 , -761 , -754 , -748 , -741 , -735 , -728 , -721 ,
+    -715 , -708 , -701 , -695 , -688 , -681 , -675 , -668 , -661 , -655 , -648 , -642 , -635 , -628 , -622 ,
+    -615 , -608 , -602 , -595 , -588 , -582 , -575 , -568 , -562 , -555 , -549 , -542 , -535 , -529 , -522 ,
+    -515 , -509 , -502 , -495 , -489 , -482 , -475 , -469 , -462 , -455 , -449 , -442 , -436 , -429 , -422 ,
+    -416 , -409 , -402 , -396 , -389 , -382 , -376 , -369 , -362 , -356 , -349 , -343 , -336 , -329 , -323 ,
+    -316 , -309 , -303 , -296 , -289 , -283 , -276 , -269 , -263 , -256 , -250 , -243 , -236 , -230 , -223 ,
+    -216 , -210 , -203 , -196 , -190 , -183 , -176 , -170 , -163 , -157 , -150 , -143 , -137 , -130 , -123 ,
+    -117 , -110 , -103 , -97  , -90  , -83  , -77  , -70  , -63  , -57  , -50  , -44  , -37  , -30  , -24  ,
+    -17  , -10  , -4   , 3    , 10   , 16   , 23   , 30   , 36   , 43   , 49   , 56   , 63   , 69   , 76   ,
+    83   , 89   , 96   , 103  , 109  , 116  , 123  , 129  , 136  , 142  , 149  , 156  , 162  , 169  , 176  ,
+    182  , 189  , 196  , 202  , 209  , 216  , 222  , 229  , 235  , 242  , 249  , 255  , 262  , 269  , 275  ,
+    282  , 289  , 295  , 302  , 309  , 315  , 322  , 328  , 335  , 342  , 348  , 355  , 362  , 368  , 375  ,
+    382  , 388  , 395  , 402  , 408  , 415  , 422  , 428  , 435  , 441  , 448  , 455  , 461  , 468  , 475  ,
+    481  , 488  , 495  , 501  , 508  , 515  , 521  , 528  , 534  , 541  , 548  , 554  , 561  , 568  , 574  ,
+    581  , 588  , 594  , 601  , 608  , 614  , 621  , 627  , 634  , 641  , 647  , 654  , 661  , 667  , 674  ,
+    681  , 687  , 694  , 701  , 707  , 714  , 720  , 727  , 734  , 740  , 747  , 754  , 760  , 767  , 774  ,
+    780  , 787  , 794  , 800  , 807  , 813  , 820  , 827  , 833  , 840  , 847  , 853  , 860  , 867  , 873  ,
+    880  , 887  , 893  , 900  , 907  , 913  , 920  , 926  , 933  , 940  , 946  , 953  , 960  , 966
+};
+
+#else
 
 #define POW2_LUT_MIN_IDX    -344
 #define POW2_LUT_MAX_IDX    309
@@ -1376,6 +1581,7 @@ static const int16_t pow2_exp_lut[POW2_LUT_MAX_IDX - POW2_LUT_MIN_IDX + 1] = {
     887  , 890  , 893  , 897  , 900  , 903  , 907  , 910  , 913  , 916  , 920  , 923  , 926  , 930  , 933  ,
     936  , 940  , 943  , 946  , 950  , 953  , 956  , 960  , 963
 };
+#endif
 
 static inline double ldouble_rconvert(uint64_t f, int32_t e)
 {
@@ -1395,6 +1601,19 @@ static inline double ldouble_rconvert(uint64_t f, int32_t e)
 
     double d = 0;
     uint64_t *v = (uint64_t *)&d;
+
+#if USING_SMALL_LUT
+    if (e & 1) {
+        if (f <= 1844674407370955161llu) { /* ((uint64_t)1 << 64) / 10 */
+            f *= 10;
+            e -= 1;
+        } else {
+            f /= 10;
+            e += 1;
+        }
+    }
+    e >>= 1;
+#endif
 
     if (e <= POW2_LUT_MIN_IDX || e >= POW2_LUT_MAX_IDX) {
         *v = e <= POW2_LUT_MIN_IDX ? 0 : DP_EXPONENT_MASK;
