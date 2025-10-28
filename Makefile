@@ -9,6 +9,7 @@ PACKAGE_NAME    = ljson
 
 INSTALL_HEADERS = json.h jnum.h
 DTOA           ?= 0
+SMALL          ?= 0
 
 libsrcs        := json.c jnum.c
 ifeq ($(DTOA),2)
@@ -20,6 +21,7 @@ endif
 
 
 CPFLAGS        += -DJSON_DTOA_ALGORITHM=$(DTOA) # 0:ldouble 1:sprintf 2:grisu2 3:dragonbox
+CPFLAGS        += -DUSING_SMALL_LUT=$(SMALL) # 0:big lut 1:small lut
 CXXFLAGS       += -Wno-missing-field-initializers -Wno-write-strings
 
 .PHONY: all clean install
