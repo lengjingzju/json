@@ -42,7 +42,7 @@ LJSON is a dual-mode data processing engine designed for extreme performance, se
     * SAX + streaming combination enables constant memory usage (KB-level for 1GB JSON files)
 * Extended Data Type Support:
     * Long integers, hexadecimal numbers, and other extended types
-    * **Binary data extension, it format is `<len:data>`**
+    * **Binary data extension, its format is `<len:data>`**
 * Developer-Friendly:
     * cJSON-inspired API design
     * Pure C implementation with no third-party dependencies
@@ -193,8 +193,8 @@ Note 2: Due to modifications such as feature additions and logic optimizations, 
 
 ![x86_64-Linux Test Result](image/test_for_x86_64.png)
 
-> Test Platform: PC | CPU: Intel i7-1260P | OS: Ubuntu 20.04 (VMWare) | LJSON_v5.0.0<br>
-> Test Result: LJSON parses 408% faster and prints 1908% faster than cJSON, LJSON parses 118% faster and prints 188% faster than RapidJSON
+> Test Platform: PC | CPU: Intel i7-1260P | OS: Debian 13 (VMWare) | LJSON_v5.0.2<br>
+> Test Result: LJSON parses 543% faster and prints 2112% faster than cJSON, LJSON parses 166% faster and prints 215% faster than RapidJSON
 (without file reading and writing)
 
 ![x86_64-Linux Test Result2](image/test_for_x86_64-2.png)
