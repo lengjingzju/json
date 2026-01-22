@@ -5,7 +5,7 @@
 # https://github.com/lengjingzju/cbuild-ng #
 ############################################
 
-############# Date: 2025-08-08 #############
+############# Date: 2026-02-02 #############
 
 # The default behavior only includes inc.env.mk and inc.ins.mk.
 # INC_MAKES can be set to a combination of `disenv` `conf` `app` `mod` `disins`.
@@ -37,9 +37,9 @@ OPTIMIZER_FLAG ?= -O0 -g -ggdb
 else ifeq ($(ENV_BUILD_TYPE),release)
 OPTIMIZER_FLAG ?= -O3
 else ifeq ($(ENV_BUILD_TYPE),minsize)
-OPTIMIZER_FLAG ?= -Os
+OPTIMIZER_FLAG ?= -Os -g -ggdb
 else
-OPTIMIZER_FLAG ?= -O2
+OPTIMIZER_FLAG ?= -O2 -g -ggdb
 endif
 
 ifneq ($(ENV_BUILD_MODE),yocto)
@@ -176,6 +176,30 @@ FT_CONFIG       += $$(if $$(filter y,$$($1)),$2,$3)
 $(if $(filter y,$(CACHE_BUILD)),CACHE_APPENDS   += $1=$$($1))
 endef
 
+define imake-config
+ifneq ($(NATIVE_BUILD),y)
+ifeq ($$($1),y)
+CPFLAGS        += $2
+LDFLAGS        += $3
+endif
+CHECK_INFO     += $1=$$($1)
+else
+ifeq ($$($1_NATIVE),y)
+CPFLAGS        += $2
+LDFLAGS        += $3
+endif
+CHECK_INFO     += $1_NATIVE=$$($1_NATIVE)
+endif
+endef
+
+define IMAKE-CONFIG
+ifeq ($$($1),y)
+CPFLAGS        += $2
+LDFLAGS        += $3
+endif
+CHECK_INFO     += $1=$$($1)
+endef
+
 PREPARE_SYSROOT := -s CROSS_DESTDIR=$(WORKDIR)/sysroot NATIVE_DESTDIR=$(WORKDIR)/sysroot-native \
                   NATIVE_BUILD= INSTALL_OPTION=link -C $(ENV_TOP_DIR) $(PACKAGE_ID)_psysroot
 
@@ -218,8 +242,10 @@ CPP            := $(CROSS_COMPILE)gcc -E
 CXX            := $(CROSS_COMPILE)g++
 AS             := $(CROSS_COMPILE)as
 LD             := $(CROSS_COMPILE)ld
-AR             := $(CROSS_COMPILE)ar
-RANLIB         := $(CROSS_COMPILE)ranlib
+# Enabling LTO requires loading a plugin, ar/nm/ranlib do not add it automatically,
+# which is why we switched to using gcc-ar/gcc-nm/gcc-ranlib.
+AR             := $(CROSS_COMPILE)gcc-ar
+RANLIB         := $(CROSS_COMPILE)gcc-ranlib
 OBJCOPY        := $(CROSS_COMPILE)objcopy
 STRIP          := $(CROSS_COMPILE)strip
 endif
@@ -265,6 +291,20 @@ CROSS_SYSROOT  := /usr/$(patsubst %-,%,$(CROSS_COMPILE))
 endif
 clang_cpflags  := --target=$(patsubst %-,%,$(CROSS_COMPILE)) --sysroot=$(CROSS_SYSROOT)
 clang_ldflags  := $(clang_cpflags) -fuse-ld=lld
+clang_gccdir   := $(shell LANG=en_US PATH=$(PATH) $(CROSS_COMPILE)gcc -print-search-dirs | grep "^libraries:" | cut -d '=' -f 2 | cut -d ':' -f 1)
+clang_ldflags  += -L$(clang_gccdir) -Wl,-rpath-link=$(clang_gccdir) -B$(clang_gccdir)
+ifeq ($(USING_CLANG_CXX_BUILD),y)
+# Cross-compiling C++ requires providing C++ headers and libraries of LLVM.
+# For example, cross compile aarch64 on Debian, the following packages need to be installed:
+# sudo dpkg --add-architecture arm64
+# sudo apt update && sudo apt install libc++-dev:arm64 libc++abi-dev:arm64
+# Note: CMake failed to cross compile with clang because it did not use the set ldflags
+#       during the try_compile phase. While IMake does not have this issue.
+clang_incdir   ?= /usr/include/c++/v1
+clang_libdir   ?= /usr/lib/$(shell echo $(CROSS_COMPILE) | sed 's/-$$//')
+clang_cpflags  += -I$(clang_incdir)
+clang_ldflags  += -L$(clang_libdir) -Wl,-rpath-link=$(clang_libdir) -stdlib=libc++
+endif # USING_CLANG_CXX_BUILD
 endif # CROSS_COMPILE
 endif # clang
 
@@ -439,7 +479,7 @@ ifeq ($(KERNELRELEASE), )
 
 COLORECHO      := $(if $(findstring dash,$(shell readlink /bin/sh)),echo,echo -e)
 SRC_PATH       ?= .
-IGNORE_PATH    ?= .git .pc scripts output obj objects
+IGNORE_PATH    ?= .git .pc scripts out output obj objects
 REG_SUFFIX     ?= c cc cxx cpp S
 ifeq ($(USING_CXX_BUILD_C),y)
 CXX_SUFFIX     ?= c cc cp cxx cpp CPP c++ C
@@ -468,20 +508,40 @@ endif
 imake_cpflags  += $(call link_hdrs)
 imake_ldflags  += $(call link_libs)
 
+# Optimization flags
 imake_cpflags  += $(OPTIMIZER_FLAG)
 ifneq ($(ENV_BUILD_TYPE),debug)
+imake_ldflags  += -Wl,-O1
+ENV_LINK_SECTION ?= y
+endif
+ifeq ($(ENV_BUILD_TYPE),release)
+ENV_LINK_LTO   ?= y
+endif
+
+# Independent segments that can remove unused functions and variables when linking
+ifeq ($(ENV_LINK_SECTION),y)
 imake_cpflags  += -ffunction-sections -fdata-sections
 imake_ldflags  += -Wl,--gc-sections
-else
-imake_ldflags  += -Wl,-O1
 endif
+
+# Link Time Optimization: Global cross-file optimization can be performed when linking
+ifeq ($(ENV_LINK_LTO),y)
+imake_cpflags  += -flto
+imake_ldflags  += -flto
+endif
+
 #imake_ldflags += -static
 
 imake_cpflags  += -Wall # This enables all the warnings about constructions that some users consider questionable.
 imake_cpflags  += -Wextra # This enables some extra warning flags that are not enabled by -Wall (This option used to be called -W).
-imake_cpflags  += -Wlarger-than=$(if $(object_byte_size),$(object_byte_size),1024) # Warn whenever an object is defined whose size exceeds object_byte_size.
-imake_cpflags  += -Wframe-larger-than=$(if $(frame_byte_size),$(frame_byte_size),8192) # Warn if the size of a function frame exceeds frame_byte_size.
+imake_cpflags  += -Wlarger-than=$(if $(object_byte_size),$(object_byte_size),8192) # Warn whenever an object is defined whose size exceeds object_byte_size.
+imake_cpflags  += -Wframe-larger-than=$(if $(frame_byte_size),$(frame_byte_size),65536) # Warn if the size of a function frame exceeds frame_byte_size.
 #imake_cpflags += -Wdate-time #Warn when macros __TIME__, __DATE__ or __TIMESTAMP__ are encountered as they might prevent bit-wise-identical reproducible compilations.
+
+ifeq ($(ENV_STRICT_WARN),y)
+imake_cpflags  += -Wconversion # Warn for implicit conversions that may alter a value
+#imake_cpflags  += -Wshadow # Warn when a local variable shadows another
+endif
 
 # Set SIMD acceleration for ARM and X86/AMD64 for cross build
 ifneq ($(NATIVE_BUILD),y)
@@ -617,8 +677,7 @@ endef
 define compile_cmd
 	$(PREAT)mkdir -p $$(dir $$@)
 ifeq ($(filter $(1),$(ASM_SUFFIX)), )
-	$(PREAT)$(2) $(if $(filter $(1),$(CXX_SUFFIX)),$$(CXXFLAGS),$$(CFLAGS)) $$(imake_cpflags) $$(CPFLAGS) $$(CFLAGS_$$(patsubst $$(OBJ_PREFIX)/%,%,$$@)) $$(PRIVATE_CPFLAGS) -MM -MT $$@ -MF $$(patsubst %.o,%.d,$$@) $$<
-	$(PREAT)cat $$(patsubst %.o,%.d,$$@) | sed -e 's/#.*//' -e 's/^[^:]*:\s*//' -e 's/\s*\\$$$$//' -e 's/[ \t\v][ \t\v]*/\n/g' | sed -e '/^$$$$/ d' -e 's/$$$$/:/g' >> $$(patsubst %.o,%.d,$$@)
+	$(PREAT)$(2) $(if $(filter $(1),$(CXX_SUFFIX)),$$(CXXFLAGS),$$(CFLAGS)) $$(imake_cpflags) $$(CPFLAGS) $$(CFLAGS_$$(patsubst $$(OBJ_PREFIX)/%,%,$$@)) $$(PRIVATE_CPFLAGS) -MM -MP -MT $$@ -MF $$(patsubst %.o,%.d,$$@) $$<
 endif
 	$(PREAT)$(COLORECHO) "\033[032m$(2)\033[0m	$$<" $(TOLOG)
 ifneq ($(2),$(AS))
@@ -781,7 +840,7 @@ endef
 
 ifeq ($(words $(MOD_NAME)),1)
 
-IGNORE_PATH    ?= .git .pc scripts output
+IGNORE_PATH    ?= .git .pc scripts out output obj objects
 REG_SUFFIX     ?= c S
 
 ifeq ($(SRCS), )
