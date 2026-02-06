@@ -19,11 +19,14 @@
 #endif
 #else
 #include <io.h>
+#include <BaseTsd.h>     // for SSIZE_T
+#ifndef ssize_t
+typedef SSIZE_T ssize_t;
+#endif
 #define open                            _open
 #define close                           _close
 #define read                            _read
 #define write                           _write
-#define ssize_t                         int
 #pragma warning(disable: 4996)
 #endif
 
@@ -568,6 +571,13 @@ json_object *json_get_array_item(json_object *json, int seq, json_object **prev)
     json_object *p = NULL, *pos = NULL, *n = NULL;
 
     if (json->type_member == JSON_ARRAY) {
+        if (!!prev && !!(*prev)) {
+            pos = json_list_entry((*prev)->list.next, json_object);
+            if (&pos->list != (struct json_list *)(&json->value.head)) {
+                return pos;
+            }
+        }
+
         json_list_for_each_entry_safe(p, pos, n, &json->value.head, list, json_object) {
             if (count++ == seq) {
                 if (prev)
@@ -586,6 +596,15 @@ json_object *json_get_object_item(json_object *json, const char *key, json_objec
 
     if (json->type_member == JSON_OBJECT) {
         if (key && key[0]) {
+            if (!!prev && !!(*prev)) {
+                pos = json_list_entry((*prev)->list.next, json_object);
+                if (&pos->list != (struct json_list *)(&json->value.head)) {
+                    if (pos->key_member && strcmp(key, pos->key_member) == 0) {
+                        return pos;
+                    }
+                }
+            }
+
             json_list_for_each_entry_safe(p, pos, n, &json->value.head, list, json_object) {
                 if (pos->key_member && strcmp(key, pos->key_member) == 0) {
                     if (prev)
@@ -594,6 +613,15 @@ json_object *json_get_object_item(json_object *json, const char *key, json_objec
                 }
             }
         } else {
+            if (!!prev && !!(*prev)) {
+                pos = json_list_entry((*prev)->list.next, json_object);
+                if (&pos->list != (struct json_list *)(&json->value.head)) {
+                    if (!pos->jkey.len) {
+                        return pos;
+                    }
+                }
+            }
+
             json_list_for_each_entry_safe(p, pos, n, &json->value.head, list, json_object) {
                 if (!pos->jkey.len) {
                     if (prev)
