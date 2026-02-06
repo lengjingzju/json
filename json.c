@@ -669,6 +669,11 @@ json_object *json_get_array_item(json_object *json, int seq, json_object **prev)
             json_object *first = json_list_entry_first(head, json_object);
             json_object *item = first;
 
+            if (!!prev && !!(*prev)) {
+                item = json_list_entry_next(*prev, list, json_object);
+                return (item != first) ? item : NULL;
+            }
+
             do {
                 if (count++ == seq) {
                     if (prev)
@@ -695,6 +700,14 @@ json_object *json_get_object_item(json_object *json, const char *key, json_objec
                 json_object *first = json_list_entry_first(head, json_object);
                 json_object *item = first;
 
+                if (!!prev && !!(*prev)) {
+                    item = json_list_entry_next(*prev, list, json_object);
+                    if (item->key && strcmp(key, item->key) == 0) {
+                        return item;
+                    }
+                    item = first;
+                }
+
                 do {
                     if (item->key && strcmp(key, item->key) == 0) {
                         if (prev)
@@ -712,6 +725,14 @@ json_object *json_get_object_item(json_object *json, const char *key, json_objec
                 json_object *pitem = json_list_entry_last(head, json_object);
                 json_object *first = json_list_entry_first(head, json_object);
                 json_object *item = first;
+
+                if (!!prev && !!(*prev)) {
+                    item = json_list_entry_next(*prev, list, json_object);
+                    if (!item->ikey.len) {
+                        return item;
+                    }
+                    item = first;
+                }
 
                 do {
                     if (!item->ikey.len) {

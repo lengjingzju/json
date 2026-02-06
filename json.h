@@ -14,7 +14,7 @@
 extern "C" {
 #endif
 
-#define JSON_VERSION                    0x050002
+#define JSON_VERSION                    0x050003
 #define JSON_SAX_APIS_SUPPORT           1
 
 /**************** json object structure / json对象结构 ****************/
@@ -629,15 +629,19 @@ int json_get_object_size(json_object *json);
  * json_get_array_item - Get the specified object in JSON_ARRAY object
  * @json: IN, the JSON_ARRAY object
  * @seq: IN, the sequence number
- * &prev: OUT, to store the previous JSON object, it can be NULL
+ * &prev: INOUT, to store the previous JSON object, it can be NULL
  * @return: NULL on failure, a pointer on success
+ * @description: If the `*prev` is not NULL, the API ignores the value of `seq`
+ *               and directly retrieves the next item.
  */
 /*
  * json_get_array_item - 获取JSON_ARRAY类型对象的指定序号的子对象
  * @json: IN, json对象
  * @seq: IN, 序号
- * &prev: OUT, 存储前一个对象，主要是删除会用到，不是删除时可以设为NULL
+ * &prev: INOUT, 存储前一个对象，主要是删除会用到，不是删除时可以设为NULL
  * @return: 失败返回NULL；成功返回指针
+ * @description: 如果 `*prev` 不是空指针, 本接口会忽略 `seq` 的值并
+ *               直接获取 `*prev` 的下一个节点
  */
 json_object *json_get_array_item(json_object *json, int seq, json_object **prev);
 
@@ -645,15 +649,20 @@ json_object *json_get_array_item(json_object *json, int seq, json_object **prev)
  * json_get_object_item - Get the specified object in JSON_OBJECT object
  * @json: IN, the JSON_OBJECT object
  * @key: IN, the specified key
- * &prev: OUT, to store the previous JSON object, it can be NULL
+ * &prev: INOUT, to store the previous JSON object, it can be NULL
  * @return: NULL on failure, a pointer on success
+ * @description: If the `*prev` is not NULL, the API first checks if the key of the
+ *               next node after `*prev` matches the requested `key`. If not, it starts
+ *               the check from the beginning, which can accelerate node retrieval.
  */
 /*
  * json_get_object_item - 获取JSON_ARRAY类型对象的指定key的子对象
  * @json: IN, json对象
  * @seq: key, 键值
- * &prev: OUT, 存储前一个对象，主要是删除会用到，不是删除时可以设为NULL
+ * &prev: INOUT, 存储前一个对象，主要是删除会用到，不是删除时可以设为NULL
  * @return: 失败返回NULL；成功返回指针
+ * @description: 如果 `*prev` 不是空指针, 本接口会先判断 `*prev` 的下一个节点的key
+ *               是否是要求的key，不是再从头开始判断，可加速获取节点
  */
 json_object *json_get_object_item(json_object *json, const char *key, json_object **prev);
 
