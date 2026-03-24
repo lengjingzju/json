@@ -509,7 +509,8 @@ int json_string_strdup(const char *src, json_strinfo_t *isrc, char **dst, json_s
                 return -1;
             }
         }
-        *idst = *isrc;
+        idst->escaped = isrc->escaped;
+        idst->len = isrc->len;
         memcpy(*dst, src, isrc->len);
         (*dst)[idst->len] = '\0';
     } else {
@@ -1399,7 +1400,8 @@ int pjson_string_strdup(const char *src, json_strinfo_t *isrc, char **dst, json_
                 return -1;
             }
         }
-        *idst = *isrc;
+        idst->escaped = isrc->escaped;
+        idst->len = isrc->len;
         memcpy(*dst, src, isrc->len);
         (*dst)[idst->len] = '\0';
     } else {
