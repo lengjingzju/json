@@ -5,7 +5,7 @@
 # https://github.com/lengjingzju/cbuild-ng #
 ############################################
 
-############# Date: 2026-02-02 #############
+############# Date: 2026-04-24 #############
 
 # The default behavior only includes inc.env.mk and inc.ins.mk.
 # INC_MAKES can be set to a combination of `disenv` `conf` `app` `mod` `disins`.
@@ -863,7 +863,7 @@ else
 endif
 
 #
-# Starting from kernel version 6.10, the compilation dependency rule has been changed
+# Starting from kernel version 6.10(9a0ebe5011f4), the compilation dependency rule has been changed
 # from "$(obj)/%.o: $(src)/%.c" to "$(obj)/%.o: $(obj)/%.c", the original method of separating
 # compilation output from source code has failed, so the following rules has been added.
 #
@@ -897,11 +897,22 @@ MOD_MAKES      += $(if $(KERNEL_OUT),O=$(KERNEL_OUT),O=)
 endif
 
 ifneq ($(filter $(OBJ_PREFIX),. $(MOD_PATH)), )
-MOD_OPATH      ?= $(MOD_PATH)
+MOD_OPATH      ?= $(shell realpath -m $(OBJ_PREFIX))
 MOD_MAKES      += M=$(MOD_PATH)
+
+modules_install_prepend:
+	@
+
 else
+
 MOD_OPATH      ?= $(shell realpath -m $(OBJ_PREFIX))
 MOD_MAKES      += M=$(MOD_OPATH) src=$(MOD_PATH)
+
+#
+# Starting from kernel version 6.13(13b25489b6f8b), the variable value of `build-dir` has
+# been changed from `$(KBUILD_EXTMOD)` to `.`, so the following variable setting has been added.
+#
+MOD_MAKES      += build-dir=$(MOD_OPATH)
 
 #
 # Note:
@@ -918,6 +929,19 @@ $(OBJ_PREFIX)/$(KBUILD_MK): $(MOD_PATH)/$(KBUILD_MK)
 	$(PREAT)-mkdir -p $(dir $@)
 	$(PREAT)-cp -f $< $@
 
+#
+# Starting from kernel version 6.13(13b25489b6f8b and bad6beb2c0bb9), the variable value of `extmod_prefix`
+# has been removed, module will be install to `$(INS_PREFIX)/lib/modules/<full_ver>/updates/$(MOD_OPATH)`.
+# To avoid installation in this directory, so the following rule has been added.
+#
+modules_install_prepend:
+	$(PREAT)full_ver=$$($(MAKE) -s $(MOD_MAKES) kernelversion); \
+		major_ver=$$(echo $${full_ver} | cut -d. -f 1); \
+		minor_ver=$$(echo $${full_ver} | cut -d. -f 2); \
+		if [ $${major_ver} -gt 6 ] || ([ $${major_ver} -eq 6 ] && [ $${minor_ver} -ge 13 ]); then \
+			sed -i "s@$(MOD_OPATH)/@@g" $(MOD_OPATH)/modules.order; \
+		fi
+
 endif
 
 export SEARCH_HDRS PACKAGE_NAME
@@ -933,11 +957,12 @@ ifeq ($(filter $(MOD_OPATH)/% $(MOD_OPATH),$(MOD_PATH)), )
 	$(PREAT)rm -rf $(MOD_OPATH)
 endif
 
-modules_install:
+modules_install: modules_install_prepend
 	$(PREAT)$(MAKE) $(MOD_MAKES) $(if $(INS_PREFIX), INSTALL_MOD_PATH=$(INS_PREFIX)) modules_install
 
 symvers_install:
 	$(PREAT)install -d $(INS_PREFIX)/usr/include/$(INSTALL_HDR)
+	$(PREAT)sed -i "s@$(MOD_OPATH)/@@g" $(OBJ_PREFIX)/Module.symvers
 	$(PREAT)cp -drf --preserve=mode,timestamps $(OBJ_PREFIX)/Module.symvers $(INS_PREFIX)/usr/include/$(INSTALL_HDR)
 
 install_hdrs: symvers_install

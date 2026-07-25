@@ -20,26 +20,26 @@ extern "C" {
 /**************** json object structure / json对象结构 ****************/
 
 /*
- * struct json_list - the value of json list
- * @next: the next list
- * @description: LJSON uses it to manage json objects and memory blocks.
+ * @brief   the value of json list
+ * @param   next the next list
+ * @note    LJSON uses it to manage json objects and memory blocks.
  */
 /*
- * struct json_list - 链表节点
- * @next: 下一个对象的链表节点
- * @description: LJSON使用它管理JSON对象和内存块的节点
+ * @brief   链表节点
+ * @param   next 下一个对象的链表节点
+ * @note    LJSON使用它管理JSON对象和内存块的节点
  */
 struct json_list {
     struct json_list *next;
 };
 
 /*
- * json_type_t - the json object type
- * @description: LJSON supports not only standard types, but also extended types (JSON HEX...).
+ * @brief   the json object type
+ * @note    LJSON supports not only standard types, but also extended types (JSON HEX...).
  */
 /*
- * json_type_t - json对象的类型
- * @description: LJSON支持的对象比cJSON多，例如长整数，十六机制的数
+ * @brief   json对象的类型
+ * @note    LJSON支持的对象比cJSON多，例如长整数，十六机制的数
  */
 typedef enum {
     JSON_NULL = 0,              /* It doesn't has value variable: null */
@@ -56,20 +56,20 @@ typedef enum {
 } json_type_t;
 
 /*
- * json_strinfo_t - the information of json string object value or type-key value
- * @type: the json object type (json_type_t), it is only valid when used as a key
- * @escaped: whether the string contains characters that need to be escaped
- * @alloced: whether the string is alloced, it is only valid for SAX APIs
- * @len: the length of string
- * @description: LJSON uses string with information to accelerate printing.
+ * @brief   the information of json string object value or type-key value
+ * @param   type the json object type (json_type_t), it is only valid when used as a key
+ * @param   escaped whether the string contains characters that need to be escaped
+ * @param   alloced whether the string is alloced, it is only valid for SAX APIs
+ * @param   len the length of string
+ * @note    LJSON uses string with information to accelerate printing.
  */
 /*
- * json_strinfo_t - json对象的键或字符串类型的值的信息
- * @type: json对象的类型，只在作为json对象的键时才有效
- * @escaped: 是否含转义字符
- * @alloced: 是否是在堆中分配，只在SAX接口中有效
- * @len: 字符串长度
- * @description: LJSON使用此结构就知道了字符串长度，可以加快数据处理
+ * @brief   json对象的键或字符串类型的值的信息
+ * @param   type json对象的类型，只在作为json对象的键时才有效
+ * @param   escaped 是否含转义字符
+ * @param   alloced 是否是在堆中分配，只在SAX接口中有效
+ * @param   len 字符串长度
+ * @note    LJSON使用此结构就知道了字符串长度，可以加快数据处理
  */
 typedef struct {
     uint32_t type:4;
@@ -79,16 +79,16 @@ typedef struct {
 } json_strinfo_t;
 
 /*
- * json_string_t - the json string with information
- * @str: the value of string
- * @info: the information of string
- * @description: LJSON uses string with information to accelerate printing.
+ * @brief   the json string with information
+ * @param   str the value of string
+ * @param   info the information of string
+ * @note    LJSON uses string with information to accelerate printing.
  */
 /*
- * json_string_t - 带信息的字符串
- * @str: 字符串数据
- * @info: 字符串信息
- * @description: LJSON使用此结构就知道了字符串长度，可以加快数据处理
+ * @brief   带信息的字符串
+ * @param   str 字符串数据
+ * @param   info 字符串信息
+ * @note    LJSON使用此结构就知道了字符串长度，可以加快数据处理
  */
 typedef struct {
     char *str;
@@ -96,16 +96,16 @@ typedef struct {
 } json_string_t;
 
 /*
- * json_binary_t - the json binary with information
- * @bin: the value of binary
- * @info: the information of binary
- * @description: LJSON uses binary to extend JSON functionality
+ * @brief   the json binary with information
+ * @param   bin the value of binary
+ * @param   info the information of binary
+ * @note    LJSON uses binary to extend JSON functionality
  */
 /*
- * json_binary_t - 带信息的二进制数据
- * @bin: 二进制数据
- * @info: 二进制信息，主要是长度
- * @description: LJSON使用此结构扩展JSON功能
+ * @brief   带信息的二进制数据
+ * @param   bin 二进制数据
+ * @param   info 二进制信息，主要是长度
+ * @note    LJSON使用此结构扩展JSON功能
  */
 typedef struct {
     void *bin;
@@ -113,12 +113,12 @@ typedef struct {
 } json_binary_t;
 
 /*
- * json_number_t - the json number object value
- * @description: LJSON supports decimal and hexadecimal, integer and long long integer.
+ * @brief   the json number object value
+ * @note    LJSON supports decimal and hexadecimal, integer and long long integer.
  */
 /*
- * json_number_t - json数字类型的值
- * @description: LJSON支持长整数和十六进制数
+ * @brief   json数字类型的值
+ * @note    LJSON支持长整数和十六进制数
  */
 typedef union {
     bool vbool;
@@ -130,20 +130,20 @@ typedef union {
 } json_number_t;
 
 /*
- * json_value_t - the json object value
- * @vnum: the numerical value
- * @vstr: the string value
- * @vbin: the binary value
- * @head: the DOM array or object value, LJSON manages child json objects through the list head
- * @description: LJSON uses union to manage the value of different objects to save memory.
+ * @brief   the json object value
+ * @param   vnum the numerical value
+ * @param   vstr the string value
+ * @param   vbin the binary value
+ * @param   head the DOM array or object value, LJSON manages child json objects through the list head
+ * @note    LJSON uses union to manage the value of different objects to save memory.
  */
 /*
- * json_value_t - json对象的值
- * @vnum: 数字类型的值
- * @vstr: 字符串类型的值
- * @vbin: 二进制类型的值
- * @head: 集合对象的子节点挂载的链表头，指向最后一个元素(非空时)或自己(空时)
- * @description: LJSON使用union管理对象的值从而节省内存空间
+ * @brief   json对象的值
+ * @param   vnum 数字类型的值
+ * @param   vstr 字符串类型的值
+ * @param   vbin 二进制类型的值
+ * @param   head 集合对象的子节点挂载的链表头，指向最后一个元素(非空时)或自己(空时)
+ * @note    LJSON使用union管理对象的值从而节省内存空间
  */
 typedef union {
     json_number_t vnum;
@@ -153,23 +153,22 @@ typedef union {
 } json_value_t;
 
 /*
- * json_object - the json object
- * @list: the list value, LJSON associates `list` to the `head` of parent json object
- *   or the `list` of brother json objects
- * @key: the json object key, only the child objects of JSON_OBJECT have key
- * @ikey: the information of key (contains json object type)
- * @istr: the information of value.vstr/vbin
- * @value: the json object value
- * @description: LJSON uses union to manage the value of different objects to save memory.
+ * @brief   the json object
+ * @param   list the list value, LJSON associates `list` to the `head` of parent json object or the `list` of brother json objects
+ * @param   key the json object key, only the child objects of JSON_OBJECT have key
+ * @param   ikey the information of key (contains json object type)
+ * @param   istr the information of value.vstr/vbin
+ * @param   value the json object value
+ * @note    LJSON uses union to manage the value of different objects to save memory.
  */
 /*
- * json_object - json对象
- * @list: 链表节点，指向下一个对象或父对象的链表头
- * @key: json对象的键值，只有JSON_OBJECT的子对象才有键值
- * @ikey: key字符串信息(含json类型)
- * @istr: value.vstr/vbin信息
- * @value: json对象的值
- * @description: LJSON使用更紧凑的内存结构以节省内存
+ * @brief   json对象
+ * @param   list 链表节点，指向下一个对象或父对象的链表头
+ * @param   key json对象的键值，只有JSON_OBJECT的子对象才有键值
+ * @param   ikey key字符串信息(含json类型)
+ * @param   istr value.vstr/vbin信息
+ * @param   value json对象的值
+ * @note    LJSON使用更紧凑的内存结构以节省内存
  */
 typedef struct {
     struct json_list list;
@@ -180,16 +179,16 @@ typedef struct {
 } json_object;
 
 /*
- * json_item_t - the json item which contains json object and hash code
- * @hash: the hash code of key, only child json objects of JSON_OBJECT has the value
- * @json: the json object
- * @description: LJSON uses hash code to accelerate access to member of JSON_OBJECT.
+ * @brief   the json item which contains json object and hash code
+ * @param   hash the hash code of key, only child json objects of JSON_OBJECT has the value
+ * @param   json the json object
+ * @note    LJSON uses hash code to accelerate access to member of JSON_OBJECT.
  */
 /*
- * json_item_t - 包含json对象和hash值的结构
- * @hash: 只有JSON_OBJECT才有key值，才有key的hash值
- * @json: json对象
- * @description: LJSON使用hash值来加快获取JSON_OBJECT下的子对象
+ * @brief   包含json对象和hash值的结构
+ * @param   hash 只有JSON_OBJECT才有key值，才有key的hash值
+ * @param   json json对象
+ * @note    LJSON使用hash值来加快获取JSON_OBJECT下的子对象
  */
 typedef struct {
     uint32_t hash;
@@ -197,20 +196,20 @@ typedef struct {
 } json_item_t;
 
 /*
- * json_items_t - the json items array
- * @conflicted: whether the key hashes are conflicted in items, only for JSON_OBJECT parent
- * @total: the total size of items
- * @count: the total number of child json objects of JSON_ARRAY or JSON_OBJECT
- * @json: the array to store child json objects
- * @description: LJSON uses it to store all sub-objects of JSON_ARRAY or JSON_OBJECT.
+ * @brief   the json items array
+ * @param   conflicted whether the key hashes are conflicted in items, only for JSON_OBJECT parent
+ * @param   total the total size of items
+ * @param   count the total number of child json objects of JSON_ARRAY or JSON_OBJECT
+ * @param   json the array to store child json objects
+ * @note    LJSON uses it to store all sub-objects of JSON_ARRAY or JSON_OBJECT.
  */
 /*
- * json_items_t - json_item_t 的管理结构
- * @conflicted: JSON_OBJECT下的子对象的key的hash值是否有冲突
- * @total: 数组的容量
- * @count: 数组的当前数量
- * @json: 存储json对象的数组
- * @description: LJSON使用它存储JSON_ARRAY或JSON_OBJECT下的所有子对象，使用json_get_items接口获取
+ * @brief   json_item_t 的管理结构
+ * @param   conflicted JSON_OBJECT下的子对象的key的hash值是否有冲突
+ * @param   total 数组的容量
+ * @param   count 数组的当前数量
+ * @param   json 存储json对象的数组
+ * @note    LJSON使用它存储JSON_ARRAY或JSON_OBJECT下的所有子对象，使用json_get_items接口获取
  */
 typedef struct {
     uint32_t conflicted:1;
@@ -223,74 +222,74 @@ typedef struct {
 /**************** json classic editor / json常规编辑接口 ****************/
 
 /*
- * json_memory_free - Free the ptr alloced by LJSON
- * @ptr: IN, the alloced ptr
- * @return: None
- * @description: the alloced ptr may be:
- *   1. the returned string by json_print_common or json_sax_print_finish when printing
- *      to string and json_print_ptr_t is not passed in
- *   2. the p of json_print_ptr_t which stores the string returned when printing to a string,
- *      or the internal buffer when printing to a file
- *   3. the LJSON style string alloced by LJSON classic(not pool) APIS
+ * @brief   Free the ptr alloced by LJSON
+ * @param   ptr [IN] the alloced ptr
+ * @return  None
+ * @note    the alloced ptr may be:
+ *          1. the returned string by json_print_common or json_sax_print_finish when printing
+ *             to string and json_print_ptr_t is not passed in
+ *          2. the p of json_print_ptr_t which stores the string returned when printing to a string,
+ *             or the internal buffer when printing to a file
+ *          3. the LJSON style string alloced by LJSON classic(not pool) APIS
  */
 /*
- * json_memory_free - 释放内存
- * @ptr: IN, 内存指针
- * @return: 无返回值
- * @description: 要释放的内存可能是:
- *   1. json_print_common 或 json_sax_print_finish 打印到字符串时返回的字符串，且没有传入 json_print_ptr_t
- *   2. json_print_ptr_t的p成员，它存储了打印到字符串时返回的字符串，或打印到文件时的内部缓冲
- *   3. 普通接口(非内存池接口)分配的字符串
+ * @brief   释放内存
+ * @param   ptr [IN] 内存指针
+ * @return  无返回值
+ * @note    要释放的内存可能是:
+ *          1. json_print_common 或 json_sax_print_finish 打印到字符串时返回的字符串，且没有传入 json_print_ptr_t
+ *          2. json_print_ptr_t的p成员，它存储了打印到字符串时返回的字符串，或打印到文件时的内部缓冲
+ *          3. 普通接口(非内存池接口)分配的字符串
  */
 void json_memory_free(void *ptr);
 
 /*
- * json_item_total_get - Get the total number of json tree (recursive)
- * @json: IN, the json object
- * @return: the total number
+ * @brief   Get the total number of json tree (recursive)
+ * @param   json [IN] the json object
+ * @return  the total number
  */
 /*
- * json_item_total_get - 递归获取json对象的总数
- * @json: IN, json对象
- * @return: 对象总数
+ * @brief   递归获取json对象的总数
+ * @param   json [IN] json对象
+ * @return  对象总数
  */
 int json_item_total_get(json_object *json);
 
 /*
- * json_del_object - Delete the json object, includes the child objects (recursive)
- * @json: IN, the json object
- * @return: None
+ * @brief   Delete the json object, includes the child objects (recursive)
+ * @param   json [IN] the json object
+ * @return  None
  */
 /*
- * json_del_object - 递归删除json对象(即挂载在它上面的子对象)
- * @json: IN, json对象
- * @return: 无返回值
+ * @brief   递归删除json对象(即挂载在它上面的子对象)
+ * @param   json [IN] json对象
+ * @return  无返回值
  */
 void json_del_object(json_object *json);
 
 /*
- * json_new_object - Create a json object without value
- * @type: IN, the json object type
- * @return: NULL on failure, a pointer on success
+ * @brief   Create a json object without value
+ * @param   type [IN] the json object type
+ * @return  NULL on failure, a pointer on success
  */
 /*
- * json_new_object - 新建一个指定类型的无值对象
- * @type: IN, 对象类型
- * @return: 失败返回NULL；成功返回指针
+ * @brief   新建一个指定类型的无值对象
+ * @param   type [IN] 对象类型
+ * @return  失败返回NULL；成功返回指针
  */
 json_object *json_new_object(json_type_t type);
 
 /*
- * json_create_item - Create a json object with value
- * @type: IN, the json object type
- * @value: IN, the json object value
- * @return: NULL on failure, a pointer on success
+ * @brief   Create a json object with value
+ * @param   type [IN] the json object type
+ * @param   value [IN] the json object value
+ * @return  NULL on failure, a pointer on success
  */
 /*
- * json_create_item - 新建一个指定类型的有值对象
- * @type: IN, 对象类型
- * @value: IN, 对象值
- * @return: 失败返回NULL；成功返回指针
+ * @brief   新建一个指定类型的有值对象
+ * @param   type [IN] 对象类型
+ * @param   value [IN] 对象值
+ * @return  失败返回NULL；成功返回指针
  */
 json_object *json_create_item(json_type_t type, void *value);
 static inline json_object *json_create_null(void) { return json_new_object(JSON_NULL); }
@@ -330,18 +329,18 @@ json_binary_t*  : json_create_binary)(value)
 #endif
 
 /*
- * json_create_item_array - Create a JSON_ARRAY object with a group of child json objects
- * @type: IN, the type of child json objects
- * @values: IN, the values of child json objects
- * @count: IN, the total number of child json objects
- * @return: NULL on failure, a pointer on success
+ * @brief   Create a JSON_ARRAY object with a group of child json objects
+ * @param   type [IN] the type of child json objects
+ * @param   values [IN] the values of child json objects
+ * @param   count [IN] the total number of child json objects
+ * @return  NULL on failure, a pointer on success
  */
 /*
- * json_create_item_array - 新建一个 JSON_ARRAY 的有子节点的对象
- * @type: IN, 子对象类型
- * @values: IN, 子对象值数组
- * @count: IN, 子对象数量
- * @return: 失败返回NULL；成功返回指针
+ * @brief   新建一个 JSON_ARRAY 的有子节点的对象
+ * @param   type [IN] 子对象类型
+ * @param   values [IN] 子对象值数组
+ * @param   count [IN] 子对象数量
+ * @return  失败返回NULL；成功返回指针
  */
 json_object *json_create_item_array(json_type_t type, void *values, int count);
 static inline json_object *json_create_bool_array(bool *values, int count) { return json_create_item_array(JSON_BOOL, values, count); }
@@ -378,32 +377,32 @@ json_binary_t*  : json_create_binary_array)(values, count)
 #endif
 
 /*
- * json_string_info_get - Get the information for json string
- * @str: IN, the string
- * @orig: IN, the original information of the string, can be NULL
- * @return: the information of the string
- * @description: if str contains `"  \  \b  \f  \n  \r  \t  \v`, escaped will be set
+ * @brief   Get the information for json string
+ * @param   str [IN] the string
+ * @param   orig [IN] the original information of the string, can be NULL
+ * @return  the information of the string
+ * @note    if str contains `"  \  \b  \f  \n  \r  \t  \v`, escaped will be set
  */
 /*
- * json_string_info_get - 获取json_string_t的信息
- * @str: IN, 要处理的字符串
- * @orig: IN, 字符串原始信息，可以为NULL
- * @return: 字符串信息
- * @description: str含有 `"  \  \b  \f  \n  \r  \t  \v` 字符时会设置escaped
+ * @brief   获取json_string_t的信息
+ * @param   str [IN] 要处理的字符串
+ * @param   orig [IN] 字符串原始信息，可以为NULL
+ * @return  字符串信息
+ * @note    str含有 `"  \  \b  \f  \n  \r  \t  \v` 字符时会设置escaped
  */
 json_strinfo_t json_string_info_get(const char *str, const json_strinfo_t *orig);
 
 /*
- * json_string_info_update - Update the parameters for json string
- * @jstr: INOUT, the LJSON string
- * @return: None
- * @description: If jstr->info.len is not equal to 0, the parameters will not be updated
+ * @brief   Update the parameters for json string
+ * @param   jstr [INOUT] the LJSON string
+ * @return  None
+ * @note    If jstr->info.len is not equal to 0, the parameters will not be updated
  */
 /*
- * json_string_info_update - 更新json_string_t的信息
- * @jstr: INOUT, 要处理的对象
- * @return: 无返回值
- * @description: jstr->info.len是0时数据才会更新
+ * @brief   更新json_string_t的信息
+ * @param   jstr [INOUT] 要处理的对象
+ * @return  无返回值
+ * @note    jstr->info.len是0时数据才会更新
  */
 static inline void json_string_info_update(json_string_t *jstr)
 {
@@ -412,28 +411,28 @@ static inline void json_string_info_update(json_string_t *jstr)
 }
 
 /*
- * json_string_hash_code - Calculate the hash code of json string
- * @jstr: IN, the LJSON string
- * @return: the hash value
+ * @brief   Calculate the hash code of json string
+ * @param   jstr [IN] the LJSON string
+ * @return  the hash value
  */
 /*
- * json_string_hash_code - 计算字符串的hash值
- * @jstr: IN, 字符串数据
- * @return: hash值
+ * @brief   计算字符串的hash值
+ * @param   jstr [IN] 字符串数据
+ * @return  hash值
  */
 uint32_t json_string_hash_code(json_string_t *jstr);
 
 /*
- * json_get_string_value - Get the string of JSON_STRING object
- * @json: IN, the json object to be get
- * @jstr: OUT, store the LJSON string value
- * @return: NULL on failure, 0 on success
+ * @brief   Get the string of JSON_STRING object
+ * @param   json [IN] the json object to be get
+ * @param   jstr [OUT] store the LJSON string value
+ * @return  NULL on failure, 0 on success
  */
 /*
- * json_get_string_value - 获取JSON_STRING类型的json对象的值
- * @json: IN, 被获取值的json对象
- * @jstr: OUT, 存储获取到的值
- * @return: 失败返回NULL；成功返回jstr
+ * @brief   获取JSON_STRING类型的json对象的值
+ * @param   json [IN] 被获取值的json对象
+ * @param   jstr [OUT] 存储获取到的值
+ * @return  失败返回NULL；成功返回jstr
  */
 static inline json_string_t *json_get_string_value(json_object *json, json_string_t *jstr)
 {
@@ -446,35 +445,36 @@ static inline json_string_t *json_get_string_value(json_object *json, json_strin
 }
 
 /*
- * json_string_strdup - Strdup the LJSON string src to dst
- * @src: IN, the source string
- * @isrc: INOUT, the information of the source string, can be NULL
- * @dst: OUT, the destination string
- * @idst: OUT, the information of the destination string, can not be NULL
- * @return: -1 on failure, 0 on success
+ * @brief   Strdup the LJSON string src to dst
+ * @param   src [IN] the source string
+ * @param   isrc [INOUT] the information of the source string, can be NULL
+ * @param   dst [OUT] the destination string
+ * @param   idst [OUT] the information of the destination string, can not be NULL
+ * @return  -1 on failure, 0 on success
+ * @note    If dst is large enough to hold the data of src, no memory allocation will be performed
  */
 /*
- * json_string_strdup - 复制字符串数据
- * @src: IN, 源字符串
- * @isrc: INOUT, 源字符串信息，可以为NULL
- * @dst: OUT, 目标字符串
- * @idst: OUT, 目标字符串信息，不能为NULL
- * @return: 失败返回-1；成功返回0
- * @description: 如果dst足够容纳src的数据，将不会进行内存分配
+ * @brief   复制字符串数据
+ * @param   src [IN] 源字符串
+ * @param   isrc [INOUT] 源字符串信息，可以为NULL
+ * @param   dst [OUT] 目标字符串
+ * @param   idst [OUT] 目标字符串信息，不能为NULL
+ * @return  失败返回-1；成功返回0
+ * @note    如果dst足够容纳src的数据，将不会进行内存分配
  */
 int json_string_strdup(const char *src, json_strinfo_t *isrc, char **dst, json_strinfo_t *idst);
 
 /*
- * json_set_key - Set the key of json object
- * @json: IN, the json object to be set
- * @jkey: IN, the LJSON string key, allow length not to be set first by json_string_info_update
- * @return: -1 on failure, 0 on success
+ * @brief   Set the key of json object
+ * @param   json [IN] the json object to be set
+ * @param   jkey [IN] the LJSON string key, allow length not to be set first by json_string_info_update
+ * @return  -1 on failure, 0 on success
  */
 /*
- * json_set_key - 设置json的key
- * @json: IN, 被设置的json对象
- * @jkey: IN, 要设置的key，可以预先填好jkey的len/escaped成员接口加快速度
- * @return: 失败返回-1；成功返回0
+ * @brief   设置json的key
+ * @param   json [IN] 被设置的json对象
+ * @param   jkey [IN] 要设置的key，可以预先填好jkey的len/escaped成员接口加快速度
+ * @return  失败返回-1；成功返回0
  */
 static inline int json_set_key(json_object *json, json_string_t *jkey)
 {
@@ -482,16 +482,16 @@ static inline int json_set_key(json_object *json, json_string_t *jkey)
 }
 
 /*
- * json_set_string_value - Set the string of JSON_STRING object
- * @json: IN, the json object to be set
- * @jstr: IN, the LJSON string value, allow length not to be set first by json_string_info_update
- * @return: -1 on failure, 0 on success
+ * @brief   Set the string of JSON_STRING object
+ * @param   json [IN] the json object to be set
+ * @param   jstr [IN] the LJSON string value, allow length not to be set first by json_string_info_update
+ * @return  -1 on failure, 0 on success
  */
 /*
- * json_set_string_value - 设置JSON_STRING类型的json对象的值
- * @json: IN, 被设置的json对象
- * @jstr: IN, 要设置的值, 可以预先填好jstr的len/escaped成员接口加快速度
- * @return: 失败返回-1；成功返回0
+ * @brief   设置JSON_STRING类型的json对象的值
+ * @param   json [IN] 被设置的json对象
+ * @param   jstr [IN] 要设置的值, 可以预先填好jstr的len/escaped成员接口加快速度
+ * @return  失败返回-1；成功返回0
  */
 static inline int json_set_string_value(json_object *json, json_string_t *jstr)
 {
@@ -502,16 +502,16 @@ static inline int json_set_string_value(json_object *json, json_string_t *jstr)
 }
 
 /*
- * json_get_binary_value - Get the binary of JSON_BINARY object
- * @json: IN, the json object to be get
- * @jbin: OUT, store the LJSON binary value
- * @return: NULL on failure, 0 on success
+ * @brief   Get the binary of JSON_BINARY object
+ * @param   json [IN] the json object to be get
+ * @param   jbin [OUT] store the LJSON binary value
+ * @return  NULL on failure, 0 on success
  */
 /*
- * json_get_binary_value - 获取JSON_BINARY类型的json对象的值
- * @json: IN, 被获取值的json对象
- * @jbin: OUT, 存储获取到的值
- * @return: 失败返回NULL；成功返回jbin
+ * @brief   获取JSON_BINARY类型的json对象的值
+ * @param   json [IN] 被获取值的json对象
+ * @param   jbin [OUT] 存储获取到的值
+ * @return  失败返回NULL；成功返回jbin
  */
 static inline json_binary_t *json_get_binary_value(json_object *json, json_binary_t *jbin)
 {
@@ -524,32 +524,32 @@ static inline json_binary_t *json_get_binary_value(json_object *json, json_binar
 }
 
 /*
- * json_set_binary_value - Set the binary of JSON_BINARY object
- * @json: IN, the json object to be set
- * @jbin: IN, the LJSON binary value
- * @return: -1 on failure, 0 on success
+ * @brief   Set the binary of JSON_BINARY object
+ * @param   json [IN] the json object to be set
+ * @param   jbin [IN] the LJSON binary value
+ * @return  -1 on failure, 0 on success
  */
 /*
- * json_set_binary_value - 设置JSON_BINARY类型的json对象的值
- * @json: IN, 被设置的json对象
- * @jbin: IN, 要设置的值
- * @return: 失败返回-1；成功返回0
+ * @brief   设置JSON_BINARY类型的json对象的值
+ * @param   json [IN] 被设置的json对象
+ * @param   jbin [IN] 要设置的值
+ * @return  失败返回-1；成功返回0
  */
 int json_set_binary_value(json_object *json, json_binary_t *jbin);
 
 /*
- * json_get_number_value - Get the value of numerical object
- * @json: IN, the json object
- * @type: IN, the json object type
- * @value: OUT, the json object value
- * @return: -1 on failure, 0 on success, >0(original type) on success with type cast
+ * @brief   Get the value of numerical object
+ * @param   json [IN] the json object
+ * @param   type [IN] the json object type
+ * @param   value [OUT] the json object value
+ * @return  -1 on failure, 0 on success, >0(original type) on success with type cast
  */
 /*
- * json_get_number_value - 获取数字对象的值
- * @json: IN, json对象
- * @type: IN, 获取值value的类型
- * @value: OUT, 回写获取到的值
- * @return: 失败返回-1；成功且类型对应返回0；成功且类型强转返回正数
+ * @brief   获取数字对象的值
+ * @param   json [IN] json对象
+ * @param   type [IN] 获取值value的类型
+ * @param   value [OUT] 回写获取到的值
+ * @return  失败返回-1；成功且类型对应返回0；成功且类型强转返回正数
  */
 int json_get_number_value(json_object *json, json_type_t type, void *value);
 static inline bool json_get_bool_value(json_object *json) { bool value = 0; json_get_number_value(json, JSON_BOOL, &value); return value; }
@@ -560,18 +560,18 @@ static inline uint64_t json_get_lhex_value(json_object *json) { uint64_t value =
 static inline double json_get_double_value(json_object *json) { double value = 0; json_get_number_value(json, JSON_DOUBLE, &value); return value; }
 
 /*
- * json_set_number_value - Set the value of numerical object
- * @json: IN, the json object
- * @type: IN, the json object type
- * @value: IN, the json object value
- * @return: -1 on failure, 0 on success, >0(original type) on success with type cast
+ * @brief   Set the value of numerical object
+ * @param   json [IN] the json object
+ * @param   type [IN] the json object type
+ * @param   value [IN] the json object value
+ * @return  -1 on failure, 0 on success, >0(original type) on success with type cast
  */
 /*
- * json_set_number_value - 设置数字对象的值
- * @json: IN, json对象
- * @type: IN, 设置的值value的类型
- * @value: IN, 设置的值
- * @return: 失败返回-1；成功且类型对应返回0；成功且类型强转返回原先的类型
+ * @brief   设置数字对象的值
+ * @param   json [IN] json对象
+ * @param   type [IN] 设置的值value的类型
+ * @param   value [IN] 设置的值
+ * @return  失败返回-1；成功且类型对应返回0；成功且类型强转返回原先的类型
  */
 int json_set_number_value(json_object *json, json_type_t type, void *value);
 static inline int json_set_bool_value(json_object *json, bool value) { return json_set_number_value(json, JSON_BOOL, &value); }
@@ -602,306 +602,306 @@ double          : json_set_double_value)(json, value)
 #endif
 
 /*
- * json_get_array_size - Get the total child objects of JSON_ARRAY object (not recursive)
- * @json: IN, the JSON_ARRAY object
- * @return: the total child objects
+ * @brief   Get the total child objects of JSON_ARRAY object (not recursive)
+ * @param   json [IN] the JSON_ARRAY object
+ * @return  the total child objects
  */
 /*
- * json_get_array_size - 获取JSON_ARRAY类型对象的子对象个数(不递归)
- * @json: IN, json对象
- * @return: 子对象数量
+ * @brief   获取JSON_ARRAY类型对象的子对象个数(不递归)
+ * @param   json [IN] json对象
+ * @return  子对象数量
  */
 int json_get_array_size(json_object *json);
 
 /*
- * json_get_object_size - Get the total child objects of JSON_OBJECT object (not recursive)
- * @json: IN, the JSON_OBJECT object
- * @return: the total child objects
+ * @brief   Get the total child objects of JSON_OBJECT object (not recursive)
+ * @param   json [IN] the JSON_OBJECT object
+ * @return  the total child objects
  */
 /*
- * json_get_object_size - 获取JSON_OBJECT类型对象的子对象个数(不递归)
- * @json: IN, json对象
- * @return: 子对象数量
+ * @brief   获取JSON_OBJECT类型对象的子对象个数(不递归)
+ * @param   json [IN] json对象
+ * @return  子对象数量
  */
 int json_get_object_size(json_object *json);
 
 /*
- * json_get_array_item - Get the specified object in JSON_ARRAY object
- * @json: IN, the JSON_ARRAY object
- * @seq: IN, the sequence number
- * &prev: INOUT, to store the previous JSON object, it can be NULL
- * @return: NULL on failure, a pointer on success
- * @description: If the `*prev` is not NULL, the API ignores the value of `seq`
- *               and directly retrieves the next item.
+ * @brief   Get the specified object in JSON_ARRAY object
+ * @param   json [IN] the JSON_ARRAY object
+ * @param   seq [IN] the sequence number
+ * @param   prev [INOUT] to store the previous JSON object, it can be NULL
+ * @return  NULL on failure, a pointer on success
+ * @note    If the `*prev` is not NULL, the API ignores the value of `seq`
+ *          and directly retrieves the next item.
  */
 /*
- * json_get_array_item - 获取JSON_ARRAY类型对象的指定序号的子对象
- * @json: IN, json对象
- * @seq: IN, 序号
- * &prev: INOUT, 存储前一个对象，主要是删除会用到，不是删除时可以设为NULL
- * @return: 失败返回NULL；成功返回指针
- * @description: 如果 `*prev` 不是空指针, 本接口会忽略 `seq` 的值并
- *               直接获取 `*prev` 的下一个节点
+ * @brief   获取JSON_ARRAY类型对象的指定序号的子对象
+ * @param   json [IN] json对象
+ * @param   seq [IN] 序号
+ * @param   prev [INOUT] 存储前一个对象，主要是删除会用到，不是删除时可以设为NULL
+ * @return  失败返回NULL；成功返回指针
+ * @note    如果 `*prev` 不是空指针, 本接口会忽略 `seq` 的值并
+ *          直接获取 `*prev` 的下一个节点
  */
 json_object *json_get_array_item(json_object *json, int seq, json_object **prev);
 
 /*
- * json_get_object_item - Get the specified object in JSON_OBJECT object
- * @json: IN, the JSON_OBJECT object
- * @key: IN, the specified key
- * &prev: INOUT, to store the previous JSON object, it can be NULL
- * @return: NULL on failure, a pointer on success
- * @description: If the `*prev` is not NULL, the API first checks if the key of the
- *               next node after `*prev` matches the requested `key`. If not, it starts
- *               the check from the beginning, which can accelerate node retrieval.
+ * @brief   Get the specified object in JSON_OBJECT object
+ * @param   json [IN] the JSON_OBJECT object
+ * @param   key [IN] the specified key
+ * @param   prev [INOUT] to store the previous JSON object, it can be NULL
+ * @return  NULL on failure, a pointer on success
+ * @note    If the `*prev` is not NULL, the API first checks if the key of the
+ *          next node after `*prev` matches the requested `key`. If not, it starts
+ *          the check from the beginning, which can accelerate node retrieval.
  */
 /*
- * json_get_object_item - 获取JSON_ARRAY类型对象的指定key的子对象
- * @json: IN, json对象
- * @seq: key, 键值
- * &prev: INOUT, 存储前一个对象，主要是删除会用到，不是删除时可以设为NULL
- * @return: 失败返回NULL；成功返回指针
- * @description: 如果 `*prev` 不是空指针, 本接口会先判断 `*prev` 的下一个节点的key
- *               是否是要求的key，不是再从头开始判断，可加速获取节点
+ * @brief   获取JSON_ARRAY类型对象的指定key的子对象
+ * @param   json [IN] json对象
+ * @param   key [IN] 键值
+ * @param   prev [INOUT] 存储前一个对象，主要是删除会用到，不是删除时可以设为NULL
+ * @return  失败返回NULL；成功返回指针
+ * @note    如果 `*prev` 不是空指针, 本接口会先判断 `*prev` 的下一个节点的key
+ *          是否是要求的key，不是再从头开始判断，可加速获取节点
  */
 json_object *json_get_object_item(json_object *json, const char *key, json_object **prev);
 
 /*
- * json_search_object_item - Search the specified object in chiild items of JSON_OBJECT object
- * @items: IN, all child json objects of JSON_OBJECT
- * @jkey: IN, the searched LJSON string key, allow length not to be set first by json_string_info_update
- * @hash: IN, the hash value for searched key, if it is zero, the func will calculate actual hash
- * @return: NULL on failure, a pointer on success
- * @description: LJSON uses dichotomy to search the specific json object
+ * @brief   Search the specified object in chiild items of JSON_OBJECT object
+ * @param   items [IN] all child json objects of JSON_OBJECT
+ * @param   jkey [IN] the searched LJSON string key, allow length not to be set first by json_string_info_update
+ * @param   hash [IN] the hash value for searched key, if it is zero, the func will calculate actual hash
+ * @return  NULL on failure, a pointer on success
+ * @note    LJSON uses dichotomy to search the specific json object
  */
 /*
- * json_search_object_item - 从items存储的数组中找到指定key的对象
- * @items: IN, 存储json对象数组的管理结构
- * @jkey: IN, 要查找的key，可以预先填好jkey的len/escaped成员接口加快速度
- * @hash: IN, 要查找的hash值
- * @return: 失败返回NULL；成功返回指针
- * @description: LJSON使用二分法和hash值加快查找速度
+ * @brief   从items存储的数组中找到指定key的对象
+ * @param   items [IN] 存储json对象数组的管理结构
+ * @param   jkey [IN] 要查找的key，可以预先填好jkey的len/escaped成员接口加快速度
+ * @param   hash [IN] 要查找的hash值
+ * @return  失败返回NULL；成功返回指针
+ * @note    LJSON使用二分法和hash值加快查找速度
  */
 json_object *json_search_object_item(json_items_t *items, json_string_t *jkey, uint32_t hash);
 
 /*
- * json_free_items - Free alloced memory in json_items_t
- * @items: INOUT, the json items
- * @return: none
+ * @brief   Free alloced memory in json_items_t
+ * @param   items [INOUT] the json items
+ * @return  none
  */
 /*
- * json_free_items - 释放items的内存
- * @items: IN, 存储json对象数组的管理结构
- * @return: 无返回值
+ * @brief   释放items的内存
+ * @param   items [IN] 存储json对象数组的管理结构
+ * @return  无返回值
  */
 void json_free_items(json_items_t *items);
 
 /*
- * json_get_items - Get all child json objects of JSON_ARRAY or JSON_OBJECT
- * @json: IN, the JSON_ARRAY or JSON_OBJECT object to get
- * @items: INOUT, the json items
- * @return: -1 on failure, 0 on success
- * @description: LJSON uses it to accelerate access to member of JSON_ARRAY or JSON_OBJECT
+ * @brief   Get all child json objects of JSON_ARRAY or JSON_OBJECT
+ * @param   json [IN] the JSON_ARRAY or JSON_OBJECT object to get
+ * @param   items [INOUT] the json items
+ * @return  -1 on failure, 0 on success
+ * @note    LJSON uses it to accelerate access to member of JSON_ARRAY or JSON_OBJECT
  */
 /*
- * json_get_items - 获取JSON_ARRAY或JSON_OBJECT类型的对象下的所有子对象
- * @json: IN, json对象
- * @items: INOUT, 回写获取到的所有子对象
- * @return: 失败返回-1；成功返回0
- * @description: LJSON将子对象由链表改存储为数组，可以显著加快获取速度
+ * @brief   获取JSON_ARRAY或JSON_OBJECT类型的对象下的所有子对象
+ * @param   json [IN] json对象
+ * @param   items [INOUT] 回写获取到的所有子对象
+ * @return  失败返回-1；成功返回0
+ * @note    LJSON将子对象由链表改存储为数组，可以显著加快获取速度
  */
 int json_get_items(json_object *json, json_items_t *items);
 
 /*
- * json_add_item_to_array - Add the specified object to the JSON_ARRAY object
- * @array: IN, the JSON_ARRAY object
- * @item: IN, the json object to add
- * @return: -1 on failure, 0 on success
- * @description: The item will be added to the end, once successfully added,
- *   it is no longer necessary to manually delete item.
+ * @brief   Add the specified object to the JSON_ARRAY object
+ * @param   array [IN] the JSON_ARRAY object
+ * @param   item [IN] the json object to add
+ * @return  -1 on failure, 0 on success
+ * @note    The item will be added to the end, once successfully added,
+ *          it is no longer necessary to manually delete item.
  */
 /*
- * json_add_item_to_array - 将指定的json对象添加到JSON_ARRAY对象中
- * @array: IN, 目标JSON_ARRAY对象
- * @item: IN, 要添加的json对象
- * @return: 失败返回-1；成功返回0
- * @description: 该对象将被添加到数组的末尾，一旦成功添加，无需手动删除该对象。
+ * @brief   将指定的json对象添加到JSON_ARRAY对象中
+ * @param   array [IN] 目标JSON_ARRAY对象
+ * @param   item [IN] 要添加的json对象
+ * @return  失败返回-1；成功返回0
+ * @note    该对象将被添加到数组的末尾，一旦成功添加，无需手动删除该对象。
  */
 int json_add_item_to_array(json_object *array, json_object *item);
 
 /*
- * json_add_item_to_object - Add the specified object to the JSON_OBJECT object
- * @object: IN, the JSON_OBJECT object
- * @item: IN, the json object to add, users should set the key of item first
- * @return: -1 on failure, 0 on success
- * @description: The item will be added to the end, once successfully added,
- *   it is no longer necessary to manually delete item.
+ * @brief   Add the specified object to the JSON_OBJECT object
+ * @param   object [IN] the JSON_OBJECT object
+ * @param   item [IN] the json object to add, users should set the key of item first
+ * @return  -1 on failure, 0 on success
+ * @note    The item will be added to the end, once successfully added,
+ *          it is no longer necessary to manually delete item.
  */
 /*
- * json_add_item_to_object - 将指定的json对象添加到JSON_OBJECT对象中
- * @object: IN, 目标JSON_OBJECT对象
- * @item: IN, 要添加的json对象，用户应首先设置该对象的键
- * @return: 失败返回-1；成功返回0
- * @description: 该对象将被添加到对象的末尾，一旦成功添加，无需手动删除该对象。
+ * @brief   将指定的json对象添加到JSON_OBJECT对象中
+ * @param   object [IN] 目标JSON_OBJECT对象
+ * @param   item [IN] 要添加的json对象，用户应首先设置该对象的键
+ * @return  失败返回-1；成功返回0
+ * @note    该对象将被添加到对象的末尾，一旦成功添加，无需手动删除该对象。
  */
 int json_add_item_to_object(json_object *object, json_object *item);
 
 /*
- * json_detach_item_from_array - Detach the specified object in JSON_ARRAY object
- * @json: IN, the JSON_ARRAY object
- * @seq: IN, the sequence number
- * @return: NULL on failure, a pointer (the detached object) on success
- * @description: After use, users need to delete the returned object in classic jsons,
- *   don't delete it in pool jsons.
+ * @brief   Detach the specified object in JSON_ARRAY object
+ * @param   json [IN] the JSON_ARRAY object
+ * @param   seq [IN] the sequence number
+ * @return  NULL on failure, a pointer (the detached object) on success
+ * @note    After use, users need to delete the returned object in classic jsons,
+ *          don't delete it in pool jsons.
  */
 /*
- * json_detach_item_from_array - 从JSON_ARRAY对象中分离指定的对象
- * @json: IN, 目标JSON_ARRAY对象
- * @seq: IN, 要分离的对象的序号
- * @return: 失败返回NULL；成功时返回分离的对象指针
- * @description: 使用后，用户需要手动删除返回的对象(普通JSON），在Pool JSON中不要删除
+ * @brief   从JSON_ARRAY对象中分离指定的对象
+ * @param   json [IN] 目标JSON_ARRAY对象
+ * @param   seq [IN] 要分离的对象的序号
+ * @return  失败返回NULL；成功时返回分离的对象指针
+ * @note    使用后，用户需要手动删除返回的对象(普通JSON），在Pool JSON中不要删除
  */
 json_object *json_detach_item_from_array(json_object *json, int seq);
 
 /*
- * json_detach_item_from_object - Detach the specified object in JSON_OBJECT object
- * @json: IN, the JSON_ARRAY object
- * @key: IN, the specified key
- * @return: NULL on failure, a pointer (the detached object) on success
- * @description: After use, users need to delete the returned object in classic jsons,
- *   don't delete it in pool jsons.
+ * @brief   Detach the specified object in JSON_OBJECT object
+ * @param   json [IN] the JSON_ARRAY object
+ * @param   key [IN] the specified key
+ * @return  NULL on failure, a pointer (the detached object) on success
+ * @note    After use, users need to delete the returned object in classic jsons,
+ *          don't delete it in pool jsons.
  */
 /*
- * json_detach_item_from_object - 从JSON_OBJECT对象中分离指定的对象
- * @json: IN, 目标JSON_OBJECT对象
- * @key: IN, 要分离的对象的键
- * @return: 失败返回NULL；成功时返回分离的对象指针
- * @description: 使用后，用户需要手动删除返回的对象(普通JSON），在Pool JSON中不要删除
+ * @brief   从JSON_OBJECT对象中分离指定的对象
+ * @param   json [IN] 目标JSON_OBJECT对象
+ * @param   key [IN] 要分离的对象的键
+ * @return  失败返回NULL；成功时返回分离的对象指针
+ * @note    使用后，用户需要手动删除返回的对象(普通JSON），在Pool JSON中不要删除
  */
 json_object *json_detach_item_from_object(json_object *json, const char *key);
 
 /*
- * json_del_item_from_array - Delete the specified object in JSON_ARRAY object
- * @json: IN, the JSON_ARRAY object
- * @seq: IN, the sequence number
- * @return: -1 on not found, 0 on found and deleted
+ * @brief   Delete the specified object in JSON_ARRAY object
+ * @param   json [IN] the JSON_ARRAY object
+ * @param   seq [IN] the sequence number
+ * @return  -1 on not found, 0 on found and deleted
  */
 /*
- * json_del_item_from_array - 从JSON_ARRAY对象中删除指定的对象
- * @json: IN, 目标JSON_ARRAY对象
- * @seq: IN, 要删除的对象的序号
- * @return: 失败返回-1(未找到)；成功返回0(找到并删除)
+ * @brief   从JSON_ARRAY对象中删除指定的对象
+ * @param   json [IN] 目标JSON_ARRAY对象
+ * @param   seq [IN] 要删除的对象的序号
+ * @return  失败返回-1(未找到)；成功返回0(找到并删除)
  */
 int json_del_item_from_array(json_object *json, int seq);
 
 /*
- * json_del_item_from_object - Delete the specified object in JSON_OBJECT object
- * @json: IN, the JSON_OBJECT object
- * @key: IN, the specified key
- * @return: -1 on not found, 0 on found and deleted
+ * @brief   Delete the specified object in JSON_OBJECT object
+ * @param   json [IN] the JSON_OBJECT object
+ * @param   key [IN] the specified key
+ * @return  -1 on not found, 0 on found and deleted
  */
 /*
- * json_del_item_from_object - 从JSON_OBJECT对象中删除指定的对象
- * @json: IN, 目标JSON_OBJECT对象
- * @key: IN, 要删除的对象的键
- * @return: 失败返回-1(未找到)；成功返回0(找到并删除)
+ * @brief   从JSON_OBJECT对象中删除指定的对象
+ * @param   json [IN] 目标JSON_OBJECT对象
+ * @param   key [IN] 要删除的对象的键
+ * @return  失败返回-1(未找到)；成功返回0(找到并删除)
  */
 int json_del_item_from_object(json_object *json, const char *key);
 
 /*
- * json_replace_item_in_array - Replace the specified object in JSON_ARRAY object with new json object
- * @array: IN, the JSON_ARRAY object
- * @seq: IN, the sequence number
- * @new_item: IN, the new json object
- * @return: -1 on failure, 0 on success
- * @description: If seq is not satisfied, new_item will be added to the end.
+ * @brief   Replace the specified object in JSON_ARRAY object with new json object
+ * @param   array [IN] the JSON_ARRAY object
+ * @param   seq [IN] the sequence number
+ * @param   new_item [IN] the new json object
+ * @return  -1 on failure, 0 on success
+ * @note    If seq is not satisfied, new_item will be added to the end.
  */
 /*
- * json_replace_item_in_array - 用新的json对象替换JSON_ARRAY对象中的指定对象
- * @array: IN, 目标JSON_ARRAY对象
- * @seq: IN, 要替换的对象的序号
- * @new_item: IN, 新的json对象
- * @return: 失败返回-1；成功返回0
- * @description: 如果序号无效，new_item将被添加到数组的末尾
+ * @brief   用新的json对象替换JSON_ARRAY对象中的指定对象
+ * @param   array [IN] 目标JSON_ARRAY对象
+ * @param   seq [IN] 要替换的对象的序号
+ * @param   new_item [IN] 新的json对象
+ * @return  失败返回-1；成功返回0
+ * @note    如果序号无效，new_item将被添加到数组的末尾
  */
 int json_replace_item_in_array(json_object *array, int seq, json_object *new_item);
 
 /*
- * json_replace_item_in_object - Replace the specified object in JSON_OBJECT object with new json object
- * @object: IN, the JSON_OBJECT object
- * @new_item: IN, the new json object, users should set the key of new_item first
- * @return: -1 on failure, 0 on success
- * @description: If key is not satisfied, new_item will be added to the end.
+ * @brief   Replace the specified object in JSON_OBJECT object with new json object
+ * @param   object [IN] the JSON_OBJECT object
+ * @param   new_item [IN] the new json object, users should set the key of new_item first
+ * @return  -1 on failure, 0 on success
+ * @note    If key is not satisfied, new_item will be added to the end.
  */
 /*
- * json_replace_item_in_object - 用新的json对象替换JSON_OBJECT对象中的指定对象
- * @object: IN, 目标JSON_OBJECT对象
- * @new_item: IN, 新的json对象，用户应首先设置该对象的键
- * @return: 失败返回-1；成功返回0
- * @description: 如果键无效，new_item将被添加到对象的末尾
+ * @brief   用新的json对象替换JSON_OBJECT对象中的指定对象
+ * @param   object [IN] 目标JSON_OBJECT对象
+ * @param   new_item [IN] 新的json对象，用户应首先设置该对象的键
+ * @return  失败返回-1；成功返回0
+ * @note    如果键无效，new_item将被添加到对象的末尾
  */
 int json_replace_item_in_object(json_object *object, json_object *new_item);
 
 /*
- * json_deepcopy - Deep copy the json object (recursive)
- * @json: IN, the source json object
- * @return: NULL on failure, a pointer on success
+ * @brief   Deep copy the json object (recursive)
+ * @param   json [IN] the source json object
+ * @return  NULL on failure, a pointer on success
  */
 /*
- * json_deepcopy - 深度递归复制json对象
- * @json: IN, 源json对象
- * @return: 失败返回NULL；成功时返回复制的对象指针
+ * @brief   深度递归复制json对象
+ * @param   json [IN] 源json对象
+ * @return  失败返回NULL；成功时返回复制的对象指针
  */
 json_object *json_deepcopy(json_object *json);
 
 /*
- * json_copy_item_to_array - Copy the specified object, the add it to the JSON_ARRAY object
- * @array: IN, the JSON_ARRAY object
- * @item: IN, the json object to copy and add
- * @return: -1 on failure, 0 on success
- * @description: The item will be added to the end, once successfully added,
- *   it is also necessary to manually delete item.
+ * @brief   Copy the specified object, the add it to the JSON_ARRAY object
+ * @param   array [IN] the JSON_ARRAY object
+ * @param   item [IN] the json object to copy and add
+ * @return  -1 on failure, 0 on success
+ * @note    The item will be added to the end, once successfully added,
+ *          it is also necessary to manually delete item.
  */
 /*
- * json_copy_item_to_array - 复制指定的json对象并将其添加到JSON_ARRAY对象中
- * @array: IN, 目标JSON_ARRAY对象
- * @item: IN, 要复制并添加的json对象
- * @return: 失败返回-1；成功返回0
- * @description: 该对象将被添加到数组的末尾，成功添加后，仍需手动删除该对象
+ * @brief   复制指定的json对象并将其添加到JSON_ARRAY对象中
+ * @param   array [IN] 目标JSON_ARRAY对象
+ * @param   item [IN] 要复制并添加的json对象
+ * @return  失败返回-1；成功返回0
+ * @note    该对象将被添加到数组的末尾，成功添加后，仍需手动删除该对象
  */
 int json_copy_item_to_array(json_object *array, json_object *item);
 
 /*
- * json_copy_item_to_object - Copy the specified object, the add it to the JSON_OBJECT object
- * @object: IN, the JSON_OBJECT object
- * @item: IN, the json object to copy and add, users should set the key of item first
- * @return: -1 on failure, 0 on success
- * @description: The item will be added to the end, once successfully added,
- *   it is also necessary to manually delete item.
+ * @brief   Copy the specified object, the add it to the JSON_OBJECT object
+ * @param   object [IN] the JSON_OBJECT object
+ * @param   item [IN] the json object to copy and add, users should set the key of item first
+ * @return  -1 on failure, 0 on success
+ * @note    The item will be added to the end, once successfully added,
+ *          it is also necessary to manually delete item.
  */
 /*
- * json_copy_item_to_object - 复制指定的json对象并将其添加到JSON_OBJECT对象中
- * @object: IN, 目标JSON_OBJECT对象
- * @item: IN, 要复制并添加的json对象，用户应首先设置该对象的键
- * @return: 失败返回-1；成功返回0
- * @description: 该对象将被添加到对象的末尾，成功添加后，仍需手动删除该对象
+ * @brief   复制指定的json对象并将其添加到JSON_OBJECT对象中
+ * @param   object [IN] 目标JSON_OBJECT对象
+ * @param   item [IN] 要复制并添加的json对象，用户应首先设置该对象的键
+ * @return  失败返回-1；成功返回0
+ * @note    该对象将被添加到对象的末尾，成功添加后，仍需手动删除该对象
  */
 int json_copy_item_to_object(json_object *object, json_object *item);
 
 /*
- * json_add_new_item_to_array - Create a new object, the add it to the JSON_ARRAY object
- * @array: IN, the JSON_ARRAY object
- * @type: IN, the json object type
- * @value: IN, the json object value
- * @return: NULL on failure, a pointer on success
- * @description: the pointer points to the created json object
+ * @brief   Create a new object, the add it to the JSON_ARRAY object
+ * @param   array [IN] the JSON_ARRAY object
+ * @param   type [IN] the json object type
+ * @param   value [IN] the json object value
+ * @return  NULL on failure, a pointer on success
+ * @note    the pointer points to the created json object
  */
 /*
- * json_add_new_item_to_array - 创建一个新的json对象并将其添加到JSON_ARRAY对象中
- * @array: IN, 目标JSON_ARRAY对象
- * @type: IN, json对象的类型
- * @value: IN, json对象的值
- * @return: 失败返回NULL；成功时返回创建的json对象指针
+ * @brief   创建一个新的json对象并将其添加到JSON_ARRAY对象中
+ * @param   array [IN] 目标JSON_ARRAY对象
+ * @param   type [IN] json对象的类型
+ * @param   value [IN] json对象的值
+ * @return  失败返回NULL；成功时返回创建的json对象指针
  */
 json_object *json_add_new_item_to_array(json_object *array, json_type_t type, void* value);
 static inline json_object *json_add_null_to_array(json_object *array) { return json_add_new_item_to_array(array, JSON_NULL, NULL); }
@@ -945,21 +945,21 @@ json_binary_t*  : json_add_binary_to_array)(array, value)
 #define json_array_append_object(array) json_add_object_to_array(array)
 
 /*
- * json_add_new_item_to_object - Create a new object, the add it to the JSON_OBJECT object
- * @object: IN, the JSON_OBJECT object
- * @type: the json object type
- * @jkey: IN, the LJSON string key, allow length not to be set first by json_string_info_update
- * @value: IN, the json object value
- * @return: NULL on failure, a pointer on success
- * @description: the pointer points to the created json object
+ * @brief   Create a new object, the add it to the JSON_OBJECT object
+ * @param   object [IN] the JSON_OBJECT object
+ * @param   type [IN] the json object type
+ * @param   jkey [IN] the LJSON string key, allow length not to be set first by json_string_info_update
+ * @param   value [IN] the json object value
+ * @return  NULL on failure, a pointer on success
+ * @note    the pointer points to the created json object
  */
 /*
- * json_add_new_item_to_object - 创建一个新的json对象并将其添加到JSON_OBJECT对象中
- * @object: IN, 目标JSON_OBJECT对象
- * @type: IN, json对象的类型
- * @jkey: IN, json对象的键，允许长度未预先设置
- * @value: IN, json对象的值
- * @return: 失败返回NULL；成功时返回创建的json对象指针
+ * @brief   创建一个新的json对象并将其添加到JSON_OBJECT对象中
+ * @param   object [IN] 目标JSON_OBJECT对象
+ * @param   type [IN] json对象的类型
+ * @param   jkey [IN] json对象的键，允许长度未预先设置
+ * @param   value [IN] json对象的值
+ * @return  失败返回NULL；成功时返回创建的json对象指针
  */
 json_object *json_add_new_item_to_object(json_object *object, json_type_t type, json_string_t *jkey, void* value);
 static inline json_object *json_add_null_to_object(json_object *object, json_string_t *jkey) { return json_add_new_item_to_object(object, JSON_NULL, jkey, NULL); }
@@ -1026,21 +1026,21 @@ json_binary_t*  : json_add_binary_to_object)(object, jkey, value)
 /**************** json pool editor / 内存块json的编辑接口 ****************/
 
 /*
- * json_mem_node_t - the block memory node
- * @list: the list value, LJSON associates `list` to the `head` of json_mem_mgr_t
- *   or the `list` of brother json_mem_node_t
- * @size: the memory size
- * @ptr: the memory pointer
- * @cur: the current memory pointer
- * @description: LJSON can use the block memory to accelerate memory allocation and save memory space.
+ * @brief   the block memory node
+ * @param   list the list value, LJSON associates `list` to the `head` of json_mem_mgr_t
+ *          or the `list` of brother json_mem_node_t
+ * @param   size the memory size
+ * @param   ptr the memory pointer
+ * @param   cur the current memory pointer
+ * @note    LJSON can use the block memory to accelerate memory allocation and save memory space.
  */
 /*
- * json_mem_node_t - 块内存节点
- * @list: 链表节点，LJSON将 `list` 关联到 `json_mem_mgr_t` 的 `head` 或兄弟 `json_mem_node_t` 的 `list`
- * @size: 内存大小
- * @ptr: 内存指针
- * @cur: 当前内存指针
- * @description: LJSON使用块内存来加速内存分配并节省内存空间，内存块只能统一申请统一释放，无法单独释放某个对象
+ * @brief   块内存节点
+ * @param   list 链表节点，LJSON将 `list` 关联到 `json_mem_mgr_t` 的 `head` 或兄弟 `json_mem_node_t` 的 `list`
+ * @param   size 内存大小
+ * @param   ptr 内存指针
+ * @param   cur 当前内存指针
+ * @note    LJSON使用块内存来加速内存分配并节省内存空间，内存块只能统一申请统一释放，无法单独释放某个对象
  */
 typedef struct {
     struct json_list list;
@@ -1050,18 +1050,18 @@ typedef struct {
 } json_mem_node_t;
 
 /*
- * json_mem_mgr_t - the node to manage block memory node
- * @head: the list head, LJSON manages block memory nodes through the list head
- * @mem_size: the default memory size to allocate, its default value is JSON_POOL_MEM_SIZE_DEF(8192)
- * @cur_node: the current block memory node
- * @description: the manage node manages a group of block memory nodes.
+ * @brief   the node to manage block memory node
+ * @param   head the list head, LJSON manages block memory nodes through the list head
+ * @param   mem_size the default memory size to allocate, its default value is JSON_POOL_MEM_SIZE_DEF(8192)
+ * @param   cur_node the current block memory node
+ * @note    the manage node manages a group of block memory nodes.
  */
 /*
- * json_mem_mgr_t - 管理块内存节点的结构
- * @head: 链表头，LJSON通过链表头管理块内存节点
- * @mem_size: 默认分配的内存大小，默认值为 `JSON_POOL_MEM_SIZE_DEF`(8192)
- * @cur_node: 当前块内存节点
- * @description: 该管理节点管理一组块内存节点
+ * @brief   管理块内存节点的结构
+ * @param   head 链表头，LJSON通过链表头管理块内存节点
+ * @param   mem_size 默认分配的内存大小，默认值为 `JSON_POOL_MEM_SIZE_DEF`(8192)
+ * @param   cur_node 当前块内存节点
+ * @note    该管理节点管理一组块内存节点
  */
 typedef struct {
     struct json_list head;
@@ -1070,23 +1070,22 @@ typedef struct {
 } json_mem_mgr_t;
 
 /*
- * json_mem_t - the head to manage all types of block memory
- * @valid: IN, is there already memory allocation available to speed up
- *   frequent parsing of small JSON files
- * @obj_mgr: the node to manage json_object
- * @key_mgr: the node to manage the value of key
- * @str_mgr: the node to manage the value of JSON_STRING object
- * @description: The reason for dividing into multiple management nodes is that
- * there is a memory address alignment requirement for json_object.
+ * @brief   the head to manage all types of block memory
+ * @param   valid [IN] is there already memory allocation available to speed up frequent parsing of small JSON files
+ * @param   obj_mgr the node to manage json_object
+ * @param   key_mgr the node to manage the value of key
+ * @param   str_mgr the node to manage the value of JSON_STRING object
+ * @note    The reason for dividing into multiple management nodes is that
+ *          there is a memory address alignment requirement for json_object.
  */
 /*
- * json_mem_t - 管理所有类型块内存的结构
- * @valid: IN, 是否已经有内存分配可用于加速频繁解析小型JSON文件
- * @obj_mgr: 管理 `json_object` 的节点
- * @key_mgr: 管理键值的节点
- * @str_mgr: 管理 `JSON_STRING` 对象值的节点
- * @description: 划分为多个管理节点的原因是 `json_object` 有内存地址对齐要求
- *   valid设为false时，JSON解析函数内部会重新初始化mem，所以此时mem一定不要有挂载内存节点
+ * @brief   管理所有类型块内存的结构
+ * @param   valid [IN] 是否已经有内存分配可用于加速频繁解析小型JSON文件
+ * @param   obj_mgr 管理 `json_object` 的节点
+ * @param   key_mgr 管理键值的节点
+ * @param   str_mgr 管理 `JSON_STRING` 对象值的节点
+ * @note    划分为多个管理节点的原因是 `json_object` 有内存地址对齐要求
+ *          valid设为false时，JSON解析函数内部会重新初始化mem，所以此时mem一定不要有挂载内存节点
  */
 typedef struct {
     bool valid;
@@ -1096,86 +1095,86 @@ typedef struct {
 } json_mem_t;
 
 /*
- * pjson_memory_free - Free all block memory
- * @mem: IN, the block memory manager
- * @description: Users need to call it to delete all json objects, not one.
+ * @brief   Free all block memory
+ * @param   mem [IN] the block memory manager
+ * @note    Users need to call it to delete all json objects, not one.
  */
 /*
- * pjson_memory_free - 释放所有块内存
- * @mem: IN, 块内存管理器
- * @description: 用户需要调用此接口来删除所有json对象，无法单独释放某个json对象的内存
+ * @brief   释放所有块内存
+ * @param   mem [IN] 块内存管理器
+ * @note    用户需要调用此接口来删除所有json对象，无法单独释放某个json对象的内存
  */
 void pjson_memory_free(json_mem_t *mem);
 
 /*
- * pjson_memory_init - Initializate the block memory manager
- * @mem: IN, the block memory manager to be initializated
- * @return: None
- * @description: Users need to call it before using block memory apis.
- *   User can re-set `mem_size` after calling it.
+ * @brief   Initializate the block memory manager
+ * @param   mem [IN] the block memory manager to be initializated
+ * @return  None
+ * @note    Users need to call it before using block memory apis.
+ *          User can re-set `mem_size` after calling it.
  */
 /*
- * pjson_memory_init - 初始化块内存管理器
- * @mem: IN, 要初始化的块内存管理器
- * @return: 无返回值
- * @description: 用户在使用块内存API之前需要调用此接口；调用后，用户可以重新设置 `mem_size`
+ * @brief   初始化块内存管理器
+ * @param   mem [IN] 要初始化的块内存管理器
+ * @return  无返回值
+ * @note    用户在使用块内存API之前需要调用此接口；调用后，用户可以重新设置 `mem_size`
  */
 void pjson_memory_init(json_mem_t *mem);
 
 /*
- * pjson_memory_refresh - Refresh all block memory
- * @mem: IN, the block memory manager
- * @description: It will retain the first memory node and release the other memory nodes.
- *   The retained nodes will be updated to an unused state and can be used to speed up
- *   frequent parsing of small JSON files with reusing memory.
+ * @brief   Refresh all block memory
+ * @param   mem [IN] the block memory manager
+ * @note    It will retain the first memory node and release the other memory nodes.
+ *          The retained nodes will be updated to an unused state and can be used to speed up
+ *          frequent parsing of small JSON files with reusing memory.
  */
 /*
- * pjson_memory_refresh - 刷新所有块内存
- * @mem: IN, 块内存管理器
- * @description: 此接口会保留第一个内存节点并释放其他内存节点，保留的节点将被更新为未使用状态，
- *   可以用于加速频繁解析小型JSON文件时的内存复用
+ * @brief   刷新所有块内存
+ * @param   mem [IN] 块内存管理器
+ * @note    此接口会保留第一个内存节点并释放其他内存节点，保留的节点将被更新为未使用状态，
+ *          可以用于加速频繁解析小型JSON文件时的内存复用
  */
 void pjson_memory_refresh(json_mem_t *mem);
 
 /*
- * pjson_memory_statistics - Count the alloced memory of the memory blocks
- * @mgr: IN, the block memory manager node
- * @return: the alloced memory size
+ * @brief   Count the alloced memory of the memory blocks
+ * @param   mgr [IN] the block memory manager node
+ * @return  the alloced memory size
  */
 /*
- * pjson_memory_statistics - 统计块内存管理器节点已分配的内存大小
- * @mgr: IN, 块内存管理器节点
- * @return: 已分配的内存大小
+ * @brief   统计块内存管理器节点已分配的内存大小
+ * @param   mgr [IN] 块内存管理器节点
+ * @return  已分配的内存大小
  */
 int pjson_memory_statistics(json_mem_mgr_t *mgr);
 
 /*
- * pjson_new_object - Create a pool json object without value
- * @type: IN, the json object type
- * @mem: IN, the block memory manager
- * @return: NULL on failure, a pointer on success
+ * @brief   Create a pool json object without value
+ * @param   type [IN] the json object type
+ * @param   mem [IN] the block memory manager
+ * @return  NULL on failure, a pointer on success
  */
 /*
- * pjson_new_object - 创建一个无值的池json对象
- * @type: IN, json对象类型
- * @mem: IN, 块内存管理器
- * @return: 失败返回 NULL；成功返回指针
+ * @brief   创建一个无值的池json对象
+ * @param   type [IN] json对象类型
+ * @param   mem [IN] 块内存管理器
+ * @return  失败返回 NULL；成功返回指针
  */
 json_object *pjson_new_object(json_type_t type, json_mem_t *mem);
 
 /*
- * pjson_create_item - Create a pool json object with value
- * @type: IN, the json object type
- * @value: IN, the json object value
- * @mem: IN, the block memory manager
- * @return: NULL on failure, a pointer on success
+ * @brief   Create a pool json object with value
+ * @param   type [IN] the json object type
+ * @param   value [IN] the json object value
+ * @param   mem [IN] the block memory manager
+ * @return  NULL on failure, a pointer on success
  */
 /*
- * pjson_create_item - 创建一个有值的池json对象
- * @type: IN, json对象类型
- * @value: IN, json对象值
- * @mem: IN, 块内存管理器
- * @return: 失败返回 NULL；成功返回指针
+ * @brief   创建一个有值的池json对象
+ * @param   type [IN] json对象类型
+ * @param   value [IN] json对象值
+ * @param   mem [IN] 块内存管理器
+ * @return  失败返回 NULL；成功返回指针
  */
 json_object *pjson_create_item(json_type_t type, void *value, json_mem_t *mem);
 static inline json_object *pjson_create_null(json_mem_t *mem) { return pjson_new_object(JSON_NULL, mem); }
@@ -1215,20 +1214,20 @@ json_binary_t*  : pjson_create_binary)(value, mem)
 #endif
 
 /*
- * pjson_create_item_array - Create a pool JSON_ARRAY object with a group of child json objects
- * @type: IN, the type of child json objects
- * @values: IN, the values of child json objects
- * @count: IN, the total number of child json objects
- * @mem: IN, the block memory manager
- * @return: NULL on failure, a pointer on success
+ * @brief   Create a pool JSON_ARRAY object with a group of child json objects
+ * @param   item_type [IN] the type of child json objects
+ * @param   values [IN] the values of child json objects
+ * @param   count [IN] the total number of child json objects
+ * @param   mem [IN] the block memory manager
+ * @return  NULL on failure, a pointer on success
  */
 /*
- * pjson_create_item_array - 创建一个包含一组子json对象的池JSON_ARRAY对象
- * @item_type: IN, 子json对象的类型
- * @values: IN, 子json对象的值数组
- * @count: IN, 子json对象的总数
- * @mem: IN, 块内存管理器
- * @return: 失败返回 NULL；成功返回指针
+ * @brief   创建一个包含一组子json对象的池JSON_ARRAY对象
+ * @param   item_type [IN] 子json对象的类型
+ * @param   values [IN] 子json对象的值数组
+ * @param   count [IN] 子json对象的总数
+ * @param   mem [IN] 块内存管理器
+ * @return  失败返回 NULL；成功返回指针
  */
 json_object *pjson_create_item_array(json_type_t item_type, void *values, int count, json_mem_t *mem);
 static inline json_object *pjson_create_bool_array(bool *values, int count, json_mem_t *mem) { return pjson_create_item_array(JSON_BOOL, values, count, mem); }
@@ -1265,39 +1264,40 @@ json_binary_t*  : pjson_create_binary_array)(values, count, mem)
 #endif
 
 /*
- * pjson_string_strdup - Strdup the LJSON string src to dst
- * @src: IN, the source string
- * @isrc: INOUT, the information of the source string, can be NULL
- * @dst: OUT, the destination string
- * @idst: OUT, the information of the destination string, can not be NULL
- * @mgr: IN, block memory manager
- * @return: -1 on failure, 0 on success
+ * @brief   Strdup the LJSON string src to dst
+ * @param   src [IN] the source string
+ * @param   isrc [INOUT] the information of the source string, can be NULL
+ * @param   dst [OUT] the destination string
+ * @param   idst [OUT] the information of the destination string, can not be NULL
+ * @param   mgr [IN] block memory manager
+ * @return  -1 on failure, 0 on success
+ * @note    If dst is large enough to hold the data of src, no memory allocation will be performed
  */
 /*
- * pjson_string_strdup - 复制字符串数据
- * @src: IN, 源字符串
- * @isrc: INOUT, 源字符串信息，可以为NULL
- * @dst: OUT, 目标字符串
- * @idst: OUT, 目标字符串信息，不能为NULL
- * @mgr: IN, 块内存管理器
- * @return: 失败返回-1；成功返回0
- * @description: 如果dst足够容纳src的数据，将不会进行内存分配
+ * @brief   复制字符串数据
+ * @param   src [IN] 源字符串
+ * @param   isrc [INOUT] 源字符串信息，可以为NULL
+ * @param   dst [OUT] 目标字符串
+ * @param   idst [OUT] 目标字符串信息，不能为NULL
+ * @param   mgr [IN] 块内存管理器
+ * @return  失败返回-1；成功返回0
+ * @note    如果dst足够容纳src的数据，将不会进行内存分配
  */
 int pjson_string_strdup(const char *src, json_strinfo_t *isrc, char **dst, json_strinfo_t *idst, json_mem_mgr_t *mgr);
 
 /*
- * pjson_set_key - Set the key of json object
- * @json: IN, the json object to be set
- * @jkey: IN, the LJSON string key, allow length not to be set first by json_string_info_update
- * @mem: IN, the block memory manager
- * @return: -1 on failure, 0 on success
+ * @brief   Set the key of json object
+ * @param   json [IN] the json object to be set
+ * @param   jkey [IN] the LJSON string key, allow length not to be set first by json_string_info_update
+ * @param   mem [IN] the block memory manager
+ * @return  -1 on failure, 0 on success
  */
 /*
- * pjson_set_key - 设置json对象的键
- * @json: IN, 要设置的json对象
- * @jkey: IN, LJSON字符串键，允许长度未预先通过 json_string_info_update 设置
- * @mem: IN, 块内存管理器
- * @return: 失败返回 -1；成功返回 0
+ * @brief   设置json对象的键
+ * @param   json [IN] 要设置的json对象
+ * @param   jkey [IN] LJSON字符串键，允许长度未预先通过 json_string_info_update 设置
+ * @param   mem [IN] 块内存管理器
+ * @return  失败返回 -1；成功返回 0
  */
 static inline int pjson_set_key(json_object *json, json_string_t *jkey, json_mem_t *mem)
 {
@@ -1305,18 +1305,18 @@ static inline int pjson_set_key(json_object *json, json_string_t *jkey, json_mem
 }
 
 /*
- * pjson_set_string_value - Set the string of JSON_STRING object
- * @json: IN, the json object to be set
- * @jstr: IN, the LJSON string value, allow length not to be set first by json_string_info_update
- * @mem: IN, the block memory manager
- * @return: -1 on failure, 0 on success
+ * @brief   Set the string of JSON_STRING object
+ * @param   json [IN] the json object to be set
+ * @param   jstr [IN] the LJSON string value, allow length not to be set first by json_string_info_update
+ * @param   mem [IN] the block memory manager
+ * @return  -1 on failure, 0 on success
  */
 /*
- * pjson_set_string_value - 设置JSON_STRING对象的字符串值
- * @json: IN, 要设置的json对象
- * @jstr: IN, LJSON字符串值，允许长度未预先通过 json_string_info_update 设置
- * @mem: IN, 块内存管理器
- * @return: 失败返回 -1；成功返回 0
+ * @brief   设置JSON_STRING对象的字符串值
+ * @param   json [IN] 要设置的json对象
+ * @param   jstr [IN] LJSON字符串值，允许长度未预先通过 json_string_info_update 设置
+ * @param   mem [IN] 块内存管理器
+ * @return  失败返回 -1；成功返回 0
  */
 static inline int pjson_set_string_value(json_object *json, json_string_t *jstr, json_mem_t *mem)
 {
@@ -1327,122 +1327,122 @@ static inline int pjson_set_string_value(json_object *json, json_string_t *jstr,
 }
 
 /*
- * pjson_set_binary_value - Set the binary of JSON_BINARY object
- * @json: IN, the json object to be set
- * @jbin: IN, the LJSON binary value
- * @mem: IN, the block memory manager
- * @return: -1 on failure, 0 on success
+ * @brief   Set the binary of JSON_BINARY object
+ * @param   json [IN] the json object to be set
+ * @param   jbin [IN] the LJSON binary value
+ * @param   mem [IN] the block memory manager
+ * @return  -1 on failure, 0 on success
  */
 /*
- * pjson_set_binary_value - 设置JSON_BINARY类型的json对象的值
- * @json: IN, 被设置的json对象
- * @jbin: IN, 要设置的值
- * @mem: IN, 块内存管理器
- * @return: 失败返回-1；成功返回0
+ * @brief   设置JSON_BINARY类型的json对象的值
+ * @param   json [IN] 被设置的json对象
+ * @param   jbin [IN] 要设置的值
+ * @param   mem [IN] 块内存管理器
+ * @return  失败返回-1；成功返回0
  */
 int pjson_set_binary_value(json_object *json, json_binary_t *jbin, json_mem_t *mem);
 
 /*
- * pjson_replace_item_in_array - Replace the specified object in JSON_ARRAY object with new json object
- * @array: IN, the JSON_ARRAY object
- * @seq: IN, the sequence number
- * @new_item: IN, the new json object
- * @return: -1 on failure, 0 on success
- * @description: If seq is not satisfied, new_item will be added to the end.
+ * @brief   Replace the specified object in JSON_ARRAY object with new json object
+ * @param   array [IN] the JSON_ARRAY object
+ * @param   seq [IN] the sequence number
+ * @param   new_item [IN] the new json object
+ * @return  -1 on failure, 0 on success
+ * @note    If seq is not satisfied, new_item will be added to the end.
  */
 /*
- * pjson_replace_item_in_array - 替换JSON_ARRAY对象中指定序号的json对象
- * @array: IN,JSON_ARRAY对象
- * @seq: IN, 序号
- * @new_item: IN, 新的json对象
- * @return: 失败返回 -1；成功返回 0
- * @description: 如果序号不满足，new_item 将被添加到末尾
+ * @brief   替换JSON_ARRAY对象中指定序号的json对象
+ * @param   array [IN] JSON_ARRAY对象
+ * @param   seq [IN] 序号
+ * @param   new_item [IN] 新的json对象
+ * @return  失败返回 -1；成功返回 0
+ * @note    如果序号不满足，new_item 将被添加到末尾
  */
 int pjson_replace_item_in_array(json_object *array, int seq, json_object *new_item);
 
 /*
- * pjson_replace_item_in_object - Replace the specified object in JSON_OBJECT object with new json object
- * @object: IN, the JSON_OBJECT object
- * @new_item: IN, the new json object, users should set the key of new_item first
- * @return: -1 on failure, 0 on success
- * @description: If key is not satisfied, new_item will be added to the end.
+ * @brief   Replace the specified object in JSON_OBJECT object with new json object
+ * @param   object [IN] the JSON_OBJECT object
+ * @param   new_item [IN] the new json object, users should set the key of new_item first
+ * @return  -1 on failure, 0 on success
+ * @note    If key is not satisfied, new_item will be added to the end.
  */
 /*
- * pjson_replace_item_in_object - 替换JSON_OBJECT对象中指定键的json对象
- * @object: IN,JSON_OBJECT对象
- * @new_item: IN, 新的json对象，用户应预先设置 new_item 的键
- * @return: 失败返回 -1；成功返回 0
- * @description: 如果键不满足，new_item 将被添加到末尾
+ * @brief   替换JSON_OBJECT对象中指定键的json对象
+ * @param   object [IN] JSON_OBJECT对象
+ * @param   new_item [IN] 新的json对象，用户应预先设置 new_item 的键
+ * @return  失败返回 -1；成功返回 0
+ * @note    如果键不满足，new_item 将被添加到末尾
  */
 int pjson_replace_item_in_object(json_object *object, json_object *new_item);
 
 /*
- * pjson_deepcopy - Deep copy the json object (recursive)
- * @json: IN, the source json object
- * @mem: IN, the block memory manager
- * @return: NULL on failure, a pointer on success
+ * @brief   Deep copy the json object (recursive)
+ * @param   json [IN] the source json object
+ * @param   mem [IN] the block memory manager
+ * @return  NULL on failure, a pointer on success
  */
 /*
- * pjson_deepcopy - 递归深拷贝json对象
- * @json: IN, 源json对象
- * @mem: IN, 块内存管理器
- * @return: 失败返回 NULL；成功返回指针
+ * @brief   递归深拷贝json对象
+ * @param   json [IN] 源json对象
+ * @param   mem [IN] 块内存管理器
+ * @return  失败返回 NULL；成功返回指针
  */
 json_object *pjson_deepcopy(json_object *json, json_mem_t *mem);
 
 /*
- * pjson_copy_item_to_array - Copy the specified object, the add it to the JSON_ARRAY object
- * @array: IN, the JSON_ARRAY object
- * @item: IN, the json object to copy and add
- * @mem: IN, the block memory manager
- * @return: -1 on failure, 0 on success
- * @description: The item will be added to the end
+ * @brief   Copy the specified object, the add it to the JSON_ARRAY object
+ * @param   array [IN] the JSON_ARRAY object
+ * @param   item [IN] the json object to copy and add
+ * @param   mem [IN] the block memory manager
+ * @return  -1 on failure, 0 on success
+ * @note    The item will be added to the end
  */
 /*
- * pjson_copy_item_to_array - 复制指定的json对象并将其添加到JSON_ARRAY对象中
- * @array: IN,JSON_ARRAY对象
- * @item: IN, 要复制并添加的json对象
- * @mem: IN, 块内存管理器
- * @return: 失败返回 -1；成功返回 0
- * @description: 对象将被添加到末尾
+ * @brief   复制指定的json对象并将其添加到JSON_ARRAY对象中
+ * @param   array [IN] JSON_ARRAY对象
+ * @param   item [IN] 要复制并添加的json对象
+ * @param   mem [IN] 块内存管理器
+ * @return  失败返回 -1；成功返回 0
+ * @note    对象将被添加到末尾
  */
 int pjson_copy_item_to_array(json_object *array, json_object *item, json_mem_t *mem);
 
 /*
- * pjson_copy_item_to_object - Copy the specified object, the add it to the JSON_OBJECT object
- * @object: IN, the JSON_OBJECT object
- * @item: IN, the json object to copy and add, users should set the key of item first
- * @mem: IN, the block memory manager
- * @return: -1 on failure, 0 on success
- * @description: The item will be added to the end
+ * @brief   Copy the specified object, the add it to the JSON_OBJECT object
+ * @param   object [IN] the JSON_OBJECT object
+ * @param   item [IN] the json object to copy and add, users should set the key of item first
+ * @param   mem [IN] the block memory manager
+ * @return  -1 on failure, 0 on success
+ * @note    The item will be added to the end
  */
 /*
- * pjson_copy_item_to_object - 复制指定的json对象并将其添加到JSON_OBJECT对象中
- * @object: IN,JSON_OBJECT对象
- * @item: IN, 要复制并添加的json对象，用户应预先设置 item 的键
- * @mem: IN, 块内存管理器
- * @return: 失败返回 -1；成功返回 0
- * @description: 对象将被添加到末尾。
+ * @brief   复制指定的json对象并将其添加到JSON_OBJECT对象中
+ * @param   object [IN] JSON_OBJECT对象
+ * @param   item [IN] 要复制并添加的json对象，用户应预先设置 item 的键
+ * @param   mem [IN] 块内存管理器
+ * @return  失败返回 -1；成功返回 0
+ * @note    对象将被添加到末尾。
  */
 int pjson_copy_item_to_object(json_object *object, json_object *item, json_mem_t *mem);
 
 /*
- * pjson_add_new_item_to_array - Create a new object, the add it to the pool JSON_ARRAY object
- * @object: IN, the JSON_ARRAY object
- * @type: the json object type
- * @value: IN, the json object value
- * @mem: IN, the block memory manager
- * @return: NULL on failure, a pointer on success
- * @description: the pointer points to the created json object
+ * @brief   Create a new object, the add it to the pool JSON_ARRAY object
+ * @param   array [IN] the JSON_ARRAY object
+ * @param   type [IN] the json object type
+ * @param   value [IN] the json object value
+ * @param   mem [IN] the block memory manager
+ * @return  NULL on failure, a pointer on success
+ * @note    the pointer points to the created json object
  */
 /*
- * pjson_add_new_item_to_array - 创建一个新的json对象并将其添加到池JSON_ARRAY对象中
- * @array: IN,JSON_ARRAY对象
- * @type: IN, json对象类型
- * @value: IN, json对象值
- * @mem: IN, 块内存管理器
- * @return: 失败返回 NULL；成功返回指针
- * @description: 指针指向创建的json对象
+ * @brief   创建一个新的json对象并将其添加到池JSON_ARRAY对象中
+ * @param   array [IN] JSON_ARRAY对象
+ * @param   type [IN] json对象类型
+ * @param   value [IN] json对象值
+ * @param   mem [IN] 块内存管理器
+ * @return  失败返回 NULL；成功返回指针
+ * @note    指针指向创建的json对象
  */
 json_object *pjson_add_new_item_to_array(json_object *array, json_type_t type, void *value, json_mem_t *mem);
 static inline json_object *pjson_add_null_to_array(json_object *array, json_mem_t *mem) { return pjson_add_new_item_to_array(array, JSON_NULL, NULL, mem); }
@@ -1486,24 +1486,24 @@ json_binary_t*  : pjson_add_binary_to_array)(array, value, mem)
 #define pjson_array_append_object(array, mem) pjson_add_object_to_array(array, mem)
 
 /*
- * pjson_add_new_item_to_object - Create a new object, the add it to the pool JSON_OBJECT object
- * @object: IN, the JSON_OBJECT object
- * @type: the json object type
- * @jkey: IN, the LJSON string key, allow length not to be set first by json_string_info_update
- * @value: IN, the json object value
- * @mem: IN, the block memory manager
- * @return: NULL on failure, a pointer on success
- * @description: the pointer points to the created json object
+ * @brief   Create a new object, the add it to the pool JSON_OBJECT object
+ * @param   object [IN] the JSON_OBJECT object
+ * @param   type [IN] the json object type
+ * @param   jkey [IN] the LJSON string key, allow length not to be set first by json_string_info_update
+ * @param   value [IN] the json object value
+ * @param   mem [IN] the block memory manager
+ * @return  NULL on failure, a pointer on success
+ * @note    the pointer points to the created json object
  */
 /*
- * pjson_add_new_item_to_object - 创建一个新的json对象并将其添加到池JSON_OBJECT对象中
- * @object: IN,JSON_OBJECT对象
- * @type: IN, json对象类型
- * @jkey: IN, LJSON字符串键，允许长度未预先通过 json_string_info_update 设置
- * @value: IN, json对象值
- * @mem: IN, 块内存管理器
- * @return: 失败返回 NULL；成功返回指针
- * @description: 指针指向创建的json对象
+ * @brief   创建一个新的json对象并将其添加到池JSON_OBJECT对象中
+ * @param   object [IN] JSON_OBJECT对象
+ * @param   type [IN] json对象类型
+ * @param   jkey [IN] LJSON字符串键，允许长度未预先通过 json_string_info_update 设置
+ * @param   value [IN] json对象值
+ * @param   mem [IN] 块内存管理器
+ * @return  失败返回 NULL；成功返回指针
+ * @note    指针指向创建的json对象
  */
 json_object *pjson_add_new_item_to_object(json_object *object, json_type_t type, json_string_t *jkey, void *value, json_mem_t *mem);
 static inline json_object *pjson_add_null_to_object(json_object *object, json_string_t *jkey, json_mem_t *mem) { return pjson_add_new_item_to_object(object, JSON_NULL, jkey, NULL, mem); }
@@ -1549,18 +1549,18 @@ json_binary_t*  : pjson_add_binary_to_object)(object, jkey, value, mem)
 /**************** json DOM printer / DOM打印器 ****************/
 
 /*
- * json_print_choice_t - the choice to print
- * @size: INOUT, the length of data
- * @p: INOUT, the data, it can be NULL while size is not 0
- * @description: it is used for reusing cache to accelerate printing speed
+ * @brief   the choice to print
+ * @param   size [INOUT] the length of data
+ * @param   p [INOUT] the data, it can be NULL while size is not 0
+ * @note    it is used for reusing cache to accelerate printing speed
  */
 /*
- * json_print_ptr_t - 打印缓冲
- * @size: INOUT, 数据的长度
- * @p: INOUT, 数据指针，当size不为0时可以为 NULL
- * @description: 用于复用缓存以加速打印速度，此时LJSON内部可能都不会进行内存分配。
- *    打印到字符串时，开始时传入json_print_ptr_t，print结束时也传入json_print_ptr_t，此时不用释放
- *    打印返回的字符串，会一直复用json_print_ptr_t的p成员，最后不再使用时释放p成员一次即可。
+ * @brief   打印缓冲
+ * @param   size [INOUT] 数据的长度
+ * @param   p [INOUT] 数据指针，当size不为0时可以为 NULL
+ * @note    用于复用缓存以加速打印速度，此时LJSON内部可能都不会进行内存分配。
+ *          打印到字符串时，开始时传入json_print_ptr_t，print结束时也传入json_print_ptr_t，此时不用释放
+ *          打印返回的字符串，会一直复用json_print_ptr_t的p成员，最后不再使用时释放p成员一次即可。
  */
 typedef struct {
     size_t size;
@@ -1568,33 +1568,40 @@ typedef struct {
 } json_print_ptr_t;
 
 /*
- * json_print_choice_t - the choice to print
- * @str_len: OUT, the length of returned printed string when printing to string
- * @plus_size: IN, increased memory size during reallocation when printing to string,
- *   or the write buffer size when printing to file,
- *   its default value is `JSON_PRINT_SIZE_PLUS_DEF`(1024)
- * @item_size: IN, the json object size when transfering to a string,
- *   its default value is `JSON_FORMAT_ITEM_SIZE_DEF`(32) when format_flag is true,
- *   or `JSON_UNFORMAT_ITEM_SIZE_DEF`(24) when format_flag is false
- * @item_total: IN, the total json objects, it will be calculated automatically in DOM print,
- *   it is better to set the value by users in SAX print
- * @format_flag: IN, set formatted printing (true) or compressed printing(false)
- * @ptr: INOUT, pre-allocated memory for printing
- * @path: IN, when the path is set, it prints to file while printing,
- *   otherwise it directly print to string
+ * @brief   the choice to print
+ * @param   str_len [OUT] the length of returned printed string when printing to string
+ * @param   plus_size [IN] increased memory size during reallocation when printing to string,
+ *          or the write buffer size when printing to file,
+ *          its default value is `JSON_PRINT_SIZE_PLUS_DEF`(1024)
+ * @param   item_size [IN] the json object size when transfering to a string,
+ *          its default value is `JSON_FORMAT_ITEM_SIZE_DEF`(32) when format_flag is true,
+ *          or `JSON_UNFORMAT_ITEM_SIZE_DEF`(24) when format_flag is false
+ * @param   item_total [IN] the total json objects, it will be calculated automatically in DOM print,
+ *          it is better to set the value by users in SAX print
+ * @param   format_flag [IN] set formatted printing (true) or compressed printing(false)
+ * @param   ptr [INOUT] pre-allocated memory for printing
+ * @param   path [IN] when the path is set, it prints to file while printing,
+ *          otherwise it directly print to string
+ * @note    If ptr is set, the external buffer enters the print internal function,
+ *          the buffer is handed over to the internal interface and the itself is set to NULL;
+ *          when printing is complete:
+ *          - if printing to string, ptr is set to the returned string value,
+ *            finally use json_memory_free to free ptr->p or the returned string;
+ *          - if printing to file, ptr is set to the internal read/write buffer value,
+ *            finally use json_memory_free to free ptr->p
  */
 /*
- * json_print_choice_t - 打印参数设置
- * @str_len: OUT, 打印到字符串时返回的字符串长度
- * @plus_size: IN, 打印到字符串时重新分配内存时增加的内存大小，或打印到文件时的写入缓冲区大小，默认值为 `JSON_PRINT_SIZE_PLUS_DEF`(1024)
- * @item_size: IN, 将 JSON 对象转换为字符串时的大小，默认值为 `JSON_FORMAT_ITEM_SIZE_DEF`(32)（当 format_flag 为 true 时）或 `JSON_UNFORMAT_ITEM_SIZE_DEF`(24)（当 format_flag 为 false 时）
- * @item_total: IN, JSON 对象的总数，DOM 打印时会自动计算，SAX 打印时最好由用户设置
- * @format_flag: IN, 设置格式化打印（true）或压缩打印（false）
- * @ptr: INOUT, 预分配的内存用于打印
- * @path: IN, 当 path 设置时，打印到文件，否则直接打印到字符串
- * @description: 如果设置了ptr，外部缓冲进入打印内部函数后，将缓冲交给内部接口，自身置空；当打印完成后：
- *   如果打印到字符串，ptr被置为了返回的字符串的值，最后使用json_memory_free释放ptr->p或返回的字符串之一；
- *   如果打印到文件，ptr被置为了内部读写缓冲的值，最后使用json_memory_free释放ptr->p
+ * @brief   打印参数设置
+ * @param   str_len [OUT] 打印到字符串时返回的字符串长度
+ * @param   plus_size [IN] 打印到字符串时重新分配内存时增加的内存大小，或打印到文件时的写入缓冲区大小，默认值为 `JSON_PRINT_SIZE_PLUS_DEF`(1024)
+ * @param   item_size [IN] 将 JSON 对象转换为字符串时的大小，默认值为 `JSON_FORMAT_ITEM_SIZE_DEF`(32)（当 format_flag 为 true 时）或 `JSON_UNFORMAT_ITEM_SIZE_DEF`(24)（当 format_flag 为 false 时）
+ * @param   item_total [IN] JSON 对象的总数，DOM 打印时会自动计算，SAX 打印时最好由用户设置
+ * @param   format_flag [IN] 设置格式化打印（true）或压缩打印（false）
+ * @param   ptr [INOUT] 预分配的内存用于打印
+ * @param   path [IN] 当 path 设置时，打印到文件，否则直接打印到字符串
+ * @note    如果设置了ptr，外部缓冲进入打印内部函数后，将缓冲交给内部接口，自身置空；当打印完成后：
+ *          如果打印到字符串，ptr被置为了返回的字符串的值，最后使用json_memory_free释放ptr->p或返回的字符串之一；
+ *          如果打印到文件，ptr被置为了内部读写缓冲的值，最后使用json_memory_free释放ptr->p
  */
 typedef struct {
     size_t str_len; /* return string length if it is printed to string. */
@@ -1607,38 +1614,38 @@ typedef struct {
 } json_print_choice_t;
 
 /*
- * json_print_common - The common DOM printer
- * @json: IN, the json object to be printed
- * @choice: INOUT, the print choice
- * @return: NULL on failure, a pointer on success
- * @description: When printing to file, the pointer is `"ok"` on success, don't free it,
- *   when printing to string, the pointer is the printed string, use `json_memory_free` to free it.
+ * @brief   The common DOM printer
+ * @param   json [IN] the json object to be printed
+ * @param   choice [INOUT] the print choice
+ * @return  NULL on failure, a pointer on success
+ * @note    When printing to file, the pointer is `"ok"` on success, don't free it,
+ *          when printing to string, the pointer is the printed string, use `json_memory_free` to free it.
  */
 /*
- * json_print_common - 通用的DOM打印器
- * @json: IN, 要打印的json对象
- * @choice: INOUT, 打印选项
- * @return: 失败返回NULL；成功返回指针
- * @description: 当打印到文件时，成功返回的指针是 `"ok"`，不要释放它；
- *   当打印到字符串时，成功返回的指针是打印的字符串，使用 `json_memory_free` 释放它或ptr->p
+ * @brief   通用的DOM打印器
+ * @param   json [IN] 要打印的json对象
+ * @param   choice [INOUT] 打印选项
+ * @return  失败返回NULL；成功返回指针
+ * @note    当打印到文件时，成功返回的指针是 `"ok"`，不要释放它；
+ *          当打印到字符串时，成功返回的指针是打印的字符串，使用 `json_memory_free` 释放它或ptr->p
  */
 char *json_print_common(json_object *json, json_print_choice_t *choice);
 
 /*
- * json_print_format - Formatted DOM printer to string
- * @json: IN, the json object to be printed
- * @item_total: IN, the total json objects, it is better to set the value by users
- * @length: OUT, the length of returned print string
- * @ptr: INOUT, pre-allocated memory for printing
- * @return: NULL on failure, a pointer on success
+ * @brief   Formatted DOM printer to string
+ * @param   json [IN] the json object to be printed
+ * @param   item_total [IN] the total json objects, it is better to set the value by users
+ * @param   length [OUT] the length of returned print string
+ * @param   ptr [INOUT] pre-allocated memory for printing
+ * @return  NULL on failure, a pointer on success
  */
 /*
- * json_print_format - 格式化 DOM 打印器，输出到字符串
- * @json: IN, 要打印的json对象
- * @item_total: IN, json对象的总数，最好由用户设置
- * @length: OUT, 返回的打印字符串的长度
- * @ptr: INOUT, 预分配的内存用于打印
- * @return: 失败返回NULL；成功返回指针
+ * @brief   格式化 DOM 打印器，输出到字符串
+ * @param   json [IN] 要打印的json对象
+ * @param   item_total [IN] json对象的总数，最好由用户设置
+ * @param   length [OUT] 返回的打印字符串的长度
+ * @param   ptr [INOUT] 预分配的内存用于打印
+ * @return  失败返回NULL；成功返回指针
  */
 static inline char *json_print_format(json_object *json, int item_total, size_t *length, json_print_ptr_t *ptr)
 {
@@ -1656,20 +1663,20 @@ static inline char *json_print_format(json_object *json, int item_total, size_t 
 }
 
 /*
- * json_print_unformat - Compressed DOM printer to string
- * @json: IN, the json object to be printed
- * @item_total: IN, the total json objects, it is better to set the value by users
- * @length: OUT, the length of returned print string
- * @ptr: INOUT, pre-allocated memory for printing
- * @return: NULL on failure, a pointer on success
+ * @brief   Compressed DOM printer to string
+ * @param   json [IN] the json object to be printed
+ * @param   item_total [IN] the total json objects, it is better to set the value by users
+ * @param   length [OUT] the length of returned print string
+ * @param   ptr [INOUT] pre-allocated memory for printing
+ * @return  NULL on failure, a pointer on success
  */
 /*
- * json_print_unformat - 压缩 DOM 打印器，输出到字符串
- * @json: IN, 要打印的json对象
- * @item_total: IN, json对象的总数，最好由用户设置
- * @length: OUT, 返回的打印字符串的长度
- * @ptr: INOUT, 预分配的内存用于打印
- * @return: 失败返回NULL；成功返回指针
+ * @brief   压缩 DOM 打印器，输出到字符串
+ * @param   json [IN] 要打印的json对象
+ * @param   item_total [IN] json对象的总数，最好由用户设置
+ * @param   length [OUT] 返回的打印字符串的长度
+ * @param   ptr [INOUT] 预分配的内存用于打印
+ * @return  失败返回NULL；成功返回指针
  */
 static inline char *json_print_unformat(json_object *json, int item_total, size_t *length, json_print_ptr_t *ptr)
 {
@@ -1687,20 +1694,20 @@ static inline char *json_print_unformat(json_object *json, int item_total, size_
 }
 
 /*
- * json_fprint_format - Formatted DOM printer to file
- * @json: IN, the json object to be printed
- * @item_total: IN, the total json objects, it is better to set the value by users
- * @path: IN, the file to store the printed string
- * @ptr: INOUT, pre-allocated memory for printing
- * @return: NULL on failure, a pointer on success
+ * @brief   Formatted DOM printer to file
+ * @param   json [IN] the json object to be printed
+ * @param   item_total [IN] the total json objects, it is better to set the value by users
+ * @param   path [IN] the file to store the printed string
+ * @param   ptr [INOUT] pre-allocated memory for printing
+ * @return  NULL on failure, a pointer on success
  */
 /*
- * json_fprint_format - 格式化 DOM 打印器，输出到文件
- * @json: IN, 要打印的json对象
- * @item_total: IN, json对象的总数，最好由用户设置
- * @path: IN, 存储打印字符串的文件路径
- * @ptr: INOUT, 预分配的内存用于打印
- * @return: 失败返回NULL；成功返回指针
+ * @brief   格式化 DOM 打印器，输出到文件
+ * @param   json [IN] 要打印的json对象
+ * @param   item_total [IN] json对象的总数，最好由用户设置
+ * @param   path [IN] 存储打印字符串的文件路径
+ * @param   ptr [INOUT] 预分配的内存用于打印
+ * @return  失败返回NULL；成功返回指针
  */
 static inline char *json_fprint_format(json_object *json, int item_total, const char *path, json_print_ptr_t *ptr)
 {
@@ -1715,20 +1722,20 @@ static inline char *json_fprint_format(json_object *json, int item_total, const 
 }
 
 /*
- * json_fprint_unformat - Compressed DOM printer to file
- * @json: IN, the json object to be printed
- * @item_total: IN, the total json objects, it is better to set the value by users
- * @path: IN, the file to store the printed string
- * @ptr: INOUT, pre-allocated memory for printing
- * @return: NULL on failure, a pointer on success
+ * @brief   Compressed DOM printer to file
+ * @param   json [IN] the json object to be printed
+ * @param   item_total [IN] the total json objects, it is better to set the value by users
+ * @param   path [IN] the file to store the printed string
+ * @param   ptr [INOUT] pre-allocated memory for printing
+ * @return  NULL on failure, a pointer on success
  */
 /*
- * json_fprint_unformat - 压缩 DOM 打印器，输出到文件
- * @json: IN, 要打印的json对象
- * @item_total: IN, json对象的总数，最好由用户设置
- * @path: IN, 存储打印字符串的文件路径
- * @ptr: INOUT, 预分配的内存用于打印
- * @return: 失败返回NULL；成功返回指针
+ * @brief   压缩 DOM 打印器，输出到文件
+ * @param   json [IN] 要打印的json对象
+ * @param   item_total [IN] json对象的总数，最好由用户设置
+ * @param   path [IN] 存储打印字符串的文件路径
+ * @param   ptr [INOUT] 预分配的内存用于打印
+ * @return  失败返回NULL；成功返回指针
  */
 static inline char *json_fprint_unformat(json_object *json, int item_total, const char *path, json_print_ptr_t *ptr)
 {
@@ -1745,28 +1752,27 @@ static inline char *json_fprint_unformat(json_object *json, int item_total, cons
 /**************** json DOM parser / DOM解析器  ****************/
 
 /*
- * json_parse_choice_t - the choice to parse json
- * @mem_size: the default block memory size to allocate, its smallest value is
- *   (str_len / `JSON_STR_MULTIPLE_NUM`(8))
- * @read_size: IN, the read buffer size when parsing from file,
- *   its default value is `JSON_PARSE_READ_SIZE_DEF`(8192)
- * @str_len: IN, the size of string to be parsed when parsing from string,
- *   it's better to set it when parsing from string
- * @reuse_flag: IN, whether to use the `str` directly as the value of JSON_STRING object and key
- * @mem: IN, the block memory manager, users needn't to Initializate it first
- * @path: IN, the file to be parsed, when the path is set, it parses the data while reading,
- *   otherwise it directly parses from the string
- * @str: IN, the string to be parsed, only one of `path` and `str` has value
+ * @brief   the choice to parse json
+ * @param   mem_size the default block memory size to allocate, its smallest value is (str_len / `JSON_STR_MULTIPLE_NUM`(8))
+ * @param   read_size [IN] the read buffer size when parsing from file,
+ *          its default value is `JSON_PARSE_READ_SIZE_DEF`(8192)
+ * @param   str_len [IN] the size of string to be parsed when parsing from string,
+ *          it's better to set it when parsing from string
+ * @param   reuse_flag [IN] whether to use the `str` directly as the value of JSON_STRING object and key
+ * @param   mem [IN] the block memory manager, users needn't to Initializate it first
+ * @param   path [IN] the file to be parsed, when the path is set, it parses the data while reading,
+ *          otherwise it directly parses from the string
+ * @param   str [IN] the string to be parsed, only one of `path` and `str` has value
  */
 /*
- * json_parse_choice_t - 解析配置
- * @mem_size: 默认分配的块内存大小，最小值为 (str_len / `JSON_STR_MULTIPLE_NUM`(8))
- * @read_size: IN, 从文件解析时的读取缓冲区大小，默认值为 `JSON_PARSE_READ_SIZE_DEF`(8192)
- * @str_len: IN, 从字符串解析时字符串的大小，最好在从字符串解析时设置
- * @reuse_flag: IN, 是否直接使用 `str` 作为 `JSON_STRING` 对象和键的值
- * @mem: IN, 块内存管理器，用户无需预先初始化
- * @path: IN, 要解析的文件，当 path 设置时，边读取边解析数据，否则直接从字符串解析
- * @str: IN, 要解析的字符串，`path` 和 `str` 只能有一个有值
+ * @brief   解析配置
+ * @param   mem_size 默认分配的块内存大小，最小值为 (str_len / `JSON_STR_MULTIPLE_NUM`(8))
+ * @param   read_size [IN] 从文件解析时的读取缓冲区大小，默认值为 `JSON_PARSE_READ_SIZE_DEF`(8192)
+ * @param   str_len [IN] 从字符串解析时字符串的大小，最好在从字符串解析时设置
+ * @param   reuse_flag [IN] 是否直接使用 `str` 作为 `JSON_STRING` 对象和键的值
+ * @param   mem [IN] 块内存管理器，用户无需预先初始化
+ * @param   path [IN] 要解析的文件，当 path 设置时，边读取边解析数据，否则直接从字符串解析
+ * @param   str [IN] 要解析的字符串，`path` 和 `str` 只能有一个有值
  */
 typedef struct {
     size_t mem_size;
@@ -1779,30 +1785,30 @@ typedef struct {
 } json_parse_choice_t;
 
 /*
- * json_parse_common - The common DOM parser
- * @choice: IN, the parse choice
- * @return: NULL on failure, a pointer on success
+ * @brief   The common DOM parser
+ * @param   choice [IN] the parse choice
+ * @return  NULL on failure, a pointer on success
  */
 /*
- * json_parse_common - 通用的 DOM 解析器
- * @choice: IN, 解析选项
- * @return: 失败返回NULL；成功返回指针
+ * @brief   通用的 DOM 解析器
+ * @param   choice [IN] 解析选项
+ * @return  失败返回NULL；成功返回指针
  */
 json_object *json_parse_common(json_parse_choice_t *choice);
 
 /*
- * json_parse_str - The ordinary DOM parser from string
- * @str: IN, the string to be parsed
- * @str_len: IN, the length of str
- * @return: NULL on failure, a pointer on success
- * @description: Use `malloc` to allocate memory
+ * @brief   The ordinary DOM parser from string
+ * @param   str [IN] the string to be parsed
+ * @param   str_len [IN] the length of str
+ * @return  NULL on failure, a pointer on success
+ * @note    Use `malloc` to allocate memory
  */
 /*
- * json_parse_str - 普通的 DOM 解析器，从字符串解析
- * @str: IN, 要解析的字符串
- * @str_len: IN, 字符串的长度
- * @return: 失败返回NULL；成功返回指针
- * @description: 使用 `malloc` 分配内存
+ * @brief   普通的 DOM 解析器，从字符串解析
+ * @param   str [IN] 要解析的字符串
+ * @param   str_len [IN] 字符串的长度
+ * @return  失败返回NULL；成功返回指针
+ * @note    使用 `malloc` 分配内存
  */
 static inline json_object *json_parse_str(char *str, size_t str_len)
 {
@@ -1815,20 +1821,20 @@ static inline json_object *json_parse_str(char *str, size_t str_len)
 }
 
 /*
- * json_fast_parse_str - The fast DOM parser from string
- * @str: IN, the string to be parsed
- * @str_len: IN, the length of str
- * @mem: IN, the block memory manager
- * @return: NULL on failure, a pointer on success
- * @description: Use `pjson_memory_alloc` to allocate memory, it is faster.
+ * @brief   The fast DOM parser from string
+ * @param   str [IN] the string to be parsed
+ * @param   str_len [IN] the length of str
+ * @param   mem [IN] the block memory manager
+ * @return  NULL on failure, a pointer on success
+ * @note    Use `pjson_memory_alloc` to allocate memory, it is faster.
  */
 /*
- * json_fast_parse_str - 快速的 DOM 解析器，从字符串解析
- * @str: IN, 要解析的字符串
- * @str_len: IN, 字符串的长度
- * @mem: IN, 块内存管理器
- * @return: 失败返回NULL；成功返回指针
- * @description: 使用 `pjson_memory_alloc` 分配内存，速度更快。
+ * @brief   快速的 DOM 解析器，从字符串解析
+ * @param   str [IN] 要解析的字符串
+ * @param   str_len [IN] 字符串的长度
+ * @param   mem [IN] 块内存管理器
+ * @return  失败返回NULL；成功返回指针
+ * @note    使用 `pjson_memory_alloc` 分配内存，速度更快。
  */
 static inline json_object *json_fast_parse_str(char *str, size_t str_len, json_mem_t *mem)
 {
@@ -1842,24 +1848,24 @@ static inline json_object *json_fast_parse_str(char *str, size_t str_len, json_m
 }
 
 /*
- * json_reuse_parse_str - The reused DOM parser from string
- * @str: IN, the string to be parsed
- * @str_len: IN, the length of str
- * @mem: IN, the block memory manager
- * @return: NULL on failure, a pointer on success
- * @description: Use `pjson_memory_alloc` to allocate memory for json object, it is faster,
- *  and it uses the parsed `str` directly as the value of JSON_STRING object and key,
- *  this means that it modifies the original string and saves memory.
+ * @brief   The reused DOM parser from string
+ * @param   str [IN] the string to be parsed
+ * @param   str_len [IN] the length of str
+ * @param   mem [IN] the block memory manager
+ * @return  NULL on failure, a pointer on success
+ * @note    Use `pjson_memory_alloc` to allocate memory for json object, it is faster,
+ *          and it uses the parsed `str` directly as the value of JSON_STRING object and key,
+ *          this means that it modifies the original string and saves memory.
  */
 /*
- * json_reuse_parse_str - 可复用的 DOM 解析器，从字符串解析
- * @str: IN, 要解析的字符串
- * @str_len: IN, 字符串的长度
- * @mem: IN, 块内存管理器
- * @return: 失败返回NULL；成功返回指针
- * @description: 使用 `pjson_memory_alloc` 分配内存，速度更快，
- *   并且直接使用解析的 `str` 作为 `JSON_STRING` 对象和键的值，
- *   这意味着它会修改原始字符串并节省内存。
+ * @brief   可复用的 DOM 解析器，从字符串解析
+ * @param   str [IN] 要解析的字符串
+ * @param   str_len [IN] 字符串的长度
+ * @param   mem [IN] 块内存管理器
+ * @return  失败返回NULL；成功返回指针
+ * @note    使用 `pjson_memory_alloc` 分配内存，速度更快，
+ *          并且直接使用解析的 `str` 作为 `JSON_STRING` 对象和键的值，
+ *          这意味着它会修改原始字符串并节省内存。
  */
 static inline json_object *json_reuse_parse_str(char *str, size_t str_len, json_mem_t *mem)
 {
@@ -1874,16 +1880,16 @@ static inline json_object *json_reuse_parse_str(char *str, size_t str_len, json_
 }
 
 /*
- * json_parse_file - The ordinary DOM parser from file
- * @path: IN, the file to be parsed
- * @return: NULL on failure, a pointer on success
- * @description: It parses the data while reading, no need to read data all at once.
+ * @brief   The ordinary DOM parser from file
+ * @param   path [IN] the file to be parsed
+ * @return  NULL on failure, a pointer on success
+ * @note    It parses the data while reading, no need to read data all at once.
  */
 /*
- * json_parse_file - 普通的 DOM 解析器，从文件解析
- * @path: IN, 要解析的文件路径
- * @return: 失败返回NULL；成功返回指针
- * @description: 边读取边解析数据，无需一次性读取所有数据。
+ * @brief   普通的 DOM 解析器，从文件解析
+ * @param   path [IN] 要解析的文件路径
+ * @return  失败返回NULL；成功返回指针
+ * @note    边读取边解析数据，无需一次性读取所有数据。
  */
 static inline json_object *json_parse_file(const char *path)
 {
@@ -1895,18 +1901,18 @@ static inline json_object *json_parse_file(const char *path)
 }
 
 /*
- * json_fast_parse_file - The fast DOM parser from file
- * @path: IN, the file to be parsed
- * @mem: IN, the block memory manager
- * @return: NULL on failure, a pointer on success
- * @description: It parses the data while reading, no need to read data all at once.
+ * @brief   The fast DOM parser from file
+ * @param   path [IN] the file to be parsed
+ * @param   mem [IN] the block memory manager
+ * @return  NULL on failure, a pointer on success
+ * @note    It parses the data while reading, no need to read data all at once.
  */
 /*
- * json_fast_parse_file - 快速的 DOM 解析器，从文件解析
- * @path: IN, 要解析的文件路径
- * @mem: IN, 块内存管理器
- * @return: 失败返回NULL；成功返回指针
- * @description: 边读取边解析数据，无需一次性读取所有数据。
+ * @brief   快速的 DOM 解析器，从文件解析
+ * @param   path [IN] 要解析的文件路径
+ * @param   mem [IN] 块内存管理器
+ * @return  失败返回NULL；成功返回指针
+ * @note    边读取边解析数据，无需一次性读取所有数据。
  */
 static inline json_object *json_fast_parse_file(const char *path, json_mem_t *mem)
 {
@@ -1923,13 +1929,13 @@ static inline json_object *json_fast_parse_file(const char *path, json_mem_t *me
 #if JSON_SAX_APIS_SUPPORT
 
 /*
- * json_sax_cmd_t - the beginning and end of JSON_ARRAY or JSON_OBJECT object
- * @description: We know that parentheses have two sides, `JSON_SAX_START` indicates left side,
- *   and `JSON_SAX_FINISH` indicates right side.
+ * @brief   the beginning and end of JSON_ARRAY or JSON_OBJECT object
+ * @note    We know that parentheses have two sides, `JSON_SAX_START` indicates left side,
+ *          and `JSON_SAX_FINISH` indicates right side.
  */
 /*
- * json_sax_cmd_t - SAX APIs中指示JSON_ARRAY或JSON_OBJECT的开始和结束
- * @description: 集合类型是括号包起来的，JSON_SAX_START表示左边括号, JSON_SAX_FINISH指示右边括号
+ * @brief   SAX APIs中指示JSON_ARRAY或JSON_OBJECT的开始和结束
+ * @note    集合类型是括号包起来的，JSON_SAX_START表示左边括号, JSON_SAX_FINISH指示右边括号
  */
 typedef enum {
     JSON_SAX_START = 0,
@@ -1937,38 +1943,38 @@ typedef enum {
 } json_sax_cmd_t;
 
 /*
- * json_sax_print_hd - the handle of SAX printer
- * @description: It is a pointer of `json_sax_print_t`
+ * @brief   the handle of SAX printer
+ * @note    It is a pointer of `json_sax_print_t`
  */
 /*
- * json_sax_parser_t - SAX打印句柄
- * @description: 实际就是 `json_sax_print_t` 的指针
+ * @brief   SAX打印句柄
+ * @note    实际就是 `json_sax_print_t` 的指针
  */
 typedef void* json_sax_print_hd;
 
 /*
- * json_sax_print_start - Start the SAX printer
- * @choice: INOUT, the print choice
- * @return: NULL on failure, a pointer (the handle of SAX print) on success
+ * @brief   Start the SAX printer
+ * @param   choice [INOUT] the print choice
+ * @return  NULL on failure, a pointer (the handle of SAX print) on success
  */
 /*
- * json_sax_print_start - 启动SAX打印器
- * @choice: INOUT, 打印选项
- * @return: 失败返回NULL；成功返回指针（SAX打印器的句柄）
+ * @brief   启动SAX打印器
+ * @param   choice [INOUT] 打印选项
+ * @return  失败返回NULL；成功返回指针（SAX打印器的句柄）
  */
 json_sax_print_hd json_sax_print_start(json_print_choice_t *choice);
 
 /*
- * json_sax_print_format_start - Start the formatted SAX printer to string
- * @item_total: IN, the total json objects, it is better to set the value by users
- * @ptr: IN, pre-allocated memory for printing
- * @return: NULL on failure, a pointer (the handle of SAX print) on success
+ * @brief   Start the formatted SAX printer to string
+ * @param   item_total [IN] the total json objects, it is better to set the value by users
+ * @param   ptr [IN] pre-allocated memory for printing
+ * @return  NULL on failure, a pointer (the handle of SAX print) on success
  */
 /*
- * json_sax_print_format_start - 启动格式化的SAX打印器，输出到字符串
- * @item_total: IN, json对象的总数，最好由用户设置
- * @ptr: IN, 预分配的内存用于打印
- * @return: 失败返回NULL；成功返回指针（SAX打印器的句柄）
+ * @brief   启动格式化的SAX打印器，输出到字符串
+ * @param   item_total [IN] json对象的总数，最好由用户设置
+ * @param   ptr [IN] 预分配的内存用于打印
+ * @return  失败返回NULL；成功返回指针（SAX打印器的句柄）
  */
 static inline json_sax_print_hd json_sax_print_format_start(int item_total, json_print_ptr_t *ptr)
 {
@@ -1982,16 +1988,16 @@ static inline json_sax_print_hd json_sax_print_format_start(int item_total, json
 }
 
 /*
- * json_sax_print_unformat_start - Start the compressed SAX printer to string
- * @item_total: IN, the total json objects, it is better to set the value by users
- * @ptr: IN, pre-allocated memory for printing
- * @return: NULL on failure, a pointer (the handle of SAX print) on success
+ * @brief   Start the compressed SAX printer to string
+ * @param   item_total [IN] the total json objects, it is better to set the value by users
+ * @param   ptr [IN] pre-allocated memory for printing
+ * @return  NULL on failure, a pointer (the handle of SAX print) on success
  */
 /*
- * json_sax_print_unformat_start - 启动压缩的SAX打印器，输出到字符串
- * @item_total: IN, json对象的总数，最好由用户设置
- * @ptr: IN, 预分配的内存用于打印
- * @return: 失败返回NULL；成功返回指针（SAX打印器的句柄）
+ * @brief   启动压缩的SAX打印器，输出到字符串
+ * @param   item_total [IN] json对象的总数，最好由用户设置
+ * @param   ptr [IN] 预分配的内存用于打印
+ * @return  失败返回NULL；成功返回指针（SAX打印器的句柄）
  */
 static inline json_sax_print_hd json_sax_print_unformat_start(int item_total, json_print_ptr_t *ptr)
 {
@@ -2005,18 +2011,18 @@ static inline json_sax_print_hd json_sax_print_unformat_start(int item_total, js
 }
 
 /*
- * json_sax_fprint_format_start - Start the formatted SAX printer to file
- * @item_total: IN, the total json objects, it is better to set the value by users
- * @path: IN, the file to store the printed string
- * @ptr: IN, pre-allocated memory for printing
- * @return: NULL on failure, a pointer (the handle of SAX print) on success
+ * @brief   Start the formatted SAX printer to file
+ * @param   item_total [IN] the total json objects, it is better to set the value by users
+ * @param   path [IN] the file to store the printed string
+ * @param   ptr [IN] pre-allocated memory for printing
+ * @return  NULL on failure, a pointer (the handle of SAX print) on success
  */
 /*
- * json_sax_fprint_format_start - 启动格式化的SAX打印器，输出到文件
- * @item_total: IN, json对象的总数，最好由用户设置
- * @path: IN, 存储打印字符串的文件路径
- * @ptr: IN, 预分配的内存用于打印
- * @return: 失败返回NULL；成功返回指针（SAX打印器的句柄）
+ * @brief   启动格式化的SAX打印器，输出到文件
+ * @param   item_total [IN] json对象的总数，最好由用户设置
+ * @param   path [IN] 存储打印字符串的文件路径
+ * @param   ptr [IN] 预分配的内存用于打印
+ * @return  失败返回NULL；成功返回指针（SAX打印器的句柄）
  */
 static inline json_sax_print_hd json_sax_fprint_format_start(int item_total, const char *path, json_print_ptr_t *ptr)
 {
@@ -2031,18 +2037,18 @@ static inline json_sax_print_hd json_sax_fprint_format_start(int item_total, con
 }
 
 /*
- * json_sax_fprint_unformat_start - Start the compressed SAX printer to file
- * @item_total: IN, the total json objects, it is better to set the value by users
- * @path: IN, the file to store the printed string
- * @ptr: IN, pre-allocated memory for printing
- * @return: NULL on failure, a pointer (the handle of SAX print) on success
+ * @brief   Start the compressed SAX printer to file
+ * @param   item_total [IN] the total json objects, it is better to set the value by users
+ * @param   path [IN] the file to store the printed string
+ * @param   ptr [IN] pre-allocated memory for printing
+ * @return  NULL on failure, a pointer (the handle of SAX print) on success
  */
 /*
- * json_sax_fprint_unformat_start - 启动压缩的SAX打印器，输出到文件
- * @item_total: IN, json对象的总数，最好由用户设置
- * @path: IN, 存储打印字符串的文件路径
- * @ptr: IN, 预分配的内存用于打印
- * @return: 失败返回NULL；成功返回指针（SAX打印器的句柄）
+ * @brief   启动压缩的SAX打印器，输出到文件
+ * @param   item_total [IN] json对象的总数，最好由用户设置
+ * @param   path [IN] 存储打印字符串的文件路径
+ * @param   ptr [IN] 预分配的内存用于打印
+ * @return  失败返回NULL；成功返回指针（SAX打印器的句柄）
  */
 static inline json_sax_print_hd json_sax_fprint_unformat_start(int item_total, const char *path, json_print_ptr_t *ptr)
 {
@@ -2057,26 +2063,26 @@ static inline json_sax_print_hd json_sax_fprint_unformat_start(int item_total, c
 }
 
 /*
- * json_sax_print_value - SAX print the json object
- * @handle: IN, the handle of SAX printer
- * @type: the json object type
- * @jkey: IN, the LJSON key, allow length not to be set first by json_string_info_update
- * @value: IN, the json object value
- * @return: -1 on failure, 0 on success
- * @description: If the parent node of the node to be printed is an object, the key string must have a value;
- *   in other cases, the key string can be filled in or not.
- *   The JSON_ARRAY and JSON_OBJECT are printed twice, once the value is `JSON_SAX_START` to start,
- *   and once the value is `JSON_SAX_FINISH` to complete.
+ * @brief   SAX print the json object
+ * @param   handle [IN] the handle of SAX printer
+ * @param   type [IN] the json object type
+ * @param   jkey [IN] the LJSON key, allow length not to be set first by json_string_info_update
+ * @param   value [IN] the json object value
+ * @return  -1 on failure, 0 on success
+ * @note    If the parent node of the node to be printed is an object, the key string must have a value;
+ *          in other cases, the key string can be filled in or not.
+ *          The JSON_ARRAY and JSON_OBJECT are printed twice, once the value is `JSON_SAX_START` to start,
+ *          and once the value is `JSON_SAX_FINISH` to complete.
  */
 /*
- * json_sax_print_value - SAX打印json对象
- * @handle: IN, SAX打印器的句柄
- * @type: IN, json对象的类型
- * @jkey: IN, json对象的键，允许长度未预先设置
- * @value: IN, json对象的值
- * @return: 失败返回-1；成功返回0
- * @description: 如果要打印的节点的父节点是对象，则键字符串必须有值；其他情况下，键字符串可以填写或不填写
- *  JSON_ARRAY和JSON_OBJECT需要打印两次，一次值为 `JSON_SAX_START` 表示开始，一次值为 `JSON_SAX_FINISH` 表示完成
+ * @brief   SAX打印json对象
+ * @param   handle [IN] SAX打印器的句柄
+ * @param   type [IN] json对象的类型
+ * @param   jkey [IN] json对象的键，允许长度未预先设置
+ * @param   value [IN] json对象的值
+ * @return  失败返回-1；成功返回0
+ * @note    如果要打印的节点的父节点是对象，则键字符串必须有值；其他情况下，键字符串可以填写或不填写
+ *          JSON_ARRAY和JSON_OBJECT需要打印两次，一次值为 `JSON_SAX_START` 表示开始，一次值为 `JSON_SAX_FINISH` 表示完成
  */
 int json_sax_print_value(json_sax_print_hd handle, json_type_t type, json_string_t *jkey, const void *value);
 static inline int json_sax_print_null(json_sax_print_hd handle, json_string_t *jkey) { return json_sax_print_value(handle, JSON_NULL, jkey, NULL); }
@@ -2148,41 +2154,41 @@ json_binary_t*  : json_sax_print_binary)(handle, jkey, value)
 #define json_sax_print_object_finish(handle)      json_sax_print_object(handle, NULL, JSON_SAX_FINISH)
 
 /*
- * json_sax_print_finish - Finish the SAX printer
- * @handle: IN, the handle of SAX printer
- * @length: OUT, the length of returned printed string
- * @ptr: OUT, export internal allocated memory for printing
- * @return: NULL on failure, a pointer on success
- * @description: When printing to file, the pointer is `"ok"` on success, don't free it,
- *   when printing to string, the pointer is the printed string, use `json_memory_free` to free it or ptr->p.
+ * @brief   Finish the SAX printer
+ * @param   handle [IN] the handle of SAX printer
+ * @param   length [OUT] the length of returned printed string
+ * @param   ptr [OUT] export internal allocated memory for printing
+ * @return  NULL on failure, a pointer on success
+ * @note    When printing to file, the pointer is `"ok"` on success, don't free it,
+ *          when printing to string, the pointer is the printed string, use `json_memory_free` to free it or ptr->p.
  */
 /*
- * json_sax_print_finish - 结束SAX打印器
- * @handle: IN, SAX 打印器的句柄
- * @length: OUT, 返回的打印字符串的长度
- * @ptr: OUT, 导出内部分配的内存用于打印
- * @return: 失败返回NULL；成功时返回指针
- * @description: 当打印到文件时，成功时返回 "ok"，不要释放它；当打印到字符串时，返回打印的字符串，使用 `json_memory_free` 释放它或ptr->p
+ * @brief   结束SAX打印器
+ * @param   handle [IN] SAX 打印器的句柄
+ * @param   length [OUT] 返回的打印字符串的长度
+ * @param   ptr [OUT] 导出内部分配的内存用于打印
+ * @return  失败返回NULL；成功时返回指针
+ * @note    当打印到文件时，成功时返回 "ok"，不要释放它；当打印到字符串时，返回打印的字符串，使用 `json_memory_free` 释放它或ptr->p
  */
 char *json_sax_print_finish(json_sax_print_hd handle, size_t *length, json_print_ptr_t *ptr);
 
 /**************** json SAX parser / SAX解析器 ****************/
 
 /*
- * json_sax_value_t - the json object value
- * @vnum: the numerical value
- * @vstr: the string value
- * @vbin: the binary value
- * @vcmd: the SAX array or object value, only for SAX APIs
- * @description: LJSON uses union to manage the value of different objects to save memory.
+ * @brief   the json object value
+ * @param   vnum the numerical value
+ * @param   vstr the string value
+ * @param   vbin the binary value
+ * @param   vcmd the SAX array or object value, only for SAX APIs
+ * @note    LJSON uses union to manage the value of different objects to save memory.
  */
 /*
- * json_value_t - json对象的值
- * @vnum: 数字类型的值
- * @vstr: 字符串类型的值
- * @vbin: 二进制类型的值
- * @vcmd: SAX APIs指示集合对象的开始和结束
- * @description: LJSON使用union管理对象的值从而节省内存空间
+ * @brief   json对象的值
+ * @param   vnum 数字类型的值
+ * @param   vstr 字符串类型的值
+ * @param   vbin 二进制类型的值
+ * @param   vcmd SAX APIs指示集合对象的开始和结束
+ * @note    LJSON使用union管理对象的值从而节省内存空间
  */
 typedef union {
     json_number_t vnum;
@@ -2192,20 +2198,20 @@ typedef union {
 } json_sax_value_t;
 
 /*
- * json_sax_parser_t - the description passed by SAX parser to the callback function
- * @total: the size of depth array
- * @index: the current index of JSON type and key
- * @array: the json depth information, which stores json object type and key
- * @value: the json object value
- * @description: LJSON SAX parsing will maintain a depth information used for state machine.
+ * @brief   the description passed by SAX parser to the callback function
+ * @param   total the size of depth array
+ * @param   index the current index of JSON type and key
+ * @param   array the json depth information, which stores json object type and key
+ * @param   value the json object value
+ * @note    LJSON SAX parsing will maintain a depth information used for state machine.
  */
 /*
- * json_sax_parse_choice_t - SAX解析选项
- * @read_size: IN, 从文件解析时的读取缓冲区大小，默认值为 `JSON_PARSE_READ_SIZE_DEF`(8192)
- * @str_len: IN, 从字符串解析时字符串的大小，最好在从字符串解析时设置
- * @str: IN, 要解析的字符串，`path` 和 `str` 只能有一个有值
- * @path: IN, 要解析的文件，当 path 设置时，边读取边解析数据，否则直接从字符串解析
- * @cb: IN, 处理 SAX 解析器传递结果的回调函数
+ * @brief   SAX解析选项
+ * @param   read_size [IN] 从文件解析时的读取缓冲区大小，默认值为 `JSON_PARSE_READ_SIZE_DEF`(8192)
+ * @param   str_len [IN] 从字符串解析时字符串的大小，最好在从字符串解析时设置
+ * @param   str [IN] 要解析的字符串，`path` 和 `str` 只能有一个有值
+ * @param   path [IN] 要解析的文件，当 path 设置时，边读取边解析数据，否则直接从字符串解析
+ * @param   cb [IN] 处理 SAX 解析器传递结果的回调函数
  */
 typedef struct {
     int total;
@@ -2215,14 +2221,14 @@ typedef struct {
 } json_sax_parser_t;
 
 /*
- * json_sax_cb_t - the callback function for SAX parsing
- * @description: Users need to fill the callback function, returning `JSON_SAX_PARSE_CONTINUE`
- * indicates continuing parsing, returning `JSON_SAX_PARSE_STOP` indicates stoping parsing
+ * @brief   the callback function for SAX parsing
+ * @note    Users need to fill the callback function, returning `JSON_SAX_PARSE_CONTINUE`
+ *          indicates continuing parsing, returning `JSON_SAX_PARSE_STOP` indicates stoping parsing
  */
 /*
- * json_sax_parse_choice_t - SAX的回调函数
- * @description: 用户使用SAX接口时需要设置回调函数, 返回 `JSON_SAX_PARSE_CONTINUE` 表示继续解析；
- *   返回 `JSON_SAX_PARSE_STOP` 表示停止解析
+ * @brief   SAX的回调函数
+ * @note    用户使用SAX接口时需要设置回调函数, 返回 `JSON_SAX_PARSE_CONTINUE` 表示继续解析；
+ *          返回 `JSON_SAX_PARSE_STOP` 表示停止解析
  */
 typedef enum {
     JSON_SAX_PARSE_CONTINUE = 0,
@@ -2231,23 +2237,23 @@ typedef enum {
 typedef json_sax_ret_t (*json_sax_cb_t)(json_sax_parser_t *parser);
 
 /*
- * json_sax_parse_choice_t - the choice to parse
- * @read_size: IN, the read buffer size when parsing from file,
- *   its default value is `JSON_PARSE_READ_SIZE_DEF`(8192)
- * @str_len: IN, the size of string to be parsed when parsing from string,
- *   it's better to set it when parsing from string
- * @str: IN, the string to be parsed, only one of `path` and `str` has value
- * @path: IN, the file to be parsed, when the path is set, it parses the data while reading,
- *   otherwise it directly parses from the string
- * @cb: IN, the callback to process result passed by the SAX parser
+ * @brief   the choice to parse
+ * @param   read_size [IN] the read buffer size when parsing from file,
+ *          its default value is `JSON_PARSE_READ_SIZE_DEF`(8192)
+ * @param   str_len [IN] the size of string to be parsed when parsing from string,
+ *          it's better to set it when parsing from string
+ * @param   str [IN] the string to be parsed, only one of `path` and `str` has value
+ * @param   path [IN] the file to be parsed, when the path is set, it parses the data while reading,
+ *          otherwise it directly parses from the string
+ * @param   cb [IN] the callback to process result passed by the SAX parser
  */
 /*
- * json_sax_parse_choice_t - 解析选项
- * @read_size: IN, 从文件解析时的读取缓冲区大小，默认值为 `JSON_PARSE_READ_SIZE_DEF`(8192)
- * @str_len: IN, 从字符串解析时的字符串大小，建议在从字符串解析时设置
- * @str: IN, 要解析的字符串，`path` 和 `str` 只能有一个有值
- * @path: IN, 要解析的文件，当设置了路径时，解析器会在读取时解析数据，否则直接从字符串解析
- * @cb: IN, 处理 SAX 解析器传递结果的回调函数
+ * @brief   解析选项
+ * @param   read_size [IN] 从文件解析时的读取缓冲区大小，默认值为 `JSON_PARSE_READ_SIZE_DEF`(8192)
+ * @param   str_len [IN] 从字符串解析时的字符串大小，建议在从字符串解析时设置
+ * @param   str [IN] 要解析的字符串，`path` 和 `str` 只能有一个有值
+ * @param   path [IN] 要解析的文件，当设置了路径时，解析器会在读取时解析数据，否则直接从字符串解析
+ * @param   cb [IN] 处理 SAX 解析器传递结果的回调函数
  */
 typedef struct {
     size_t read_size;
@@ -2258,32 +2264,32 @@ typedef struct {
 } json_sax_parse_choice_t;
 
 /*
- * json_sax_parse_common - The common SAX parser
- * @choice: IN, the parse choice
- * @return: -1 on failure, 0 on success
+ * @brief   The common SAX parser
+ * @param   choice [IN] the parse choice
+ * @return  -1 on failure, 0 on success
  */
 /*
- * json_sax_parse_common - 通用的SAX解析器
- * @choice: IN, 解析选项
- * @return: 失败返回-1；成功返回0
+ * @brief   通用的SAX解析器
+ * @param   choice [IN] 解析选项
+ * @return  失败返回-1；成功返回0
  */
 int json_sax_parse_common(json_sax_parse_choice_t *choice);
 
 /*
- * json_sax_parse_str - The SAX parser from string
- * @str: IN, the string to be parsed
- * @str_len: IN, the length of str
- * @cb: IN, the callback to process result passed by the SAX parser
- * @return: -1 on failure, 0 on success
- * description: LJSON directly parses the data from the string
+ * @brief   The SAX parser from string
+ * @param   str [IN] the string to be parsed
+ * @param   str_len [IN] the length of str
+ * @param   cb [IN] the callback to process result passed by the SAX parser
+ * @return  -1 on failure, 0 on success
+ * @note    LJSON directly parses the data from the string
  */
 /*
- * json_sax_parse_str - 从字符串进行SAX解析
- * @str: IN, 要解析的字符串
- * @str_len: IN, 字符串的长度
- * @cb: IN, 处理SAX解析器传递结果的回调函数
- * @return: 失败返回-1；成功返回0
- * @description: LJSON直接从字符串解析数据
+ * @brief   从字符串进行SAX解析
+ * @param   str [IN] 要解析的字符串
+ * @param   str_len [IN] 字符串的长度
+ * @param   cb [IN] 处理SAX解析器传递结果的回调函数
+ * @return  失败返回-1；成功返回0
+ * @note    LJSON直接从字符串解析数据
  */
 static inline int json_sax_parse_str(char *str, size_t str_len, json_sax_cb_t cb)
 {
@@ -2297,18 +2303,18 @@ static inline int json_sax_parse_str(char *str, size_t str_len, json_sax_cb_t cb
 }
 
 /*
- * json_sax_parse_file - The SAX parser from file
- * @path: IN, the file to be parsed
- * @cb: IN, the callback function to process result passed by the SAX parser
- * @return: -1 on failure, 0 on success
- * description: LJSON parses the data while reading
+ * @brief   The SAX parser from file
+ * @param   path [IN] the file to be parsed
+ * @param   cb [IN] the callback function to process result passed by the SAX parser
+ * @return  -1 on failure, 0 on success
+ * @note    LJSON parses the data while reading
  */
 /*
- * json_sax_parse_file - 从文件进行SAX解析
- * @path: IN, 要解析的文件
- * @cb: IN, 处理SAX解析器传递结果的回调函数
- * @return: 失败返回-1；成功返回0
- * @description: LJSON边读边解析数据，不会读完文件到内存再解析，降低内存峰值使用
+ * @brief   从文件进行SAX解析
+ * @param   path [IN] 要解析的文件
+ * @param   cb [IN] 处理SAX解析器传递结果的回调函数
+ * @return  失败返回-1；成功返回0
+ * @note    LJSON边读边解析数据，不会读完文件到内存再解析，降低内存峰值使用
  */
 static inline int json_sax_parse_file(const char *path, json_sax_cb_t cb)
 {
