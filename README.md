@@ -193,9 +193,8 @@ Note 2: Due to modifications such as feature additions and logic optimizations, 
 
 ![x86_64-Linux Test Result](image/test_for_x86_64.png)
 
-> Test Platform: PC | CPU: Intel i7-1260P | OS: Debian 13 (VMWare) | LJSON_v5.0.2<br>
-> Test Result: LJSON parses 543% faster and prints 2112% faster than cJSON, LJSON parses 166% faster and prints 215% faster than RapidJSON
-(without file reading and writing)
+> Test Platform: PC | CPU: Intel i7-1260P | OS: Debian 13 (VMWare) | LJSON_v5.0.4<br>
+> Test Result: LJSON parses 586% faster and prints 2202% faster than cJSON; LJSON parses 165% faster and prints 257% faster than RapidJSON; LJSON parses 160% faster and prints 112% faster than yyjson (mutable mode).  (without file reading and writing)
 
 ![x86_64-Linux Test Result2](image/test_for_x86_64-2.png)
 

@@ -178,8 +178,8 @@ run_cmd ./strdup $src
 
 ![x86_64-Linux测试结果](image/test_for_x86_64.png)
 
-> 测试平台: PC | CPU: Intel i7-1260P | OS: Debian 13 (VMWare) | LJSON_v5.0.2<br>
-> 测试结果: LJSON 比cJSON 解析最快可达 543%，打印最快可达 2112%，LJSON 比 RapidJSON 解析最快可达 166%，打印最快可达 215% (耗时不含文件读写时间)
+> 测试平台: PC | CPU: Intel i7-1260P | OS: Debian 13 (VMWare) | LJSON_v5.0.4<br>
+> 测试结果: LJSON 比cJSON 解析最快可达 586%，打印最快可达 2202%；LJSON 比 RapidJSON 解析最快可达 165%，打印最快可达 257%；LJSON 比 yyjson(可编辑模式) 解析最快可达 160%，打印最快可达 112% 。 (耗时不含文件读写时间)
 
 ![x86_64-Linux测试结果2](image/test_for_x86_64-2.png)
 
