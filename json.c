@@ -149,11 +149,13 @@ extern int dragonbox_dtoa(double num, char *buffer);
 #if defined(__GNUC__) || defined(__clang__)
 #define UNUSED_ATTR                     __attribute__((unused))
 #define FALLTHROUGH_ATTR                __attribute__((fallthrough))
+#define INLINE_ATTR                     __attribute__((always_inline))
 #define likely(cond)                    __builtin_expect(!!(cond), 1)
 #define unlikely(cond)                  __builtin_expect(!!(cond), 0)
 #else
 #define UNUSED_ATTR
 #define FALLTHROUGH_ATTR
+#define INLINE_ATTR
 #define likely(cond)                    (cond)
 #define unlikely(cond)                  (cond)
 #endif
@@ -1229,20 +1231,26 @@ static void *_json_mem_new(size_t size, json_mem_mgr_t *mgr)
     return node;
 }
 
-static inline void *pjson_memory_alloc(size_t size, json_mem_mgr_t *mgr)
+static void *pjson_memory_alloc_block(size_t size, json_mem_mgr_t *mgr)
 {
     void *p = NULL;
-
-    if (unlikely((mgr->cur_node->cur - mgr->cur_node->ptr) + size > mgr->cur_node->size)) {
-        if ((_json_mem_new((mgr->mem_size >= size) ? mgr->mem_size : size, mgr) == NULL)) {
-            return NULL;
-        }
-        mgr->cur_node = (json_mem_node_t *)(mgr->head.next);
+    if ((_json_mem_new((mgr->mem_size >= size) ? mgr->mem_size : size, mgr) == NULL)) {
+        return NULL;
     }
-
+    mgr->cur_node = (json_mem_node_t *)(mgr->head.next);
     p = mgr->cur_node->cur;
     mgr->cur_node->cur += size;
     return p;
+}
+
+static inline void *pjson_memory_alloc(size_t size, json_mem_mgr_t *mgr)
+{
+    if (likely((mgr->cur_node->cur - mgr->cur_node->ptr) + size <= mgr->cur_node->size)) {
+        void *p = mgr->cur_node->cur;
+        mgr->cur_node->cur += size;
+        return p;
+    }
+    return pjson_memory_alloc_block(size, mgr);
 }
 
 void pjson_memory_init(json_mem_t *mem)
@@ -1697,7 +1705,7 @@ static inline char _is_escape_char(uint8_t val)
     return char_escape_lut[val];
 }
 
-static inline json_object** _item_array_realloc(json_object **item_array, json_object **stack_array, int item_total)
+static json_object** _item_array_realloc(json_object **item_array, json_object **stack_array, int item_total)
 {
     if (item_array == stack_array) {
         item_array = (json_object **)json_malloc(sizeof(json_object *) * item_total);
@@ -2955,8 +2963,8 @@ err:
     return -1;
 }
 
-static int _json_parse_string(json_parse_t *parse_ptr, char end_ch, char **ppstr,
-    json_strinfo_t *pinfo, json_mem_mgr_t *mgr)
+static int _json_parse_string(json_parse_t *parse_ptr, char end_ch,
+    char **ppstr, json_strinfo_t *pinfo, json_mem_mgr_t *mgr)
 {
     char *ptr = NULL, *str = NULL;
     int escaped = 0;
@@ -3513,8 +3521,85 @@ next:
 #endif
 }
 
-static int _json_parse_string_reuse(json_parse_t *parse_ptr, char end_ch UNUSED_END_CH, char **ppstr,
-    json_strinfo_t *pinfo, json_mem_mgr_t *mgr UNUSED_ATTR)
+static int _json_parse_string_rapid(json_parse_t *parse_ptr, char end_ch UNUSED_END_CH,
+    char **ppstr, json_strinfo_t *pinfo, json_mem_mgr_t *mgr)
+{
+    char *str = NULL, *bak = NULL, *ptr= NULL;
+    char c = '\0';
+    int len = 0, total = 0;
+    int escaped = 0;
+
+    *ppstr = NULL;
+    memset(pinfo, 0, sizeof(*pinfo));
+
+    str = parse_ptr->str + parse_ptr->offset;
+    bak = str;
+
+    while (1) {
+        switch ((c = *str++)) {
+        case '\"':
+#if JSON_PARSE_SPECIAL_QUOTES
+        case '\'':
+        case ':':
+            if (c == end_ch)
+#endif
+            {
+                goto next;
+            }
+#if JSON_PARSE_SPECIAL_QUOTES
+            if (c == '\"' && !escaped)
+                escaped = -1;
+            break;
+#endif
+
+        case '\0':
+            goto err;
+        case '\\':
+            ++str;
+            escaped = 1;
+            break;
+#if !JSON_PARSE_SPECIAL_CHAR
+        case '\b': case '\f': case '\n': case '\r': case '\t': case '\v':
+            JsonErr("tab and linebreak can't be existed in string in standard json!\n");
+            goto err;
+#endif
+        default:
+            break;
+        }
+    }
+
+next:
+    total = (int)(str - bak - 1);
+    len = total;
+    if (unlikely((ptr = (char *)_parse_alloc(parse_ptr, len + 1, mgr)) == NULL)) {
+        JsonErr("malloc failed!\n");
+        goto err;
+    }
+
+    if (likely(escaped != 1)) {
+        memcpy(ptr, bak, len);
+        ptr[len] = '\0';
+    } else {
+        if (unlikely((len = _parse_strcpy(ptr, bak, len)) < 0)) {
+            JsonErr("_parse_strcpy failed!\n");
+            if (parse_ptr->mem == &s_invalid_json_mem)
+                json_free(ptr);
+            goto err;
+        }
+    }
+    _UPDATE_PARSE_OFFSET(total);
+
+    pinfo->escaped = escaped != 0;
+    pinfo->len = len;
+    *ppstr = ptr;
+    return len;
+err:
+    JsonPareseErr("parse string failed!");
+    return -1;
+}
+
+static int _json_parse_string_reuse(json_parse_t *parse_ptr, char end_ch UNUSED_END_CH,
+    char **ppstr, json_strinfo_t *pinfo, json_mem_mgr_t *mgr UNUSED_ATTR)
 {
     char *str = NULL, *end = NULL, *last = NULL, *bak = NULL, *ptr= NULL;
     int len = 0, seq_len = 0, size = 0;
@@ -3675,80 +3760,54 @@ err:
     return -1;
 }
 
-static int _json_parse_string_rapid(json_parse_t *parse_ptr, char end_ch UNUSED_END_CH, char **ppstr,
-    json_strinfo_t *pinfo, json_mem_mgr_t *mgr)
+static inline int _json_parse_string_reuse_quick(json_parse_t *parse_ptr,
+    char end_ch UNUSED_END_CH, char **ppstr, json_strinfo_t *pinfo)
 {
-    char *str = NULL, *bak = NULL, *ptr= NULL;
+    if (!parse_ptr->reuse_flag)
+        return -1;
+
+    char *str = NULL, *bak = NULL;
     char c = '\0';
-    int len = 0, total = 0;
-    int escaped = 0;
 
     *ppstr = NULL;
     memset(pinfo, 0, sizeof(*pinfo));
 
     str = parse_ptr->str + parse_ptr->offset;
     bak = str;
+    *ppstr = str;
 
     while (1) {
-        switch ((c = *str++)) {
-        case '\"':
+        c = *str++; if (unlikely(_is_special_char((uint8_t)c))) break;
+#if JSON_MANUAL_LOOP_UNFOLD
+        c = *str++; if (unlikely(_is_special_char((uint8_t)c))) break;
+        c = *str++; if (unlikely(_is_special_char((uint8_t)c))) break;
+        c = *str++; if (unlikely(_is_special_char((uint8_t)c))) break;
+        c = *str++; if (unlikely(_is_special_char((uint8_t)c))) break;
+        c = *str++; if (unlikely(_is_special_char((uint8_t)c))) break;
+        c = *str++; if (unlikely(_is_special_char((uint8_t)c))) break;
+        c = *str++; if (unlikely(_is_special_char((uint8_t)c))) break;
+#endif
+    }
+
+    switch (c) {
+    case '\"':
 #if JSON_PARSE_SPECIAL_QUOTES
-        case '\'':
-        case ':':
-            if (c == end_ch)
+    case '\'':
+    case ':':
+        if (c == end_ch)
 #endif
-            {
-                goto next;
-            }
-#if JSON_PARSE_SPECIAL_QUOTES
-            if (c == '\"' && !escaped)
-                escaped = -1;
-            break;
-#endif
-
-        case '\0':
-            goto err;
-        case '\\':
-            ++str;
-            escaped = 1;
-            break;
-#if !JSON_PARSE_SPECIAL_CHAR
-        case '\b': case '\f': case '\n': case '\r': case '\t': case '\v':
-            JsonErr("tab and linebreak can't be existed in string in standard json!\n");
-            goto err;
-#endif
-        default:
-            break;
+        {
+            int len = (int)(str - bak - 1);
+            _UPDATE_PARSE_OFFSET(len);
+            bak[len] = '\0';
+            pinfo->escaped = 0;
+            pinfo->len = len;
+            return len;
         }
+        break;
+    default:
+        break;
     }
-
-next:
-    total = (int)(str - bak - 1);
-    len = total;
-    if (unlikely((ptr = (char *)_parse_alloc(parse_ptr, len + 1, mgr)) == NULL)) {
-        JsonErr("malloc failed!\n");
-        goto err;
-    }
-
-    if (likely(escaped != 1)) {
-        memcpy(ptr, bak, len);
-        ptr[len] = '\0';
-    } else {
-        if (unlikely((len = _parse_strcpy(ptr, bak, len)) < 0)) {
-            JsonErr("_parse_strcpy failed!\n");
-            if (parse_ptr->mem == &s_invalid_json_mem)
-                json_free(ptr);
-            goto err;
-        }
-    }
-    _UPDATE_PARSE_OFFSET(total);
-
-    pinfo->escaped = escaped != 0;
-    pinfo->len = len;
-    *ppstr = ptr;
-    return len;
-err:
-    JsonPareseErr("parse string failed!");
     return -1;
 }
 
@@ -3797,9 +3856,11 @@ next2:
         } else {
             end_ch = *str;
             _UPDATE_PARSE_OFFSET(1);
-            if (unlikely(parse_ptr->parse_string(parse_ptr, end_ch, &jkey.str, &jkey.info,
-                &parse_ptr->mem->key_mgr) < 0)) {
-                goto err;
+            if (_json_parse_string_reuse_quick(parse_ptr, end_ch, &jkey.str, &jkey.info) < 0) {
+                if (unlikely(parse_ptr->parse_string(parse_ptr, end_ch, &jkey.str, &jkey.info,
+                    &parse_ptr->mem->key_mgr) < 0)) {
+                    goto err;
+                }
             }
             _UPDATE_PARSE_OFFSET(1);
         }
@@ -3823,9 +3884,11 @@ next2:
 #endif
         } else {
             end_ch = ':';
-            if (unlikely(parse_ptr->parse_string(parse_ptr, end_ch, &jkey.str, &jkey.info,
-                &parse_ptr->mem->key_mgr) < 0)) {
-                goto err;
+            if (_json_parse_string_reuse_quick(parse_ptr, end_ch, &jkey.str, &jkey.info) < 0) {
+                if (unlikely(parse_ptr->parse_string(parse_ptr, end_ch, &jkey.str, &jkey.info,
+                    &parse_ptr->mem->key_mgr) < 0)) {
+                    goto err;
+                }
             }
             _UPDATE_PARSE_OFFSET(1);
 
@@ -3866,9 +3929,11 @@ next3:
         } else {
             end_ch = *str;
             _UPDATE_PARSE_OFFSET(1);
-            if (unlikely(parse_ptr->parse_string(parse_ptr, end_ch, &item->value.vstr, &item->istr,
-                &parse_ptr->mem->str_mgr) < 0)) {
-                goto err;
+            if (_json_parse_string_reuse_quick(parse_ptr, end_ch, &item->value.vstr, &item->istr) < 0) {
+                if (unlikely(parse_ptr->parse_string(parse_ptr, end_ch, &item->value.vstr, &item->istr,
+                    &parse_ptr->mem->str_mgr) < 0)) {
+                    goto err;
+                }
             }
             _UPDATE_PARSE_OFFSET(1);
         }
