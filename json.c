@@ -1655,17 +1655,15 @@ typedef struct _json_print_t {
 static inline char _is_escape_char(uint8_t val)
 {
 #define ESCAPE_UTF16_VAL        1
-#if JSON_PRINT_UTF16_SUPPORT
-#define PRINT_STR_CMP_VAL       0
-#else
-#define PRINT_STR_CMP_VAL       ESCAPE_UTF16_VAL
-#endif
-
     /*
     // To get char_escape_lut
-    void print_char_escape_lut(void)
+    #include <stdio.h>
+    #include <stdbool.h>
+
+    void print_char_escape_lut(bool escape_utf16)
     {
         int i = 0, ch = 0;
+        printf("static const char char_escape_lut[256] = {\n");
         for (i = 0; i < 256; ++i) {
             switch (i) {
             case '\"': ch = '\"'; break;
@@ -1676,18 +1674,35 @@ static inline char _is_escape_char(uint8_t val)
             case '\r': ch = 'r' ; break;
             case '\t': ch = 't' ; break;
             case '\v': ch = 'v' ; break;
-            default: ch = i < ' ' ? ESCAPE_UTF16_VAL : 0; break;
+            default: ch = i < ' ' && escape_utf16 ? 1 : 0; break;
             }
+            if ((i & 0xF) == 0)
+                printf("    ");
             printf("%-3d, ", ch);
             if ((i & 0xF) == 0xF)
                 printf("\n");
         }
+        printf("};\n");
+    }
+
+    int main(void)
+    {
+        printf("#if JSON_PRINT_UTF16_SUPPORT\n\n");
+        print_char_escape_lut(1);
+        printf("#else\n\n");
+        print_char_escape_lut(0);
+        printf("#endif\n\n");
     }
     */
 
     static const char char_escape_lut[256] = {
+#if JSON_PRINT_UTF16_SUPPORT
         1  , 1  , 1  , 1  , 1  , 1  , 1  , 1  , 98 , 116, 110, 118, 102, 114, 1  , 1  ,
         1  , 1  , 1  , 1  , 1  , 1  , 1  , 1  , 1  , 1  , 1  , 1  , 1  , 1  , 1  , 1  ,
+#else
+        0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 98 , 116, 110, 118, 102, 114, 0  , 0  ,
+        0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  ,
+#endif
         0  , 0  , 34 , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  ,
         0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  ,
         0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  ,
@@ -1817,9 +1832,9 @@ static int _print_str_ptr_realloc(json_print_t *print_ptr, size_t slen)
     print_ptr->cur += fname(num, print_ptr->cur);   \
 } while(0)
 
-static inline int _print_addi_format(json_print_t *print_ptr, size_t depth)
+static inline int _print_addi_format(json_print_t *print_ptr, size_t depth, size_t addi_size)
 {
-    _PRINT_PTR_REALLOC((depth + 2));
+    _PRINT_PTR_REALLOC((depth + 2 + addi_size));
     *print_ptr->cur++ = '\n';
     memset(print_ptr->cur, '\t', depth);
     print_ptr->cur += depth;
@@ -1828,9 +1843,9 @@ static inline int _print_addi_format(json_print_t *print_ptr, size_t depth)
 err:
     return -1;
 }
-#define _PRINT_ADDI_FORMAT(ptr, depth) do { if (unlikely(_print_addi_format(ptr, depth) < 0)) goto err; } while(0)
+#define _PRINT_ADDI_FORMAT(ptr, depth) do { if (unlikely(_print_addi_format(ptr, depth, 0) < 0)) goto err; } while(0)
 
-static int _json_print_escape_string(json_print_t *print_ptr, const char *val, json_strinfo_t *info)
+static int _json_print_escape_string(json_print_t *print_ptr, const char *val, json_strinfo_t *info, size_t addi_size)
 {
 #define _JSON_PRINT_SEGMENT()   do {  \
     size = str - bak - 1;             \
@@ -1850,9 +1865,9 @@ static int _json_print_escape_string(json_print_t *print_ptr, const char *val, j
     end = str + len;
 
 #if JSON_PRINT_UTF16_SUPPORT
-    alloced = (len << 2) + (len << 1) + 3;
+    alloced = (len << 2) + (len << 1) + 3 + addi_size;
 #else
-    alloced = (len << 1) + 3;
+    alloced = (len << 1) + 3 + addi_size;
 #endif
     _PRINT_PTR_REALLOC(alloced);
     cur = print_ptr->cur;
@@ -1861,18 +1876,18 @@ static int _json_print_escape_string(json_print_t *print_ptr, const char *val, j
 loop:
 #if JSON_MANUAL_LOOP_UNFOLD
     while (end - str >= 8) {
-        c = *str++; ch = _is_escape_char(c); if (unlikely(ch > PRINT_STR_CMP_VAL)) goto next;
-        c = *str++; ch = _is_escape_char(c); if (unlikely(ch > PRINT_STR_CMP_VAL)) goto next;
-        c = *str++; ch = _is_escape_char(c); if (unlikely(ch > PRINT_STR_CMP_VAL)) goto next;
-        c = *str++; ch = _is_escape_char(c); if (unlikely(ch > PRINT_STR_CMP_VAL)) goto next;
-        c = *str++; ch = _is_escape_char(c); if (unlikely(ch > PRINT_STR_CMP_VAL)) goto next;
-        c = *str++; ch = _is_escape_char(c); if (unlikely(ch > PRINT_STR_CMP_VAL)) goto next;
-        c = *str++; ch = _is_escape_char(c); if (unlikely(ch > PRINT_STR_CMP_VAL)) goto next;
-        c = *str++; ch = _is_escape_char(c); if (unlikely(ch > PRINT_STR_CMP_VAL)) goto next;
+        c = *str++; ch = _is_escape_char(c); if (unlikely(ch)) goto next;
+        c = *str++; ch = _is_escape_char(c); if (unlikely(ch)) goto next;
+        c = *str++; ch = _is_escape_char(c); if (unlikely(ch)) goto next;
+        c = *str++; ch = _is_escape_char(c); if (unlikely(ch)) goto next;
+        c = *str++; ch = _is_escape_char(c); if (unlikely(ch)) goto next;
+        c = *str++; ch = _is_escape_char(c); if (unlikely(ch)) goto next;
+        c = *str++; ch = _is_escape_char(c); if (unlikely(ch)) goto next;
+        c = *str++; ch = _is_escape_char(c); if (unlikely(ch)) goto next;
     }
 #endif
     while (end > str) {
-        c = *str++; ch = _is_escape_char(c); if (unlikely(ch > PRINT_STR_CMP_VAL)) goto next;
+        c = *str++; ch = _is_escape_char(c); if (unlikely(ch)) goto next;
     }
     goto end;
 
@@ -1908,12 +1923,12 @@ err:
     return -1;
 }
 
-static inline int _json_print_string(json_print_t *print_ptr, const char *val, json_strinfo_t *info)
+static inline int _json_print_string(json_print_t *print_ptr, const char *val, json_strinfo_t *info, size_t addi_size)
 {
     if (likely(!info->escaped)) {
         char *cur = NULL;
         size_t len = info->len;
-        _PRINT_PTR_REALLOC(len + 3);
+        _PRINT_PTR_REALLOC(len + 3 + addi_size);
         cur = print_ptr->cur;
         *cur++ = '\"';
         memcpy(cur, val, len);
@@ -1923,19 +1938,19 @@ static inline int _json_print_string(json_print_t *print_ptr, const char *val, j
         return 0;
     }
 
-    return _json_print_escape_string(print_ptr, val, info);
+    return _json_print_escape_string(print_ptr, val, info, addi_size);
 err:
     JsonErr("malloc failed!\n");
     return -1;
 }
-#define _JSON_PRINT_STRING(ptr, val, info) do { if (unlikely(_json_print_string(ptr, val, info) < 0)) goto err; } while(0)
+#define _JSON_PRINT_STRING(ptr, val, info) do { if (unlikely(_json_print_string(ptr, val, info, 0) < 0)) goto err; } while(0)
 
-static inline int _json_print_binary(json_print_t *print_ptr, const void *val, json_strinfo_t *info)
+static inline int _json_print_binary(json_print_t *print_ptr, const void *val, json_strinfo_t *info, size_t addi_size)
 {
     char *cur = NULL;
     size_t len = info->len;
 
-    _PRINT_PTR_REALLOC(len + 24);
+    _PRINT_PTR_REALLOC(len + 24 + addi_size);
     cur = print_ptr->cur;
     *cur++ = '<';
     cur += jnum_itoa(len, cur);
@@ -1950,106 +1965,132 @@ err:
     JsonErr("malloc failed!\n");
     return -1;
 }
-#define _JSON_PRINT_BINARY(ptr, val, info) do { if (unlikely(_json_print_binary(ptr, val, info) < 0)) goto err; } while(0)
+#define _JSON_PRINT_BINARY(ptr, val, info) do { if (unlikely(_json_print_binary(ptr, val, info, 0) < 0)) goto err; } while(0)
 
-static int _json_print_value(json_print_t *print_ptr, json_object *json)
+#define _PRINT_ALLOC_ADDI_SIZE      64
+#define _PRINT_PTR_REALLOC_SYNC(nz)             do {                              \
+    print_ptr->cur = cur;                                                         \
+    print_ptr->item_count = item_count;                                           \
+    if (unlikely(GET_BUF_FREE_SIZE(print_ptr) < (nz + _PRINT_ALLOC_ADDI_SIZE)     \
+        && print_ptr->realloc(print_ptr, nz + _PRINT_ALLOC_ADDI_SIZE) < 0))       \
+        goto err;                                                                 \
+    cur = print_ptr->cur;                                                         \
+    item_count = print_ptr->item_count;                                           \
+} while(0)
+
+#define _PRINT_ADDI_FORMAT_SYNC(ptr, depth)     do {                              \
+    print_ptr->cur = cur;                                                         \
+    print_ptr->item_count = item_count;                                           \
+    if (unlikely(_print_addi_format(ptr, depth, _PRINT_ALLOC_ADDI_SIZE) < 0))     \
+        goto err;                                                                 \
+    cur = print_ptr->cur;                                                         \
+    item_count = print_ptr->item_count;                                           \
+} while(0)
+
+#define _JSON_PRINT_STRING_SYNC(ptr, val, info) do {                              \
+    print_ptr->cur = cur;                                                         \
+    print_ptr->item_count = item_count;                                           \
+    if (unlikely(_json_print_string(ptr, val, info, _PRINT_ALLOC_ADDI_SIZE) < 0)) \
+        goto err;                                                                 \
+    cur = print_ptr->cur;                                                         \
+    item_count = print_ptr->item_count;                                           \
+} while(0)
+
+#define _JSON_PRINT_BINARY_SYNC(ptr, val, info) do {                              \
+    print_ptr->cur = cur;                                                         \
+    print_ptr->item_count = item_count;                                           \
+    if (unlikely(_json_print_binary(ptr, val, info, _PRINT_ALLOC_ADDI_SIZE) < 0)) \
+        goto err;                                                                 \
+    cur = print_ptr->cur;                                                         \
+    item_count = print_ptr->item_count;                                           \
+} while(0)
+
+static int _json_print_value_format(json_print_t *print_ptr, json_object *json)
 {
     json_object *stack_array[JSON_ITEM_NUM_PLUS_DEF];
     json_object **item_array = stack_array;
     json_object *parent = NULL;
     struct json_list *first = NULL;
-    const char *rbrackets = NULL;
     const char *brackets[2] = {"[]", "{}"};
+    char rbracket = '\0';
+    char *cur = print_ptr->cur;
+    int item_count = print_ptr->item_count;
     int item_depth = -1, item_total = JSON_ITEM_NUM_PLUS_DEF;
 
+    _PRINT_PTR_REALLOC_SYNC(0);
     goto next2;
+
 next1:
     if (parent->ikey.type == JSON_OBJECT) {
-        if (print_ptr->format_flag) {
-            _PRINT_ADDI_FORMAT(print_ptr, item_depth + 1);
-            if (json->ikey.len) {
-                _JSON_PRINT_STRING(print_ptr, json->key, &json->ikey);
-                _PRINT_PTR_STRNCAT(":\t", 2);
-            } else {
-#if !JSON_PARSE_EMPTY_KEY
-                JsonErr("key is empty!\n");
-                goto err;
-#else
-                _PRINT_PTR_STRNCAT("\"\":\t", 4);
-#endif
-            }
+        _PRINT_ADDI_FORMAT_SYNC(print_ptr, item_depth + 1);
+        if (json->ikey.len) {
+            _JSON_PRINT_STRING_SYNC(print_ptr, json->key, &json->ikey);
+            memcpy(cur, ":\t", 2); cur += 2;
         } else {
-            if (json->ikey.len) {
-                _JSON_PRINT_STRING(print_ptr, json->key, &json->ikey);
-                _PRINT_PTR_STRNCAT(":", 1);
-            } else {
 #if !JSON_PARSE_EMPTY_KEY
-                JsonErr("key is empty!\n");
-                goto err;
+            JsonErr("key is empty!\n");
+            goto err;
 #else
-                _PRINT_PTR_STRNCAT("\"\":", 3);
+            memcpy(cur, "\"\":\t", 4); cur += 4;
 #endif
-            }
         }
     } else {
-        if (print_ptr->format_flag) {
-            if (&json->list != first) {
-                if (json->ikey.type == JSON_ARRAY)
-                    _PRINT_ADDI_FORMAT(print_ptr, item_depth + 1);
-                else
-                    _PRINT_PTR_STRNCAT(" ", 1);
-            } else {
-                if (json->ikey.type == JSON_OBJECT || json->ikey.type == JSON_ARRAY)
-                    _PRINT_ADDI_FORMAT(print_ptr, item_depth + 1);
-            }
+        _PRINT_PTR_REALLOC_SYNC(0);
+        if (&json->list != first) {
+            if (json->ikey.type == JSON_ARRAY)
+                _PRINT_ADDI_FORMAT_SYNC(print_ptr, item_depth + 1);
+            else
+                *cur++ = ' ';
+        } else {
+            if (json->ikey.type == JSON_OBJECT || json->ikey.type == JSON_ARRAY)
+                _PRINT_ADDI_FORMAT_SYNC(print_ptr, item_depth + 1);
         }
     }
 
 next2:
-    _PRINT_PTR_REALLOC(64);
     switch (json->ikey.type) {
     case JSON_NULL:
-        _PRINT_PTR_MEMCPY("null", 4);
+        memcpy(cur, "null", 4); cur += 4;
         break;
     case JSON_BOOL:
         if (json->value.vnum.vbool) {
-            _PRINT_PTR_MEMCPY("true", 4);
+            memcpy(cur, "true", 4); cur += 4;
         } else {
-            _PRINT_PTR_MEMCPY("false", 5);
+            memcpy(cur, "false", 5); cur += 5;
         }
         break;
     case JSON_INT:
-        _PRINT_PTR_NUMBER(jnum_itoa, json->value.vnum.vint);
+        cur += jnum_itoa(json->value.vnum.vint, cur);
         break;
     case JSON_HEX:
-        _PRINT_PTR_NUMBER(jnum_htoa, json->value.vnum.vhex);
+        cur += jnum_htoa(json->value.vnum.vhex, cur);
         break;
     case JSON_LINT:
-        _PRINT_PTR_NUMBER(jnum_ltoa, json->value.vnum.vlint);
+        cur += jnum_ltoa(json->value.vnum.vlint, cur);
         break;
     case JSON_LHEX:
-        _PRINT_PTR_NUMBER(jnum_lhtoa, json->value.vnum.vlhex);
+        cur += jnum_lhtoa(json->value.vnum.vlhex, cur);
         break;
     case JSON_DOUBLE:
-        _PRINT_PTR_NUMBER(json_dtoa, json->value.vnum.vdbl);
+        cur += json_dtoa(json->value.vnum.vdbl, cur);
         break;
     case JSON_STRING:
         if (unlikely(!json->istr.len)) {
-            _PRINT_PTR_MEMCPY("\"\"", 2);
+            memcpy(cur, "\"\"", 2); cur += 2;
         } else {
-            _JSON_PRINT_STRING(print_ptr, json->value.vstr, &json->istr);
+            _JSON_PRINT_STRING_SYNC(print_ptr, json->value.vstr, &json->istr);
         }
         break;
     case JSON_BINARY:
-        _JSON_PRINT_BINARY(print_ptr, json->value.vbin, &json->istr);
+        _JSON_PRINT_BINARY_SYNC(print_ptr, json->value.vbin, &json->istr);
         break;
     case JSON_ARRAY:
     case JSON_OBJECT:
         if (unlikely(json_list_empty(&json->value.head))) {
-            _PRINT_PTR_MEMCPY(brackets[json->ikey.type - JSON_ARRAY], 2);
+            memcpy(cur, brackets[json->ikey.type - JSON_ARRAY], 2); cur += 2;
             break;
         }
-        _PRINT_PTR_MEMCPY(brackets[json->ikey.type - JSON_ARRAY], 1);
+        *cur++ = brackets[json->ikey.type - JSON_ARRAY][0];
 
         if (unlikely(item_depth >= item_total - 1)) {
             item_total += JSON_ITEM_NUM_PLUS_DEF;
@@ -2060,46 +2101,175 @@ next2:
         item_array[++item_depth] = json;
         parent = json;
         first = parent->value.head.next->next;
-        rbrackets = parent->ikey.type == JSON_OBJECT ? "}" : "]";
+        rbracket = parent->ikey.type == JSON_OBJECT ? '}' : ']';
         json = json_list_entry(first, json_object);
         goto next1;
 
     default:
         break;
     }
-    ++print_ptr->item_count;
+    ++item_count;
 
 next3:
     if (likely(item_depth >= 0)) {
         if (likely(json->list.next != first)) {
-            _PRINT_PTR_STRNCAT(",", 1);
+            *cur++ = ',';
             json = json_list_entry_next(json, list, json_object);
             goto next1;
         } else {
-            if (print_ptr->format_flag) {
-                if ((parent->ikey.type == JSON_OBJECT)
-                    || (json->ikey.type == JSON_OBJECT || json->ikey.type == JSON_ARRAY)) {
-                    if (likely(item_depth > 0)) {
-                        _PRINT_ADDI_FORMAT(print_ptr, item_depth);
-                    } else {
-                        _PRINT_PTR_STRNCAT("\n", 1);
-                    }
+            if ((parent->ikey.type == JSON_OBJECT)
+                || (json->ikey.type == JSON_OBJECT || json->ikey.type == JSON_ARRAY)) {
+                if (likely(item_depth > 0)) {
+                    _PRINT_ADDI_FORMAT_SYNC(print_ptr, item_depth);
+                } else {
+                    _PRINT_PTR_REALLOC_SYNC(0);
+                    *cur++ = '\n';
                 }
             }
 
-            _PRINT_PTR_STRNCAT(rbrackets, 1);
-            ++print_ptr->item_count;
+            *cur++ = rbracket;
+            ++item_count;
 
             if (likely(item_depth > 0)) {
                 json = parent;
                 parent = item_array[--item_depth];
                 first = parent->value.head.next->next;
-                rbrackets = parent->ikey.type == JSON_OBJECT ? "}" : "]";
+                rbracket = parent->ikey.type == JSON_OBJECT ? '}' : ']';
                 goto next3;
             }
         }
     }
 
+    print_ptr->cur = cur;   // store the pointer
+    print_ptr->item_count = item_count;
+    if (item_array != NULL && item_array != stack_array) {
+        json_free(item_array);
+    }
+    return 0;
+err:
+    if (item_array != NULL && item_array != stack_array) {
+        json_free(item_array);
+    }
+    return -1;
+}
+
+static int _json_print_value_unformat(json_print_t *print_ptr, json_object *json)
+{
+    json_object *stack_array[JSON_ITEM_NUM_PLUS_DEF];
+    json_object **item_array = stack_array;
+    json_object *parent = NULL;
+    struct json_list *first = NULL;
+    const char *brackets[2] = {"[]", "{}"};
+    char rbracket = '\0';
+    char *cur = print_ptr->cur;
+    int item_count = print_ptr->item_count;
+    int item_depth = -1, item_total = JSON_ITEM_NUM_PLUS_DEF;
+
+    _PRINT_PTR_REALLOC_SYNC(0);
+    goto next2;
+
+next1:
+    _PRINT_PTR_REALLOC_SYNC(0);
+    if (parent->ikey.type == JSON_OBJECT) {
+        if (json->ikey.len) {
+            _JSON_PRINT_STRING_SYNC(print_ptr, json->key, &json->ikey);
+            *cur++ = ':';
+        } else {
+#if !JSON_PARSE_EMPTY_KEY
+            JsonErr("key is empty!\n");
+            goto err;
+#else
+            memcpy(cur, "\"\":", 3); cur += 3;
+#endif
+        }
+    }
+
+next2:
+    switch (json->ikey.type) {
+    case JSON_NULL:
+        memcpy(cur, "null", 4); cur += 4;
+        break;
+    case JSON_BOOL:
+        if (json->value.vnum.vbool) {
+            memcpy(cur, "true", 4); cur += 4;
+        } else {
+            memcpy(cur, "false", 5); cur += 5;
+        }
+        break;
+    case JSON_INT:
+        cur += jnum_itoa(json->value.vnum.vint, cur);
+        break;
+    case JSON_HEX:
+        cur += jnum_htoa(json->value.vnum.vhex, cur);
+        break;
+    case JSON_LINT:
+        cur += jnum_ltoa(json->value.vnum.vlint, cur);
+        break;
+    case JSON_LHEX:
+        cur += jnum_lhtoa(json->value.vnum.vlhex, cur);
+        break;
+    case JSON_DOUBLE:
+        cur += json_dtoa(json->value.vnum.vdbl, cur);
+        break;
+    case JSON_STRING:
+        if (unlikely(!json->istr.len)) {
+            memcpy(cur, "\"\"", 2); cur += 2;
+        } else {
+            _JSON_PRINT_STRING_SYNC(print_ptr, json->value.vstr, &json->istr);
+        }
+        break;
+    case JSON_BINARY:
+        _JSON_PRINT_BINARY_SYNC(print_ptr, json->value.vbin, &json->istr);
+        break;
+    case JSON_ARRAY:
+    case JSON_OBJECT:
+        if (unlikely(json_list_empty(&json->value.head))) {
+            memcpy(cur, brackets[json->ikey.type - JSON_ARRAY], 2); cur += 2;
+            break;
+        }
+        *cur++ = brackets[json->ikey.type - JSON_ARRAY][0];
+
+        if (unlikely(item_depth >= item_total - 1)) {
+            item_total += JSON_ITEM_NUM_PLUS_DEF;
+            item_array = _item_array_realloc(item_array, stack_array, item_total);
+            if (unlikely(!item_array))
+                goto err;
+        }
+        item_array[++item_depth] = json;
+        parent = json;
+        first = parent->value.head.next->next;
+        rbracket = parent->ikey.type == JSON_OBJECT ? '}' : ']';
+        json = json_list_entry(first, json_object);
+        goto next1;
+
+    default:
+        break;
+    }
+    ++item_count;
+
+next3:
+    if (likely(item_depth >= 0)) {
+        if (likely(json->list.next != first)) {
+            *cur++ = ',';
+            json = json_list_entry_next(json, list, json_object);
+            goto next1;
+        } else {
+            *cur++ = rbracket;
+            ++item_count;
+
+            if (likely(item_depth > 0)) {
+                json = parent;
+                parent = item_array[--item_depth];
+                first = parent->value.head.next->next;
+                rbracket = parent->ikey.type == JSON_OBJECT ? '}' : ']';
+                _PRINT_PTR_REALLOC_SYNC(0);
+                goto next3;
+            }
+        }
+    }
+
+    print_ptr->cur = cur;   // store the pointer
+    print_ptr->item_count = item_count;
     if (item_array != NULL && item_array != stack_array) {
         json_free(item_array);
     }
@@ -2210,9 +2380,16 @@ char *json_print_common(json_object *json, json_print_choice_t *choice)
     if (_print_val_init(&print_val, choice) < 0)
         return NULL;
 
-    if (_json_print_value(&print_val, json) < 0) {
-        JsonErr("print failed!\n");
-        goto err;
+    if (choice->format_flag) {
+        if (_json_print_value_format(&print_val, json) < 0) {
+            JsonErr("print failed!\n");
+            goto err;
+        }
+    } else {
+        if (_json_print_value_unformat(&print_val, json) < 0) {
+            JsonErr("print failed!\n");
+            goto err;
+        }
     }
     if (_print_val_release(&print_val, false, &choice->str_len, choice->ptr) < 0)
         goto err;

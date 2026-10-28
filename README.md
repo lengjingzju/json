@@ -97,7 +97,10 @@ make O=<output path> CROSS_COMPILE=<tool prefix> && make O=<output path> DESTDIR
 ### Run Method
 
 ```sh
-./ljson <json filename> <test index:0-7>
+./ljson <json> <number 1-7>                 # Test various parsing modes and printing modes
+./ljson <json> <number 1-3> diswr           # Test various parsing modes and printing modes, without generating files
+./ljson <json> <times greater than 7>       # Test mode 3 (reuse mode) by repeatedly parsing the specified times
+./ljson <json> <times greater than 7> print # Test reuse printing mode, repeatedly printing from DOM to string the specified times
 ```
 
 ### Debug Method
@@ -116,6 +119,7 @@ make O=<output path> CROSS_COMPILE=<tool prefix> && make O=<output path> DESTDIR
 * `#define JSON_PARSE_SPECIAL_DOUBLE       1` : Whether to allow special double such as `NaN`, `Infinity`, `-Infinity`(JSON5 feature)
 * `#define JSON_PARSE_SINGLE_VALUE         1` : Whether to allow json starting with non-array and non-object
 * `#define JSON_PARSE_FINISHED_CHAR        0` : Whether to allow characters other than spaces after finishing parsing
+* `#define JSON_ERROR_PRINT_ENABLE         0` : Whether to allow printing error information
 
 Note:
 * It 100% matches the test cases of [nativejson-benchmark](https://github.com/miloyip/nativejson-benchmark) when only `JSON_PARSE_EMPTY_KEY` is set to 1, all others are set to 0.
@@ -154,7 +158,7 @@ run_cmd() {
 }
 
 for i in `seq 1 7`; do
-	run_cmd ./ljson $src $i
+	run_cmd ./ljson $src $i diswr
 done
 
 run_cmd ./cjson $src
@@ -193,8 +197,8 @@ Note 2: Due to modifications such as feature additions and logic optimizations, 
 
 ![x86_64-Linux Test Result](image/test_for_x86_64.png)
 
-> Test Platform: PC | CPU: Intel i7-1260P | OS: Debian 13 (VMWare) | LJSON_v5.0.4<br>
-> Test Result: LJSON parses 586% faster and prints 2202% faster than cJSON; LJSON parses 165% faster and prints 257% faster than RapidJSON; LJSON parses 160% faster and prints 112% faster than yyjson (mutable mode).  (without file reading and writing)
+> Test Platform: PC | CPU: Intel i7-1260P | OS: Debian 13 (VMWare) | LJSON_v5.0.5<br>
+> Test Result: LJSON parses 562% faster and prints 2283% faster than cJSON; LJSON parses 172% faster and prints 285% faster than RapidJSON; LJSON parses 145% faster and prints 168% faster than yyjson (mutable mode).  (without file reading and writing)
 
 ![x86_64-Linux Test Result2](image/test_for_x86_64-2.png)
 

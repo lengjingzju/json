@@ -129,7 +129,7 @@ int read_file_data_free(char **data, size_t *size)
 static void usage_print(const char *func)
 {
 #define ANY_JSON_NAME "x.json"
-    printf("Usage:  %s <%s> <num>\n", func, ANY_JSON_NAME);
+    printf("Usage:  %s <%s> <num> <diswr/print>\n", func, ANY_JSON_NAME);
     printf("\t%s %s  1 ==> test json_parse_str()\n", func, ANY_JSON_NAME);
     printf("\t%s %s  2 ==> test json_fast_parse_str()\n", func, ANY_JSON_NAME);
     printf("\t%s %s  3 ==> test json_reuse_parse_str()\n", func, ANY_JSON_NAME);
@@ -139,7 +139,10 @@ static void usage_print(const char *func)
     printf("\t%s %s  6 ==> test json_sax_parse_str()\n", func, ANY_JSON_NAME);
     printf("\t%s %s  7 ==> test json_sax_parse_file()\n", func, ANY_JSON_NAME);
 #endif
+    printf("\t%s %s  <1-3> diswr ==> test without write data to file\n", func, ANY_JSON_NAME);
+
     printf("\t%s %s >7 ==> test json_reuse_parse_str() <num> times\n", func, ANY_JSON_NAME);
+    printf("\t%s %s >7 print ==> test json_print_format/unformat() <num> times\n", func, ANY_JSON_NAME);
 #if JSON_SAX_APIS_SUPPORT
     printf("Usage:  %s 0 ==> test json_sax_print_xxxx()\n", func);
 #endif
@@ -328,6 +331,59 @@ int test_reuse_parse_repeat(const char *file, int times)
     return 0;
 }
 
+int test_reuse_print_repeat(const char *file, int times)
+{
+    int i = 0;
+    int nitem = 0;
+    size_t size = 0, len1 = 0, len2 = 0;
+    char *data = NULL;
+    json_object *json = NULL;
+    json_mem_t mem = {0};
+    json_print_ptr_t ptr = {0};
+
+    unsigned long long format_ns = 0, unformat_ns = 0;
+    unsigned long long ns1 = 0, ns2 = 0, ns3 = 0;
+
+    pjson_memory_init(&mem);
+
+    if (read_file_to_data(file, &data, &size) < 0) {
+        printf("read file %s failed!\n", file);
+        return -1;
+    }
+    ptr.size = size;
+
+    json = json_reuse_parse_str(data, size, &mem);
+    if (!json) {
+        read_file_data_free(&data, &size);
+        printf("parse json file %s failed!\n", file);
+        return -1;
+    }
+    nitem = pjson_memory_statistics(&mem.obj_mgr) / sizeof(json_object);
+
+    for (i = 0; i < times; ++i) {
+        ns1 = _system_ns_get();
+        len1 = 0;
+        json_print_format(json, nitem, &len1, &ptr);
+
+        ns2 = _system_ns_get();
+        len2 = 0;
+        json_print_unformat(json, nitem, &len2, &ptr);
+
+        ns3 = _system_ns_get();
+        format_ns += ns2 - ns1;
+        unformat_ns += ns3 - ns2;
+    }
+
+    printf("Repeat %d times, original size=%d, LJSON reuse print costs: format ns=%llu len=%d; unformat ns=%llu, len=%d\n",
+        times, (int)size, format_ns, (int)len1, unformat_ns, (int)len2);
+
+    json_memory_free(ptr.p);
+    pjson_memory_free(&mem);
+    read_file_data_free(&data, &size);
+
+    return 0;
+}
+
 int main(int argc, char *argv[])
 {
     int ret = 0;
@@ -339,6 +395,8 @@ int main(int argc, char *argv[])
     json_object *json = NULL;
     json_mem_t mem = {0};
     unsigned int ms[8] = {0};
+    bool diswr = false;
+    bool print = false;
 
     pjson_memory_init(&mem);
 
@@ -353,7 +411,7 @@ int main(int argc, char *argv[])
         }
     }
 #endif
-    if (argc != 3)
+    if (argc != 3 && argc != 4)
         goto err;
 
     file = argv[1];
@@ -362,11 +420,22 @@ int main(int argc, char *argv[])
         goto err;
     }
     choice = atoi(argv[2]);
-    if (choice < 1)
+    if (choice <= 0) {
         goto err;
+    }
+    if (argc == 4) {
+        if (strcmp(argv[3], "diswr") == 0) {
+            diswr = true;
+        } else if (strcmp(argv[3], "print") == 0) {
+            print = true;
+        }
+    }
 
     if (choice > 7) {
-        return test_reuse_parse_repeat(file, choice);
+        if (!print)
+            return test_reuse_parse_repeat(file, choice);
+        else
+            return test_reuse_print_repeat(file, choice);
     }
 
     ms[0] = _system_ms_get();
@@ -457,7 +526,8 @@ int main(int argc, char *argv[])
 
     ms[3] = _system_ms_get();
     if (s_print_str) {
-        copy_data_to_file(s_print_str, s_print_size, s_dst_json_path);
+        if (!diswr)
+            copy_data_to_file(s_print_str, s_print_size, s_dst_json_path);
         json_memory_free(s_print_str);
         s_print_str = NULL;
     }
@@ -481,7 +551,8 @@ int main(int argc, char *argv[])
 
     ms[6] = _system_ms_get();
     if (s_print_str) {
-        copy_data_to_file(s_print_str, s_print_size, s_dst_json_path);
+        if (!diswr)
+            copy_data_to_file(s_print_str, s_print_size, s_dst_json_path);
         json_memory_free(s_print_str);
         s_print_str = NULL;
     }
@@ -490,8 +561,13 @@ int main(int argc, char *argv[])
     switch(choice)
     {
     case 1: case 2: case 3:
-        printf("[dom] %d. read=%-5d parse=%-5d format=%-5d write=%-5d unformat=%-5d write=%-5d\n",
-            choice, ms[1]-ms[0], ms[2]-ms[1], ms[3]-ms[2], ms[4]-ms[3], ms[6]-ms[5], ms[7]-ms[6]);
+        if (!diswr) {
+            printf("[dom] %d. read=%-5d parse=%-5d format=%-5d write=%-5d unformat=%-5d write=%-5d\n",
+                choice, ms[1]-ms[0], ms[2]-ms[1], ms[3]-ms[2], ms[4]-ms[3], ms[6]-ms[5], ms[7]-ms[6]);
+        } else {
+            printf("[dom] %d. read=%-5d parse=%-5d format=%-5d unformat=%-5d\n",
+                choice, ms[1]-ms[0], ms[2]-ms[1], ms[3]-ms[2], ms[6]-ms[5]);
+        }
         break;
     case 4: case 5:
         printf("[dom] %d. read+parse=%-5d       format+write=%-5d       unformat+write=%-5d\n",

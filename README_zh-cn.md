@@ -55,7 +55,7 @@ gcc -o ljson json.c jnum.c json_test.c -O2 -ffunction-sections -fdata-sections -
 * [IMAKE](https://github.com/lengjingzju/cbuild-ng) 编译
 
 ```sh
-make O=<编译输出目录> && make O=<编译输出目录> DESTDIR=<安装目录>
+make O=<编译输出目录> && make O=<编译输出目录> DESTDIR=<安装目录> install
 ```
 
 * 交叉编译
@@ -82,7 +82,10 @@ make O=<编译输出目录> CROSS_COMPILE=<交叉编译器前缀> && make O=<编
 ### 运行方法
 
 ```sh
-./ljson <json文件名> <测试序号0-7>
+./ljson <json文件名> <测试序号1-7>          # 测试各种解析模式和打印模式
+./ljson <json文件名> <测试序号1-3> diswr    # 测试各种解析模式和打印模式，不生成文件
+./ljson <json文件名> <测试次数大于7>        # 测试模式3（复用模式）重复解析指定次
+./ljson <json文件名> <测试次数大于7> print  # 测试复用打印模式，重复从DOM打印成字符串指定次
 ```
 
 ### 调试方法
@@ -101,6 +104,7 @@ make O=<编译输出目录> CROSS_COMPILE=<交叉编译器前缀> && make O=<编
 * `#define JSON_PARSE_SPECIAL_DOUBLE       1` : 是否允许特殊的double值 `NaN` `Infinity` `-Infinity`(JSON5特性)
 * `#define JSON_PARSE_SINGLE_VALUE         1` : 是否允许不是JSON_ARRAY或JSON_OBJECT开头的JSON值
 * `#define JSON_PARSE_FINISHED_CHAR        0` : 是否解析完成后忽略检查字符串尾部的合法性
+* `#define JSON_ERROR_PRINT_ENABLE         0` : 是否打印错误信息
 
 注：
 
@@ -140,7 +144,7 @@ run_cmd() {
 }
 
 for i in `seq 1 7`; do
-	run_cmd ./ljson $src $i
+	run_cmd ./ljson $src $i diswr
 done
 
 run_cmd ./cjson $src
@@ -178,8 +182,8 @@ run_cmd ./strdup $src
 
 ![x86_64-Linux测试结果](image/test_for_x86_64.png)
 
-> 测试平台: PC | CPU: Intel i7-1260P | OS: Debian 13 (VMWare) | LJSON_v5.0.4<br>
-> 测试结果: LJSON 比cJSON 解析最快可达 586%，打印最快可达 2202%；LJSON 比 RapidJSON 解析最快可达 165%，打印最快可达 257%；LJSON 比 yyjson(可编辑模式) 解析最快可达 160%，打印最快可达 112% 。 (耗时不含文件读写时间)
+> 测试平台: PC | CPU: Intel i7-1260P | OS: Debian 13 (VMWare) | LJSON_v5.0.5<br>
+> 测试结果: LJSON 比cJSON 解析最快可达 562%，打印最快可达 2283%；LJSON 比 RapidJSON 解析最快可达 172%，打印最快可达 285%；LJSON 比 yyjson(可编辑模式) 解析最快可达 145%，打印最快可达 168% 。 (耗时不含文件读写时间)
 
 ![x86_64-Linux测试结果2](image/test_for_x86_64-2.png)
 
