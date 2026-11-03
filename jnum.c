@@ -12,15 +12,17 @@
 #endif
 
 #if defined(__GNUC__) || defined(__clang__)
-#define UNUSED_ATTR                __attribute__((unused))
-#define FALLTHROUGH_ATTR           __attribute__((fallthrough))
-#define likely(cond)               __builtin_expect(!!(cond), 1)
-#define unlikely(cond)             __builtin_expect(!!(cond), 0)
+#define UNUSED_ATTR                 __attribute__((unused))
+#define FALLTHROUGH_ATTR            __attribute__((fallthrough))
+#define INLINE_ATTR                 __attribute__((always_inline))
+#define likely(cond)                __builtin_expect(!!(cond), 1)
+#define unlikely(cond)              __builtin_expect(!!(cond), 0)
 #else
 #define UNUSED_ATTR
 #define FALLTHROUGH_ATTR
-#define likely(cond)               (cond)
-#define unlikely(cond)             (cond)
+#define INLINE_ATTR
+#define likely(cond)                (cond)
+#define unlikely(cond)              (cond)
 #endif
 
 #define DIY_SIGNIFICAND_SIZE        64                  /* Symbol: 1 bit, Exponent, 11 bits, Mantissa, 52 bits */
@@ -1663,92 +1665,67 @@ static inline double ldouble_rconvert(uint64_t f, int32_t e)
 }
 
 #define IS_DIGIT(c)     ((c) >= '0' && (c) <= '9')
+#define X10_DIGIT(v)    (((v) << 3) + ((v) << 1))   // v * 10
 
 #if JNUM_MANUAL_LOOP_UNFOLD
-static inline const char *_parse_19_digits(const char *str, uint64_t *value)
+INLINE_ATTR
+static inline const char *_parse_ge16_digits(const char *s, uint64_t *val, int max)
 {
-    const char *s = str;
-    uint64_t m = *value;
-
+    const char *t = s;
+    uint64_t m = *val;
     do {
-        if (!IS_DIGIT(*s))
-            break;
-        m = (m << 3) + (m << 1) + (*s++ - '0');
-        if (!IS_DIGIT(*s))
-            break;
-        m = (m << 3) + (m << 1) + (*s++ - '0');
-        if (!IS_DIGIT(*s))
-            break;
-        m = (m << 3) + (m << 1) + (*s++ - '0');
-        if (!IS_DIGIT(*s))
-            break;
-        m = (m << 3) + (m << 1) + (*s++ - '0');
+        if (!IS_DIGIT(*t)) break;
+        m = X10_DIGIT(m) + (*t++ - '0');
+        if (!IS_DIGIT(*t)) break;
+        m = X10_DIGIT(m) + (*t++ - '0');
+        if (!IS_DIGIT(*t)) break;
+        m = X10_DIGIT(m) + (*t++ - '0');
+        if (!IS_DIGIT(*t)) break;
+        m = X10_DIGIT(m) + (*t++ - '0');
 
-        if (!IS_DIGIT(*s))
-            break;
-        m = (m << 3) + (m << 1) + (*s++ - '0');
-        if (!IS_DIGIT(*s))
-            break;
-        m = (m << 3) + (m << 1) + (*s++ - '0');
-        if (!IS_DIGIT(*s))
-            break;
-        m = (m << 3) + (m << 1) + (*s++ - '0');
-        if (!IS_DIGIT(*s))
-            break;
-        m = (m << 3) + (m << 1) + (*s++ - '0');
+        if (!IS_DIGIT(*t)) break;
+        m = X10_DIGIT(m) + (*t++ - '0');
+        if (!IS_DIGIT(*t)) break;
+        m = X10_DIGIT(m) + (*t++ - '0');
+        if (!IS_DIGIT(*t)) break;
+        m = X10_DIGIT(m) + (*t++ - '0');
+        if (!IS_DIGIT(*t)) break;
+        m = X10_DIGIT(m) + (*t++ - '0');
 
-        if (!IS_DIGIT(*s))
-            break;
-        m = (m << 3) + (m << 1) + (*s++ - '0');
-        if (!IS_DIGIT(*s))
-            break;
-        m = (m << 3) + (m << 1) + (*s++ - '0');
-        if (!IS_DIGIT(*s))
-            break;
-        m = (m << 3) + (m << 1) + (*s++ - '0');
-        if (!IS_DIGIT(*s))
-            break;
-        m = (m << 3) + (m << 1) + (*s++ - '0');
+        if (!IS_DIGIT(*t)) break;
+        m = X10_DIGIT(m) + (*t++ - '0');
+        if (!IS_DIGIT(*t)) break;
+        m = X10_DIGIT(m) + (*t++ - '0');
+        if (!IS_DIGIT(*t)) break;
+        m = X10_DIGIT(m) + (*t++ - '0');
+        if (!IS_DIGIT(*t)) break;
+        m = X10_DIGIT(m) + (*t++ - '0');
 
-        if (!IS_DIGIT(*s))
-            break;
-        m = (m << 3) + (m << 1) + (*s++ - '0');
-        if (!IS_DIGIT(*s))
-            break;
-        m = (m << 3) + (m << 1) + (*s++ - '0');
-        if (!IS_DIGIT(*s))
-            break;
-        m = (m << 3) + (m << 1) + (*s++ - '0');
-        if (!IS_DIGIT(*s))
-            break;
-        m = (m << 3) + (m << 1) + (*s++ - '0');
+        if (!IS_DIGIT(*t)) break;
+        m = X10_DIGIT(m) + (*t++ - '0');
+        if (!IS_DIGIT(*t)) break;
+        m = X10_DIGIT(m) + (*t++ - '0');
+        if (!IS_DIGIT(*t)) break;
+        m = X10_DIGIT(m) + (*t++ - '0');
+        if (!IS_DIGIT(*t)) break;
+        m = X10_DIGIT(m) + (*t++ - '0');
 
-        if (!IS_DIGIT(*s))
-            break;
-        m = (m << 3) + (m << 1) + (*s++ - '0');
-        if (!IS_DIGIT(*s))
-            break;
-        m = (m << 3) + (m << 1) + (*s++ - '0');
-        if (!IS_DIGIT(*s))
-            break;
-        m = (m << 3) + (m << 1) + (*s++ - '0');
+        while (IS_DIGIT(*t) && ((int)(t - s) < max)) {
+            m = X10_DIGIT(m) + (*t++ - '0');
+        }
     } while (0);
 
-    *value = m;
-    return s;
+    *val = m;
+    return t;
 }
 #endif
 
 int jnum_parse_num(const char *str, jnum_type_t *type, jnum_value_t *value)
 {
     const char *s = str, *t = NULL;
+    int32_t max = 0, dmax = 0;
     int32_t eneg = 0, e = 0, k = 0, i = 0;
     uint64_t neg = 0, m = 0;
-#if JNUM_MANUAL_LOOP_UNFOLD
-    uint64_t n = 0;
-#else
-    int32_t idx = 0, max = 0;
-#endif
 
     switch (*s) {
     case '-':
@@ -1781,12 +1758,19 @@ int jnum_parse_num(const char *str, jnum_type_t *type, jnum_value_t *value)
     /* ---------- Parse integer ---------- */
     while (*s == '0')
         ++s;
+
 #if JNUM_MANUAL_LOOP_UNFOLD
-    t = _parse_19_digits(s, &m);
+    t = _parse_ge16_digits(s, &m, 19);
 #else
     t = s;
-    for (idx = 0; IS_DIGIT(*t) && (idx < 19); ++idx) {
-        m = (m << 3) + (m << 1) + (*t++ - '0');
+    while (1) {
+        if ((t - s == 18) || !IS_DIGIT(t[0]) || !IS_DIGIT(t[1]))
+            break;
+        m = m * 100 + (t[0] - '0') * 10 + (t[1] - '0');
+        t += 2;
+    }
+    if (IS_DIGIT(*t)) {
+        m = X10_DIGIT(m) + (*t++ - '0');
     }
 #endif
     k = (int)(t - s);
@@ -1803,38 +1787,33 @@ int jnum_parse_num(const char *str, jnum_type_t *type, jnum_value_t *value)
             }
         }
 
-#if JNUM_MANUAL_LOOP_UNFOLD
-        n = m;
-        t = _parse_19_digits(s, &m);
-        if (k + (int)(t - s) < 20 && !IS_DIGIT(*t)) {
-            k += (int)(t - s);
-            i -= (int)(t - s);
-            s = t;
-        } else {
-            m = n;
-            while (IS_DIGIT(*s) && (k != 19)) {
-                m = (m << 3) + (m << 1) + (*s++ - '0');
-                ++k;
-                --i;
-            }
-            while (IS_DIGIT(*s))
-                ++s;
-        }
-#else
-        t = s;
         max = 19 - k;
-        for (idx = 0; IS_DIGIT(*t) && (idx < max); ++idx) {
-            m = (m << 3) + (m << 1) + (*t++ - '0');
+#if JNUM_MANUAL_LOOP_UNFOLD
+        if (max >= 16) {
+            t = _parse_ge16_digits(s, &m, max);
         }
-        k += (int)(t - s);
-        i -= (int)(t - s);
+        else
+#endif
+        {
+            t = s;
+            dmax = max & 0xfe;
+            while (1) {
+                if ((int)(t - s) == dmax || !IS_DIGIT(t[0]) || !IS_DIGIT(t[1]))
+                    break;
+                m = m * 100 + (t[0] - '0') * 10 + (t[1] - '0');
+                t += 2;
+            }
+            if (IS_DIGIT(*t) && ((int)(t - s) < max)) {
+                m = X10_DIGIT(m) + (*t++ - '0');
+            }
+        }
+        dmax = (int)(t - s);
+        k += dmax;
+        i -= dmax;
         s = t;
 
-        if (unlikely(IS_DIGIT(*s))) {
-            while (IS_DIGIT(*s))
-                ++s;
-        }
-#endif
+        while (IS_DIGIT(*s))
+            ++s;
         break;
 
     case '0': case '1': case '2': case '3': case '4':
@@ -1875,18 +1854,14 @@ int jnum_parse_num(const char *str, jnum_type_t *type, jnum_value_t *value)
             ++s;
 
         do {
-            if (!IS_DIGIT(*s))
-                break;
-            e = (e << 3) + (e << 1) + (*s++ - '0');
-            if (!IS_DIGIT(*s))
-                break;
-            e = (e << 3) + (e << 1) + (*s++ - '0');
-            if (!IS_DIGIT(*s))
-                break;
-            e = (e << 3) + (e << 1) + (*s++ - '0');
-            if (!IS_DIGIT(*s))
-                break;
-            e = (e << 3) + (e << 1) + (*s++ - '0');
+            if (!IS_DIGIT(*s)) break;
+            e = X10_DIGIT(e) + (*s++ - '0');
+            if (!IS_DIGIT(*s)) break;
+            e = X10_DIGIT(e) + (*s++ - '0');
+            if (!IS_DIGIT(*s)) break;
+            e = X10_DIGIT(e) + (*s++ - '0');
+            if (!IS_DIGIT(*s)) break;
+            e = X10_DIGIT(e) + (*s++ - '0');
             while (IS_DIGIT(*s))
                 ++s;
         } while (0);

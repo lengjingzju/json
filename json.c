@@ -1692,6 +1692,7 @@ static inline char _is_escape_char(uint8_t val)
         printf("#else\n\n");
         print_char_escape_lut(0);
         printf("#endif\n\n");
+        return 0;
     }
     */
 
@@ -2672,67 +2673,94 @@ typedef struct _json_parse_t {
 #endif
 } json_parse_t;
 
-#define IS_BLANK(c)      ((((c) + 0xdf) & 0xff) > 0xdf)
-#define IS_DIGIT(c)      ((c) >= '0' && (c) <= '9')
+#define IS_BLANK(c)     ((c) && (c) <= ' ')
+#define IS_DIGIT(c)     ((c) >= '0' && (c) <= '9')
+#define X10_DIGIT(v)    (((v) << 3) + ((v) << 1))   // v * 10
 
 static inline bool _is_special_char(uint8_t val)
 {
     /*
     // To get char_type_lut
-    void print_char_type_lut(void)
+    #include <stdio.h>
+    #include <stdbool.h>
+
+    void print_char_type_lut(char special_quotes, char special_char)
     {
-        int i = 0;
+        int i = 0, flag = 0;
+        printf("static const char char_type_lut[256] = {\n");
         for (i = 0; i < 256; ++i) {
             switch (i) {
-            case '\0': printf("%-3d, ", 1 << 0); break;
-            case '\"': printf("%-3d, ", 1 << 1); break;
-            case '\'': printf("%-3d, ", 1 << 2); break;
-            case ':' : printf("%-3d, ", 1 << 3); break;
-            case '\\': printf("%-3d, ", 1 << 4); break;
-            case ' ' : printf("%-3d, ", 1 << 5); break;
+            case '\0': case '\\': case '\"':
+                flag = 1;
+                break;
+            case '\'': case ':' :
+                flag = special_quotes;
+                break;
             case '\b': case '\f': case '\n': case '\r': case '\t': case '\v':
-                       printf("%-3d, ", 1 << 6); break;
-            default  : printf("%-3d, ", 0); break;
+                flag = !special_char;
+                break;
+            default  :
+                flag = 0;
+                break;
             }
+            if ((i & 0xF) == 0)
+                printf("    ");
+            printf("%d, ", flag);
             if ((i & 0xF) == 0xF)
                 printf("\n");
         }
+        printf("};\n");
+    }
+
+    int main(void)
+    {
+        printf("#if JSON_PARSE_SPECIAL_QUOTES\n\n");
+        printf("#if JSON_PARSE_SPECIAL_CHAR\n\n");
+        print_char_type_lut(true, true);
+        printf("\n#else\n\n");
+        print_char_type_lut(true, false);
+        printf("#endif\n\n");
+        printf("#else\n\n");
+        printf("#if JSON_PARSE_SPECIAL_CHAR\n\n");
+        print_char_type_lut(false, true);
+        printf("\n#else\n\n");
+        print_char_type_lut(false, false);
+        printf("#endif\n\n");
+        printf("#endif\n\n");
+
+        return 0;
     }
     */
 
-    static const uint8_t char_type_lut[256] = {
-        1  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 64 , 64 , 64 , 64 , 64 , 64 , 0  , 0  ,
-        0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  ,
-        32 , 0  , 2  , 0  , 0  , 0  , 0  , 4  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  ,
-        0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 8  , 0  , 0  , 0  , 0  , 0  ,
-        0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  ,
-        0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 16 , 0  , 0  , 0  ,
-        0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  ,
-        0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  ,
-        0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  ,
-        0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  ,
-        0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  ,
-        0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  ,
-        0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  ,
-        0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  ,
-        0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  ,
-        0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0  , 0
+    static const char char_type_lut[256] = {
+#if JSON_PARSE_SPECIAL_CHAR
+        1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+#else
+        1, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 0, 0,
+#endif
+        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+#if JSON_PARSE_SPECIAL_QUOTES
+        0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0,
+        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0,
+#else
+        0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+#endif
+        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0,
+        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
     };
 
-#if JSON_PARSE_SPECIAL_QUOTES
-#if JSON_PARSE_SPECIAL_CHAR
-    static const uint8_t flag = ~((1 << 5) | (1 << 6));
-#else
-    static const uint8_t flag = ~((1 << 5));
-#endif
-#else
-#if JSON_PARSE_SPECIAL_CHAR
-    static const uint8_t flag = ~((1 << 2) | (1 << 3) | (1 << 5) | (1 << 6));
-#else
-    static const uint8_t flag = ~((1 << 2) | (1 << 3) | (1 << 5));
-#endif
-#endif
-    return (char_type_lut[val] & flag);
+    return char_type_lut[val];
 }
 
 static inline void *_parse_alloc(json_parse_t *parse_ptr, size_t size, json_mem_mgr_t *mgr)
@@ -3258,45 +3286,36 @@ err:
 
 static inline const char *_parse_8_digits(const char *str, int32_t *value)
 {
-#define IS_DIGIT(c)     ((c) >= '0' && (c) <= '9')
 #define MAX_BIN_LEN     (1 << 26)
     const char *s = str;
     int32_t m = *value;
 
 #if JSON_MANUAL_LOOP_UNFOLD
     do {
-        if (!IS_DIGIT(*s))
-            break;
-        m = (m << 3) + (m << 1) + (*s++ - '0');
-        if (!IS_DIGIT(*s))
-            break;
-        m = (m << 3) + (m << 1) + (*s++ - '0');
-        if (!IS_DIGIT(*s))
-            break;
-        m = (m << 3) + (m << 1) + (*s++ - '0');
-        if (!IS_DIGIT(*s))
-            break;
-        m = (m << 3) + (m << 1) + (*s++ - '0');
+        if (!IS_DIGIT(*s)) break;
+        m = X10_DIGIT(m) + (*s++ - '0');
+        if (!IS_DIGIT(*s)) break;
+        m = X10_DIGIT(m) + (*s++ - '0');
+        if (!IS_DIGIT(*s)) break;
+        m = X10_DIGIT(m) + (*s++ - '0');
+        if (!IS_DIGIT(*s)) break;
+        m = X10_DIGIT(m) + (*s++ - '0');
 
-        if (!IS_DIGIT(*s))
-            break;
-        m = (m << 3) + (m << 1) + (*s++ - '0');
-        if (!IS_DIGIT(*s))
-            break;
-        m = (m << 3) + (m << 1) + (*s++ - '0');
-        if (!IS_DIGIT(*s))
-            break;
-        m = (m << 3) + (m << 1) + (*s++ - '0');
-        if (!IS_DIGIT(*s))
-            break;
-        m = (m << 3) + (m << 1) + (*s++ - '0');
+        if (!IS_DIGIT(*s)) break;
+        m = X10_DIGIT(m) + (*s++ - '0');
+        if (!IS_DIGIT(*s)) break;
+        m = X10_DIGIT(m) + (*s++ - '0');
+        if (!IS_DIGIT(*s)) break;
+        m = X10_DIGIT(m) + (*s++ - '0');
+        if (!IS_DIGIT(*s)) break;
+        m = X10_DIGIT(m) + (*s++ - '0');
     } while (0);
 
 #else
 
     int i = 0;
     for (i = 0; IS_DIGIT(*s) && (i < 8); ++i) {
-        m = (m << 3) + (m << 1) + (*s++ - '0');
+        m = X10_DIGIT(m) + (*s++ - '0');
     }
 #endif
 
@@ -3799,142 +3818,101 @@ static int _json_parse_string_reuse(json_parse_t *parse_ptr,
     *ppstr = str;
     str += poffset;
 
-loop1:
     while (1) {
-        c = *str++; if (unlikely(_is_special_char((uint8_t)c))) goto next1;
+        while (1) {
+            c = *str++; if (unlikely(_is_special_char((uint8_t)c))) break;
 #if JSON_MANUAL_LOOP_UNFOLD
-        c = *str++; if (unlikely(_is_special_char((uint8_t)c))) goto next1;
-        c = *str++; if (unlikely(_is_special_char((uint8_t)c))) goto next1;
-        c = *str++; if (unlikely(_is_special_char((uint8_t)c))) goto next1;
-        c = *str++; if (unlikely(_is_special_char((uint8_t)c))) goto next1;
-        c = *str++; if (unlikely(_is_special_char((uint8_t)c))) goto next1;
-        c = *str++; if (unlikely(_is_special_char((uint8_t)c))) goto next1;
-        c = *str++; if (unlikely(_is_special_char((uint8_t)c))) goto next1;
+            c = *str++; if (unlikely(_is_special_char((uint8_t)c))) break;
+            c = *str++; if (unlikely(_is_special_char((uint8_t)c))) break;
+            c = *str++; if (unlikely(_is_special_char((uint8_t)c))) break;
+            c = *str++; if (unlikely(_is_special_char((uint8_t)c))) break;
+            c = *str++; if (unlikely(_is_special_char((uint8_t)c))) break;
+            c = *str++; if (unlikely(_is_special_char((uint8_t)c))) break;
+            c = *str++; if (unlikely(_is_special_char((uint8_t)c))) break;
 #endif
-    }
-
-next1:
-    switch (c) {
-    case '\"':
-#if JSON_PARSE_SPECIAL_QUOTES
-    case '\'':
-    case ':':
-        if (c == end_ch)
-#endif
-        {
-            len = (int)(str - bak - 1);
-            _UPDATE_PARSE_OFFSET(len);
-            ptr[len] = '\0';
-            pinfo->escaped = escaped != 0;
-            pinfo->len = len;
-            return len;
         }
+
+        switch (c) {
+        case '\"':
 #if JSON_PARSE_SPECIAL_QUOTES
-        if (c == '\"' && !escaped)
-            escaped = -1;
-        goto loop1;
+        case '\'':
+        case ':':
+            if (c == end_ch)
 #endif
-
-    case '\0':
-        goto err;
-    case '\\':
-        --str;
-        last = str;
-        ptr += str - bak;
-        c = *str++;
-        goto next2;
-    default:
-#if !JSON_PARSE_SPECIAL_CHAR
-        /* case '\b': case '\f': case '\n': case '\r': case '\t': case '\v': */
-        JsonErr("tab and linebreak can't be existed in string in standard json!\n");
-        goto err;
-#else
-        goto loop1;
-#endif
-    }
-
-loop2:
-    while (1) {
-        c = *str++; if (unlikely(_is_special_char((uint8_t)c))) goto next2;
-#if JSON_MANUAL_LOOP_UNFOLD
-        c = *str++; if (unlikely(_is_special_char((uint8_t)c))) goto next2;
-        c = *str++; if (unlikely(_is_special_char((uint8_t)c))) goto next2;
-        c = *str++; if (unlikely(_is_special_char((uint8_t)c))) goto next2;
-        c = *str++; if (unlikely(_is_special_char((uint8_t)c))) goto next2;
-        c = *str++; if (unlikely(_is_special_char((uint8_t)c))) goto next2;
-        c = *str++; if (unlikely(_is_special_char((uint8_t)c))) goto next2;
-        c = *str++; if (unlikely(_is_special_char((uint8_t)c))) goto next2;
-#endif
-    }
-
-next2:
-    switch (c) {
-    case '\"':
-#if JSON_PARSE_SPECIAL_QUOTES
-    case '\'':
-    case ':':
-        if (c == end_ch)
-#endif
-        {
-            size = (int)(str - last - 1);
-            memmove(ptr, last, size);
-            ptr += size;
-            *ptr = '\0';
-            len = (int)(str - bak - 1);
-            _UPDATE_PARSE_OFFSET(len);
-            pinfo->escaped = 1;
-            pinfo->len = (uint32_t)(ptr - bak);
-            return pinfo->len;
-        }
-        goto loop2;
-
-    case '\0':
-        goto err;
-    case '\\':
-        size = (int)(str - last - 1);
-        memmove(ptr, last, size);
-        ptr += size;
-
-        switch ((*str++)) {
-        case 'b' : *ptr++ = '\b'; break;
-        case 'f' : *ptr++ = '\f'; break;
-        case 'n' : *ptr++ = '\n'; break;
-        case 'r' : *ptr++ = '\r'; break;
-        case 't' : *ptr++ = '\t'; break;
-        case 'v' : *ptr++ = '\v'; break;
-        case '\"': *ptr++ = '\"'; break;
-        case '\'': *ptr++ = '\''; break;
-        case '\\': *ptr++ = '\\'; break;
-        case '/' : *ptr++ = '/' ; break;
-#if JSON_PARSE_SPECIAL_CHAR
-        case '\r': if (*str == '\n') ++str; break;
-        case '\n': break;
-#endif
-        case 'u' :
-            str -= 2;
-            if (unlikely((seq_len = utf16_literal_to_utf8((unsigned char*)str,
-                            (unsigned char*)end, (unsigned char**)&ptr)) == 0)) {
-                JsonErr("invalid utf16 code(\\u%c)!\n", str[2]);
-                goto err;
+            {
+                if (last) {
+                    size = (int)(str - last - 1);
+                    memmove(ptr, last, size);
+                } else {
+                    size = (int)(str - bak - 1);
+                }
+                ptr += size;
+                *ptr = '\0';
+                len = (int)(str - bak - 1);
+                _UPDATE_PARSE_OFFSET(len);
+                pinfo->escaped = escaped != 0;
+                pinfo->len = (uint32_t)(ptr - bak);
+                return pinfo->len;
             }
-            str += seq_len;
+#if JSON_PARSE_SPECIAL_QUOTES
+            if (c == '\"' && !escaped)
+                escaped = -1;
+#endif
             break;
 
-        default :
-            JsonErr("invalid escape character(\\%c)!\n", str[1]);
+        case '\0':
             goto err;
-        }
+        case '\\':
+            if (last) {
+                size = (int)(str - last - 1);
+                memmove(ptr, last, size);
+            } else {
+                size = (int)(str - bak - 1);
+            }
+            ptr += size;
+            escaped = 1;
 
-        last = str;
-        goto loop2;
-    default:
-#if !JSON_PARSE_SPECIAL_CHAR
-        /* case '\b': case '\f': case '\n': case '\r': case '\t': case '\v': */
-        JsonErr("tab and linebreak can't be existed in string in standard json!\n");
-        goto err;
-#else
-        goto loop2;
+            switch ((*str++)) {
+            case 'b' : *ptr++ = '\b'; break;
+            case 'f' : *ptr++ = '\f'; break;
+            case 'n' : *ptr++ = '\n'; break;
+            case 'r' : *ptr++ = '\r'; break;
+            case 't' : *ptr++ = '\t'; break;
+            case 'v' : *ptr++ = '\v'; break;
+            case '\"': *ptr++ = '\"'; break;
+            case '\'': *ptr++ = '\''; break;
+            case '\\': *ptr++ = '\\'; break;
+            case '/' : *ptr++ = '/' ; break;
+#if JSON_PARSE_SPECIAL_CHAR
+            case '\r': if (*str == '\n') ++str; break;
+            case '\n': break;
 #endif
+            case 'u' :
+                str -= 2;
+                if (unlikely((seq_len = utf16_literal_to_utf8((unsigned char*)str,
+                                (unsigned char*)end, (unsigned char**)&ptr)) == 0)) {
+                    JsonErr("invalid utf16 code(\\u%c)!\n", str[2]);
+                    goto err;
+                }
+                str += seq_len;
+                break;
+
+            default :
+                JsonErr("invalid escape character(\\%c)!\n", str[1]);
+                goto err;
+            }
+
+            last = str;
+            break;
+        default:
+#if !JSON_PARSE_SPECIAL_CHAR
+            /* case '\b': case '\f': case '\n': case '\r': case '\t': case '\v': */
+            JsonErr("tab and linebreak can't be existed in string in standard json!\n");
+            goto err;
+#else
+            break;
+#endif
+        }
     }
 
 err:
