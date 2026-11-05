@@ -1,6 +1,6 @@
 # LJSON
 
-![License](https://img.shields.io/badge/license-MIT-brightgreen.svg) ![Language](https://img.shields.io/badge/language-C99%20%2F%20C11-blue.svg) ![Version](https://img.shields.io/badge/version-v5.0.5-orange.svg) ![Dependencies](https://img.shields.io/badge/dependencies-0-success.svg) ![SIMD](https://img.shields.io/badge/SIMD-not%20required-brightgreen.svg) ![Platform](https://img.shields.io/badge/platform-Linux%20%7C%20Windows%20%7C%20RTOS-lightgrey.svg) ![Modes](https://img.shields.io/badge/parse%20modes-7-blueviolet.svg) ![Print](https://img.shields.io/badge/print%20modes-4-blueviolet.svg)
+![License](https://img.shields.io/badge/license-MIT-brightgreen.svg) ![Language](https://img.shields.io/badge/language-C99%20%2F%20C11-blue.svg) ![Version](https://img.shields.io/badge/version-v5.0.6-orange.svg) ![Dependencies](https://img.shields.io/badge/dependencies-0-success.svg) ![SIMD](https://img.shields.io/badge/SIMD-not%20required-brightgreen.svg) ![Platform](https://img.shields.io/badge/platform-Linux%20%7C%20Windows%20%7C%20RTOS-lightgrey.svg) ![Modes](https://img.shields.io/badge/parse%20modes-7-blueviolet.svg) ![Print](https://img.shields.io/badge/print%20modes-4-blueviolet.svg)
 
 [中文版](./README_zh-cn.md)
 
