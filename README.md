@@ -217,8 +217,8 @@ On 64-bit systems `json_object` was shrunk from 40 bytes to **32 bytes** (since 
 
 * Costs only **1.5%~10%** of `sprintf`, i.e. **10~70× faster**
 * **17 digits of precision**, and **always emits the shortest exact representation**
-* Except for one-digit decimals, generally significantly faster than **grisu2**; over **100% faster** in scientific-notation cases
-* Faster than **dragonbox** in most cases; over **30% faster** in scientific-notation cases
+* Generally significantly faster than **grisu2**; over **100% faster** in scientific-notation cases
+* Faster than **dragonbox** in most cases; over **40% faster** in scientific-notation cases
 
 > Note: to chase performance, LDOUBLE's boundary handling pursues the **shortest representation** rather than mechanical round-to-even, so it does not fully conform to strict IEEE-754 round-trip conventions. If your scenario needs standard-library behavior, compile with `-DJSON_DTOA_ALGORITHM=1` to switch back to `sprintf`.
 
