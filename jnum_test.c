@@ -133,7 +133,7 @@ int main(int argc, char *argv[])
             int i;
             double d = strtod(argv[1], NULL);
             int cnt = atoi(argv[2]);
-            unsigned int ms, ms1, ms2, ms3;
+            unsigned int ms, jms, ms1, ms2, ms3;
 
             ms1 = _system_ms_get();
             for (i = 0; i < cnt; ++i) {
@@ -148,8 +148,9 @@ int main(int argc, char *argv[])
                 jnum_dtoa(d, buf);
             }
             ms2 = _system_ms_get();
-            ms3 = ms2 - ms1;
-            printf("ldouble   : %s\t%ums\t%.0lf%%\n", buf, ms3, ms3 ? 100.0 * ms / ms3 : 0);
+            jms = ms2 - ms1;
+            printf("ldouble   : %s\t%ums\t%.0lf%%\n", buf, jms,
+                jms ? 100.0 * ms / jms : 0);
 
             ms1 = _system_ms_get();
             for (i = 0; i < cnt; ++i) {
@@ -157,7 +158,8 @@ int main(int argc, char *argv[])
             }
             ms2 = _system_ms_get();
             ms3 = ms2 - ms1;
-            printf("grisu2    : %s\t%ums\t%.0lf%%\n", buf, ms3, ms3 ? 100.0 * ms / ms3 : 0);
+            printf("grisu2    : %s\t%ums\t%.0lf%%\t%.0lf%%\n", buf, ms3,
+                ms3 ? 100.0 * ms / ms3 : 0, ms3 ? 100.0 * jms / ms3 : 0);
 
             ms1 = _system_ms_get();
             for (i = 0; i < cnt; ++i) {
@@ -165,7 +167,8 @@ int main(int argc, char *argv[])
             }
             ms2 = _system_ms_get();
             ms3 = ms2 - ms1;
-            printf("dragonbox : %s\t%ums\t%.0lf%%\n", buf, ms3, ms3 ? 100.0 * ms / ms3 : 0);
+            printf("dragonbox : %s\t%ums\t%.0lf%%\t%.0lf%%\n", buf, ms3,
+                ms3 ? 100.0 * ms / ms3 : 0, ms3 ? 100.0 * jms / ms3 : 0);
         }
         break;
     }
