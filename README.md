@@ -110,7 +110,7 @@ If you only have 30 seconds to decide whether to keep reading, this table is eno
 | 6 | **True streaming** | Parses while reading, writes while printing — not the fake "read it all, then parse / print it all, then write" | A 1 GB JSON can be reformatted with KB-level memory |
 | 7 | **Editable *and* zero-copy** | Reuse mode (mode 3) reuses the original string in place **and stays natively editable** (yyjson needs an extra conversion, doubling memory) | For "fast but also mutable" workloads, LJSON is one of the few viable answers |
 | 8 | **Zero heap allocation** | After the first allocation, the library performs **no heap allocation at all** during the parse/print loop | High-frequency message handling with no fragmentation, no allocation jitter, predictable latency |
-| 9 | **In-house ldouble numeric engine** | float→string costs only **1.5%~10%** of `sprintf` (10~70× faster); string→number is 1~10× faster than `strtod` | Float-heavy JSON (geospatial, time series) gains an order of magnitude in print performance |
+| 9 | **In-house ldouble numeric engine** | float→string takes about **0.25%~10%** of `snprintf` (10~390× faster on individual v5.0.6 cases); string→number is **2~19× faster** than `strtod` | Float-heavy JSON (geospatial, time series) gains an order of magnitude in print performance |
 | 10 | **Engineering maintainability** | About 10k lines, clear structure, **bilingual (Chinese/English) comments** on every API; API style modeled on cJSON | Readable, modifiable, extensible — not a black box you can only admire |
 
 In one sentence: **LJSON is not "the library that is fastest in one particular mode" — it is "the library that lets you pick a near-optimal path for any scenario, while still being faster than most libraries on that path."**
@@ -211,16 +211,18 @@ On 64-bit systems `json_object` was shrunk from 40 bytes to **32 bytes** (since 
 
 **String → number (atod)**
 
-* **1~10× faster** than the standard `strtod` (2~3× in most cases)
+* **2~19× faster** than the standard `strtod` across the v5.0.6 cases (**4~18×** by group mean)
 
 **Number → string (dtoa)**
 
-* Costs only **1.5%~10%** of `sprintf`, i.e. **10~70× faster**
+* Takes about **0.25%~10%** of `snprintf`, i.e. **10~390× faster** on individual cases; group means are **12~59× on Linux** and **20~268× on Windows**
 * **17 digits of precision**, and **always emits the shortest exact representation**
-* Generally significantly faster than **grisu2**; over **100% faster** in scientific-notation cases
-* Faster than **dragonbox** in most cases; over **40% faster** in scientific-notation cases
+* Faster than **grisu2** in every A-J group by group mean (**1.4~4.1×**; up to **16.7×** on an individual case); a few individual Linux cases are marginally slower
+* Faster than **dragonbox** in every A-J group by group mean (**1.2~1.7×**; up to **3.1×** on an individual case); a few individual cases are marginally slower
 
 > Note: to chase performance, LDOUBLE's boundary handling pursues the **shortest representation** rather than mechanical round-to-even, so it does not fully conform to strict IEEE-754 round-trip conventions. If your scenario needs standard-library behavior, compile with `-DJSON_DTOA_ALGORITHM=1` to switch back to `sprintf`.
+
+> Full grouped data and the six-panel chart are in [Section 6.7](#67-numeric-conversion-performance).
 
 ### 2.3 Supported Data Types
 
@@ -851,7 +853,7 @@ int main(void)
     /* Replace */
     json_object *newage = json_create_int(32);
     set_str(&jkey, (char *)"NewAge");  /* empty-key support is off by default, so set it before replacing */
-    json_set_key(newage, &jkey); 
+    json_set_key(newage, &jkey);
     json_replace_item_in_object(root, newage);
 
     /* Deep copy */
@@ -999,7 +1001,7 @@ int main(void)
     len = jnum_htoa(0xDEADBEEF, buf);         printf("htoa : %s (%d)\n", buf, len);
     len = jnum_lhtoa(0x123456789ABCDEFULL, buf); printf("lhtoa: %s (%d)\n", buf, len);
 
-    /* String -> number (inline versions, 1~10x faster than strtod/atoi) */
+    /* String -> number (jnum_atod is 2~19x faster than strtod in the v5.0.6 benchmark) */
     printf("atod : %g\n", jnum_atod("3.14159265358979"));
     printf("atoi : %d\n", jnum_atoi("-123456"));
     printf("atol : %lld\n", (long long)jnum_atol("1234567890123"));
@@ -1276,7 +1278,6 @@ gcc -o strdup strdup_test.c -O2                     # strdup and strlen
 * `unm` (unmutable): read-only mode; the parsed structure cannot be modified
 * `mut` (mutable): editable mode; the parsed structure can be modified
 
-
 ### 6.2 Intel i7-1260P (v5.0.5, latest) ★
 
 > Test platform: PC | CPU: Intel i7-1260P | OS: Debian 13 (VMWare) | LJSON v5.0.5<br>
@@ -1313,7 +1314,6 @@ The six "up to" percentages in the figure can all be **reproduced exactly** from
 > About the historical data: Sections 6.5 and 6.6 are results from **a certain version in the v3 era** (ARM Cortex-A53 and i7-10700),
 > shown to illustrate LJSON's long-term behavior on weak CPUs and older platforms; they **do not represent the current version**.
 > Because of added features and logic optimizations, the latest version does not necessarily match the historical results (for example, adopting more accurate number handling lowered `canada.json` parse performance, while optimizing branch prediction in reuse mode raised parse performance).
-
 
 ### 6.3 Latest Terminal Measurements: All 7 Modes Compared
 
@@ -1515,24 +1515,37 @@ make O=obj
 
 **Test environment**
 
-> Test platform: PC | CPU: Intel i7-1260P | OS: Ubuntu 20.04 (VMWare)<br>
-> Test platform: PC | CPU: Intel i7-1260P | OS: Windows 11 (MSVC 2023)<br>
+> Test platform: PC | CPU: Intel i7-1260P | OS: Debian 13 (VMWare 26H1) | LJSON v5.0.6<br>
+> Test platform: PC | CPU: Intel i7-1260P | OS: Windows 11 (MSVC 2026) | LJSON v5.0.6<br>
 > Test command (dtoa): `./jnum_test <num> 10000000` # 10 million iterations<br>
 > Test command (atod): `./jnum_test a <num> 10000000` # 10 million iterations
 
-![Number/string conversion test results](image/test_for_ldouble_zh.png)
+![dtoa atod test results](image/test_for_ldouble.png)
+
+**How the figure is computed**
+
+* `100% = 1×`; `speedup = baseline_time / algorithm_time × 100%`. The top row uses `snprintf` as the baseline for `ldouble` / `grisu2` / `dragonbox`; the middle row uses `snprintf`, `grisu2`, and `dragonbox` as baselines for `ldouble`; the bottom row uses `strtod` as the baseline for `jnum_atod`.
+* Each bar is the arithmetic mean of the per-case speedups in one A-J group. Group definitions are printed in the figure footnote: `d` is the number of mantissa significant digits (leading zeros and the decimal point are excluded), and `e` is the decimal exponent of the input.
+* The raw log's second percentage on `grisu2` / `dragonbox` lines is `ldouble_time / algorithm_time`; the middle row inverts it to show ldouble's speedup against those algorithms.
+* Linux and Windows panels in the same row share one y-scale. Above **80×** (top row) or **5×** (middle row), one vertical unit represents 10× as much speedup; the atod row uses a uniform linear scale. Bar labels show × speedup; the y-axis shows the same values in %. Each compressed panel carries its scale note in the top-right corner.
+* The middle row applies a shared **80× virtual-height cap**. This is a different 80× from the top-row compression threshold: here it is a hard cut on drawn height, not a scale break. The single Windows E bar (267.9×) would otherwise squeeze the 0~5× region where ldouble-vs-grisu2/dragonbox comparisons live. That bar is cut at the cap, marked with a break and an up arrow, and its true value is still labeled. Both middle panels use the same scale, so the cap does not break cross-OS comparison.
 
 **Conclusions**
 
-* **dtoa (number → string)**: ldouble is an order of magnitude faster than `sprintf` (up to **40×** on some cases) and also somewhat faster than grisu2 and dragonbox; within its precision range it guarantees the shortest form and matches `printf` output.
-* **atod (string → number)**: ldouble is **2~3× faster** than `strtod` in most cases (up to **10×** on some cases).
+| Comparison | Linux: cases / group means | Windows: cases / group means |
+|------|---------:|---------:|
+| `ldouble` vs `snprintf` | `9.7~86.3×` / `12.2~58.9×` | `16.0~392.5×` / `19.9~267.9×` |
+| `grisu2` vs `snprintf` | `1.2~65.0×` / `6.7~39.8×` | `1.9~230.8×` / `11.0~175.3×` |
+| `dragonbox` vs `snprintf` | `6.8~61.4×` / `9.4~40.0×` | `12.2~241.5×` / `15.0~175.8×` |
+| `ldouble` vs `grisu2` | `0.9~16.7×` / `1.4~4.1×` | `1.0~14.3×` / `1.4~3.8× `|
+| `ldouble` vs `dragonbox` | `0.9~3.1×` / `1.3~1.7×` | `0.9~2.6×` / `1.2~1.6×` |
+| `jnum_atod` vs `strtod` | `2.2~18.9×` / `4.5~15.8×` | `3.4~19.1×` / `4.3~18.0× `|
 
-**Details visible in the figure** (four grouped bar charts: dtoa and atod speedups on Linux and Windows):
+**Details visible in the figure** (one canvas, six panels: 2 columns × 3 rows):
 
-* **dtoa charts**: three groups of bars — `ldouble` (blue), `grisu2` (orange), `dragonbox` (green) — with categories on the x axis: short decimal / long decimal / integer / scientific notation / very large.
-  * On Linux, the three algorithms are roughly **10~45×** faster than `sprintf`, and `ldouble` is the tallest bar in every category.
-  * On Windows (MSVC) the speedups are **clearly higher**: in the "very large" category `ldouble` reaches about **200×**, `dragonbox` about 175×, and `grisu2` about 130× — meaning MSVC's `sprintf` is relatively slower, while ldouble is unaffected by the quality of the standard library implementation.
-* **atod charts**: only one group of blue bars (`ldouble`, relative to `strtod`). Peak is about **10×** on Linux and about **16~17×** on Windows.
+* **Top row — dtoa relative to `snprintf`**: `ldouble` (blue), `grisu2` (orange), `dragonbox` (green), three tightly packed bars per group. `ldouble` is the tallest bar in all 10 groups on both OSes. The Windows E group reaches **267.9×** by group mean (the largest individual case is **392.5×**), because MSVC's `snprintf` is relatively slow on extreme exponents.
+* **Middle row — ldouble relative to others**: three bars per group show ldouble's speedup against `snprintf`, `grisu2`, and `dragonbox`. Group-mean advantages peak at **4.1× over grisu2** (Linux E) and **1.7× over dragonbox** (Linux I); a few individual cases fall slightly below 1×. The capped Windows E bar is drawn with a virtual height so the 0~5× comparisons stay readable.
+* **Bottom row — atod relative to `strtod`**: one bar per group (`jnum_atod`). The H/I very-small and subnormal groups are strongest (**14.3~15.8×** on Linux, **17.4~18.0×** on Windows by group mean), while integer group J is the weakest (**4.3~4.5×**).
 
 ---
 
@@ -3077,7 +3090,7 @@ The convention: float→string should produce the **shortest representation that
 | canada formatted print | 273 ms | 5956 ms | **21.8×** |
 | canada compact print | 260 ms | 6007 ms | **23.1×** |
 
-canada.json is float-heavy geographic data where nearly every value goes through a float→string conversion. **The 20×+ print gap comes mostly from this single algorithm.**
+canada.json is float-heavy geographic data where nearly every value goes through a float→string conversion. **The 20×+ print gap comes mostly from this single algorithm.** The standalone v5.0.6 number-conversion benchmark in [Section 6.7](#67-numeric-conversion-performance) shows the same gap at algorithm level: across 209 inputs, `ldouble` is **9.7~86.3× faster** than `snprintf` on Linux and **16.0~392.5× faster** on Windows.
 
 **Why is this a reasonable trade?**
 
